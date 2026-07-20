@@ -2071,7 +2071,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 JSON Schema:
                 {
                   "thought": "Analysis and plan.",
-                  "tool": "list_directory" | "read_file" | "read_file_range" | "write_file" | "edit_file" | "patch_file" | "append" | "delete_file" | "rename_file" | "move_file" | "run_command" | "global_search" | "complete" | "delete_code" | "move_code" | "copy_code" | "generate_image" | "resize_image" | "browser_search" | "browser_click" | "browser_read" | "create_todo_list" | "complete_todo_task" | "scan_dir",
+                  "tool": "read_file" | "read_file_range" | "write_file" | "edit_file" | "patch_file" | "append" | "delete_file" | "rename_file" | "move_file" | "run_command" | "global_search" | "complete" | "delete_code" | "move_code" | "copy_code" | "generate_image" | "resize_image" | "browser_search" | "browser_click" | "browser_read" | "create_todo_list" | "complete_todo_task" | "scan_dir",
                   "arguments": {
                     "path": "file/path.kt",
                     "destinationPath": "dest/path.kt",
@@ -2100,7 +2100,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 - The details should be easy to read and extremely professional, giving the user a complete picture of your actions and visual design choices.
                 
                 SEARCH, DEBUGGING & PATTERN ANALYSIS MANDATE (CRITICAL):
-                - For listing files, exploring directories, finding files, and scanning codebase structures, you can use the 'list_directory' tool or 'run_command' with simulated 'find' command (e.g. `find . -name "*.kt"`).
+                - For listing files, exploring directories, finding files, and scanning codebase structures, you MUST strictly use the 'scan_dir' tool first. The 'list_directory' tool is deprecated and has been removed; you must strictly use 'scan_dir' to explore the workspace!
                 - For error fixing, debugging, problem solving, file pattern analysis, error finding, keyword searching, checking code usages, and doing multi-file text search, you MUST use the 'run_command' tool with the 'grep' command (e.g., `grep -rn "keyword" .`).
                 - Using 'grep' is the most efficient and reliable way to analyze the codebase and locate precise line numbers for editing, patching, and appending.
                 - The simulated 'grep' command is highly advanced and supports regex matching, case insensitivity (-i), whole-word matching (-w), invert match (-v), recursive search (-r/-R), and glob paths (e.g. `*.kt`).
