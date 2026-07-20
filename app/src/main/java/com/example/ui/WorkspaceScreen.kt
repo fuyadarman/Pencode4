@@ -2188,6 +2188,11 @@ fun CodeTabContent(
                     Row(modifier = Modifier.fillMaxSize()) {
                         val lineCount = editorContent.count { it == '\n' } + 1
                         val lineNumbers = (1..lineCount).joinToString("\n")
+                        val editorTextStyle = androidx.compose.ui.text.TextStyle(
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            fontSize = 13.sp,
+                            lineHeight = 18.sp
+                        )
 
                         androidx.compose.foundation.layout.Row(
                             modifier = Modifier
@@ -2198,8 +2203,7 @@ fun CodeTabContent(
                             Text(
                                 text = lineNumbers,
                                 color = Color(0xFF6E7681),
-                                fontSize = 13.sp,
-                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                style = editorTextStyle,
                                 modifier = Modifier.padding(start = 16.dp, end = 16.dp),
                                 textAlign = TextAlign.End
                             )
@@ -2210,11 +2214,7 @@ fun CodeTabContent(
                                     .weight(1f)
                                     .fillMaxHeight()
                                     .horizontalScroll(rememberScrollState()),
-                                textStyle = TextStyle(
-                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                                    fontSize = 13.sp,
-                                    color = Color(0xFFE6EDF3)
-                                ),
+                                textStyle = editorTextStyle.copy(color = Color(0xFFE6EDF3)),
                                 visualTransformation = com.example.ui.SyntaxHighlighter(),
                                 cursorBrush = androidx.compose.ui.graphics.SolidColor(Color.White)
                             )

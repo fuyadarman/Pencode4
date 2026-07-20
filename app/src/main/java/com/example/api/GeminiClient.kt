@@ -227,7 +227,7 @@ object GeminiClient {
         customBaseUrl: String? = null,
         useCustom: Boolean = false
     ): ToolCallResponse? = withContext(Dispatchers.IO) {
-        val activeApiKey = apiKey
+        val activeApiKey = apiKey.trim()
         if (activeApiKey.isEmpty()) {
             return@withContext ToolCallResponse(
                 thought = "No API key found.",
@@ -696,7 +696,8 @@ object GeminiClient {
         systemInstruction: String,
         conversationHistory: List<Content>
     ): AgentResponse? = withContext(Dispatchers.IO) {
-        if (apiKey.isEmpty()) {
+        val trimmedKey = apiKey.trim()
+        if (trimmedKey.isEmpty()) {
             return@withContext AgentResponse(
                 thought = "No API key found.",
                 actions = emptyList(),
@@ -719,7 +720,7 @@ object GeminiClient {
         val mediaType = "application/json; charset=utf-8".toMediaType()
         val body = jsonRequest.toRequestBody(mediaType)
 
-        val url = "https://generativelanguage.googleapis.com/v1beta/models/$MODEL_NAME:generateContent?key=$apiKey"
+        val url = "https://generativelanguage.googleapis.com/v1beta/models/$MODEL_NAME:generateContent?key=$trimmedKey"
 
         val request = Request.Builder()
             .url(url)

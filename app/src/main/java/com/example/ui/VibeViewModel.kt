@@ -2077,8 +2077,8 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                   }
                 }
                 
-                AI THINKING RULE:
-                - You can optionally decide to ignore/skip 'ai formulating logic' by not outputting detailed thoughts in formulating logs, although it is preferred that you do not ignore it.
+                AI THINKING RULE (CRITICAL):
+                - You MUST keep your "thought" (formulating logic) extremely short, concise, and direct (at most 1-2 sentences). You can also choose to completely skip outputting thoughts or skip 'ai formulating logic' entirely to respond as fast as possible. Never write long essays or paragraph blocks under the 'thought' field!
                 
                 COMPLETION DETAILS MANDATE (CRITICAL):
                 - When you call the 'complete' tool, you MUST provide a beautifully structured and highly informative short details/summary of what you have done in the 'message' argument.
