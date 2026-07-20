@@ -1577,7 +1577,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
 
     private suspend fun loadProjectDetails(projectName: String) {
         val files = repository.getFilesForProject(projectName)
-        val visibleFiles = files.filter { it.path != "browser_memory.md" }
+        val visibleFiles = files.filter { it.path != "browser_memory.md" && it.path != "memory.md" }
         _projectFiles.value = visibleFiles
         
         // Auto-select index.html or first file to view in editor
@@ -2001,6 +2001,13 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 - If the user tags files with @, they are provided in your context. 
                 - You should prioritize performing actions on these tagged files.
                 
+                PERSISTENT PROJECT MEMORY MODULE (CRITICAL):
+                - The workspace contains a persistent background file named 'memory.md' (NOT visible to the user but fully accessible to you).
+                - This file is used to store and persist critical information about the project, framework, workspace setup, important decisions, architectural design, todo progress, or custom user rules.
+                - You MUST check, read, update, or append to 'memory.md' to retrieve or persist important details about the project you are working on.
+                - Feel free to create it if it doesn't exist, read it via read_file, or update/append to it when you make significant changes or learn important facts about the workspace!
+                - Since it behaves like a normal file, you can use all file operation tools (read_file, edit_file, patch_file, append) on 'memory.md'.
+                
                 TOOL USAGE RULES (SURGICAL EDITING - MANDATORY):
                 - YOU MUST NOT WRITE/CREATE FULL FILES TO APPLY SMALL EDITS. DO NOT REWRITE CODE.
                 - YOU MUST ALWAYS 'read_file' or 'read_file_range' TO SEE THE CURRENT CODE BEFORE CREATING OR EDITING.
@@ -2099,9 +2106,9 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 1. Use list_directory to search directories/files.
                 2. ALWAYS use the 'grep' command (run_command with grep -rn "keyword" .) to find exact files and matching lines before reading any files. You can run grep up to 5 times if you do not get any grep output, because you need to locate exact file lines.
                 3. After finding the exact file and matched lines using grep, you MUST read ONLY about 30 lines surrounding the matched code (e.g., 15 lines before and 15 lines after) using the 'read_file_range' tool.
-                4. NEVER read the full file if it is larger than 30 lines. Always use 'read_file_range' with a precise 30-line window. Full file reads are strictly prohibited and inefficient!
+                4. NEVER read the full file if it is larger than 80 lines. If a file is larger than 80 lines, you are STRICTLY FORBIDDEN from reading the full file. Instead, you MUST use global_search or grep to find the exact match first, and then read only the surrounding lines of code (using 'read_file_range' with a precise window around the target).
                 5. Verify that all tasks are completed and then stop.
-                Warning: If you do not use grep and instead read whole files, you will be punished and you will be rejected!
+                Warning: If a file has more than 80 lines of code and you read the entire file instead of using grep and read_file_range, you will be punished and your request will be rejected!
                 
                 ANDROID / FLUTTER BUILD RULES & AUTOMATIC PUSH PERMISSION (CRITICAL):
                 - NEVER run `gradle assembleDebug`, `gradle build`, `flutter build apk`, or any APK building commands using `run_command`. 

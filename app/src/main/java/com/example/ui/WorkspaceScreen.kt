@@ -2207,17 +2207,21 @@ fun CodeTabContent(
                                 modifier = Modifier.padding(start = 16.dp, end = 16.dp),
                                 textAlign = TextAlign.End
                             )
-                            androidx.compose.foundation.text.BasicTextField(
-                                value = editorContent,
-                                onValueChange = onUpdateEditor,
+                            androidx.compose.foundation.layout.Box(
                                 modifier = Modifier
                                     .weight(1f)
                                     .fillMaxHeight()
-                                    .horizontalScroll(rememberScrollState()),
-                                textStyle = editorTextStyle.copy(color = Color(0xFFE6EDF3)),
-                                visualTransformation = com.example.ui.SyntaxHighlighter(),
-                                cursorBrush = androidx.compose.ui.graphics.SolidColor(Color.White)
-                            )
+                                    .horizontalScroll(rememberScrollState())
+                            ) {
+                                androidx.compose.foundation.text.BasicTextField(
+                                    value = editorContent,
+                                    onValueChange = onUpdateEditor,
+                                    modifier = Modifier.fillMaxHeight(),
+                                    textStyle = editorTextStyle.copy(color = Color(0xFFE6EDF3)),
+                                    visualTransformation = com.example.ui.SyntaxHighlighter(),
+                                    cursorBrush = androidx.compose.ui.graphics.SolidColor(Color.White)
+                                )
+                            }
                         }
                     }
                     
