@@ -82,18 +82,18 @@ fun HomeScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF111214),
+                    containerColor = Color(0xFF090B10),
                     titleContentColor = Color.White
                 )
             )
         },
-        containerColor = Color(0xFF111214)
+        containerColor = Color(0xFF07090D)
     ) { innerPadding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .background(Color(0xFF111214))
+                .background(Color(0xFF07090D))
         ) {
             // Dark futuristic radial glow of developer workspace
             Box(
@@ -101,8 +101,8 @@ fun HomeScreen(
                     .fillMaxSize()
                     .background(
                         Brush.radialGradient(
-                            colors = listOf(Color(0x1F8B5CF6), Color.Transparent),
-                            radius = 1200f
+                            colors = listOf(Color(0x226366F1), Color.Transparent),
+                            radius = 1400f
                         )
                     )
             )
@@ -115,9 +115,9 @@ fun HomeScreen(
             ) {
                 // Intro Hero Banner styled like Cursor homepage
                 Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF181A1F)),
-                    border = BorderStroke(1.dp, Color(0xFF2E3136)),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0E111A)),
+                    border = BorderStroke(1.dp, Color(0xFF1F2437)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
@@ -145,28 +145,30 @@ fun HomeScreen(
                             Button(
                                 onClick = { showCreateDialog = true },
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF8B5CF6),
+                                    containerColor = Color(0xFF6366F1),
                                     contentColor = Color.White
                                 ),
-                                shape = RoundedCornerShape(8.dp)
+                                shape = RoundedCornerShape(12.dp),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
                             ) {
                                 Icon(Icons.Default.Add, contentDescription = "Add", modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("New Workspace", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                Text("New Workspace", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                             }
 
                             Button(
                                 onClick = { showCloneDialog = true },
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF1E293B).copy(alpha = 0.5f),
+                                    containerColor = Color(0xFF1E293B).copy(alpha = 0.4f),
                                     contentColor = Color(0xFF38BDF8)
                                 ),
-                                shape = RoundedCornerShape(8.dp),
-                                border = BorderStroke(1.dp, Color(0xFF2E3136))
+                                shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(1.dp, Color(0xFF1F2437)),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
                             ) {
                                 Icon(Icons.Default.Share, contentDescription = "Clone", modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Clone Git Repo", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                Text("Clone Git Repo", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                             }
                         }
                     }
@@ -300,9 +302,9 @@ fun ProjectCard(
     onDelete: () -> Unit
 ) {
     Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF181A1F)),
-        border = BorderStroke(1.dp, Color(0xFF2E3136)),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0E111A)),
+        border = BorderStroke(1.dp, Color(0xFF1F2437)),
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
@@ -322,10 +324,10 @@ fun ProjectCard(
                 Box(
                     modifier = Modifier
                         .size(44.dp)
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(10.dp))
                         .background(
                             Brush.linearGradient(
-                                colors = listOf(Color(0xFF8B5CF6), Color(0xFF38BDF8))
+                                colors = listOf(Color(0xFF6366F1), Color(0xFF00FFCC))
                             )
                         ),
                     contentAlignment = Alignment.Center

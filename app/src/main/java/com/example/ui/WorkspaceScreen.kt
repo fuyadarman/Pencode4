@@ -611,7 +611,7 @@ fun WorkspaceBottomNavigation(
     onTabSelected: (WorkspaceTab) -> Unit
 ) {
     NavigationBar(
-        containerColor = Color(0xFF0C0D14),
+        containerColor = Color(0xFF080A0E),
         tonalElevation = 8.dp,
         modifier = Modifier.height(72.dp)
     ) {
@@ -625,7 +625,7 @@ fun WorkspaceBottomNavigation(
                 selectedTextColor = Color(0xFF38BDF8),
                 unselectedIconColor = Color(0xFF4F5575),
                 unselectedTextColor = Color(0xFF4F5575),
-                indicatorColor = Color(0xFF1E2130)
+                indicatorColor = Color(0xFF141A29)
             )
         )
         NavigationBarItem(
@@ -638,7 +638,7 @@ fun WorkspaceBottomNavigation(
                 selectedTextColor = Color(0xFF8B5CF6),
                 unselectedIconColor = Color(0xFF4F5575),
                 unselectedTextColor = Color(0xFF4F5575),
-                indicatorColor = Color(0xFF1E2130)
+                indicatorColor = Color(0xFF141A29)
             )
         )
         NavigationBarItem(
@@ -651,7 +651,7 @@ fun WorkspaceBottomNavigation(
                 selectedTextColor = Color(0xFF2ED573),
                 unselectedIconColor = Color(0xFF4F5575),
                 unselectedTextColor = Color(0xFF4F5575),
-                indicatorColor = Color(0xFF1E2130)
+                indicatorColor = Color(0xFF141A29)
             )
         )
         NavigationBarItem(
@@ -664,7 +664,7 @@ fun WorkspaceBottomNavigation(
                 selectedTextColor = Color(0xFFF1C40F),
                 unselectedIconColor = Color(0xFF4F5575),
                 unselectedTextColor = Color(0xFF4F5575),
-                indicatorColor = Color(0xFF1E2130)
+                indicatorColor = Color(0xFF141A29)
             )
         )
         NavigationBarItem(
@@ -677,7 +677,7 @@ fun WorkspaceBottomNavigation(
                 selectedTextColor = Color(0xFFEC4899),
                 unselectedIconColor = Color(0xFF4F5575),
                 unselectedTextColor = Color(0xFF4F5575),
-                indicatorColor = Color(0xFF1E2130)
+                indicatorColor = Color(0xFF141A29)
             )
         )
     }
@@ -790,19 +790,27 @@ fun ChatTabContent(
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.padding(24.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Star,
-                        contentDescription = "Logo",
-                        tint = Color(0xFF222533),
-                        modifier = Modifier.size(64.dp)
-                    )
+                    Box(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .background(Color(0xFF38BDF8).copy(alpha = 0.1f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Star,
+                            contentDescription = "Logo",
+                            tint = Color(0xFF38BDF8),
+                            modifier = Modifier.size(36.dp)
+                        )
+                    }
                     Text(
                         text = "DEVELOPED BY MUSTASIM FUYAD",
-                        color = Color(0xFF222533),
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Black,
+                        color = Color(0xFFECEFF4),
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
                         letterSpacing = 2.sp,
                         textAlign = TextAlign.Center
                     )
@@ -811,7 +819,7 @@ fun ChatTabContent(
                         color = Color(0xFF94A3B8),
                         fontSize = 14.sp,
                         textAlign = TextAlign.Center,
-                        lineHeight = 20.sp
+                        lineHeight = 22.sp
                     )
                 }
             }
@@ -904,15 +912,17 @@ fun ChatTabContent(
                 )
                 suggestions.forEach { suggestion ->
                     Card(
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF161822)),
-                        border = BorderStroke(1.dp, Color(0xFF222533)),
-                        modifier = Modifier.clickable { onUpdateChatInputText(suggestion) }
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF0E111A)),
+                        border = BorderStroke(1.dp, Color(0xFF1F2437)),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { onUpdateChatInputText(suggestion) }
                     ) {
                         Text(
                             text = suggestion,
                             fontSize = 12.sp,
-                            color = Color.White,
+                            color = Color(0xFFECEFF4),
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
                         )
                     }
@@ -921,8 +931,8 @@ fun ChatTabContent(
         }
 
         Surface(
-            color = Color(0xFF0C0D14),
-            border = BorderStroke(1.dp, Color(0xFF222533)),
+            color = Color(0xFF080A0E),
+            border = BorderStroke(1.dp, Color(0xFF1F2437)),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.fillMaxWidth()) {
@@ -1736,8 +1746,8 @@ fun ChatBubble(
 ) {
     val isUser = message.role == "user"
     val align = if (isUser) Alignment.End else Alignment.Start
-    val bg = if (isUser) Color(0xFF1E1E2E) else Color(0xFF0F141C)
-    val border = if (isUser) Color(0xFF313244) else Color(0xFF1F2937)
+    val bg = if (isUser) Color(0xFF1C1E2A) else Color(0xFF0D0F14)
+    val border = if (isUser) Color(0xFF2E3147) else Color(0xFF1A1F2C)
     val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
     var isEditing by remember { mutableStateOf(false) }
     var editedContent by remember { mutableStateOf(message.content) }
@@ -1780,10 +1790,10 @@ fun ChatBubble(
 
         Card(
             shape = RoundedCornerShape(
-                topStart = 16.dp,
-                topEnd = 16.dp,
-                bottomStart = if (isUser) 16.dp else 4.dp,
-                bottomEnd = if (isUser) 4.dp else 16.dp
+                topStart = 18.dp,
+                topEnd = 18.dp,
+                bottomStart = if (isUser) 18.dp else 6.dp,
+                bottomEnd = if (isUser) 6.dp else 18.dp
             ),
             colors = CardDefaults.cardColors(containerColor = bg),
             border = BorderStroke(1.dp, border),

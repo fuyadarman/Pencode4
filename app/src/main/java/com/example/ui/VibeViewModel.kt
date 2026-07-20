@@ -1783,10 +1783,15 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 val lastAssistantEntity = historicalMessages.lastOrNull { it.role == "assistant" }
                 
                 if (lastAssistantEntity != null) {
-                    // Alternate role: add a lightweight dummy user query
+                    val lastUserEntity = historicalMessages.lastOrNull { 
+                        it.role == "user" && it.timestamp <= lastAssistantEntity.timestamp 
+                    }
+                    val previousUserPrompt = lastUserEntity?.content ?: "[Previous Request]"
+
+                    // Alternate role: add the actual previous user query
                     history.add(Content(
                         role = "user",
-                        parts = listOf(Part(text = "[Previous Request]"))
+                        parts = listOf(Part(text = previousUserPrompt))
                     ))
 
                     // Extract and compact file actions
