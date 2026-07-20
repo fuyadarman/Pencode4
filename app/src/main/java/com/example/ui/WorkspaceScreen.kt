@@ -1769,138 +1769,140 @@ fun ChatBubble(
         }
     }
 
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = align
-    ) {
-        if (!isUser && logs.isNotEmpty()) {
-            val filteredLogs = logs.filter { log ->
-                val title = log.title
-                val isFormulatingLogic = title.contains("formulating logic", ignoreCase = true)
-                val hasForbiddenThinkingKeywords = title.contains("thought process", ignoreCase = true) || 
-                                                   title.contains("thinking", ignoreCase = true) || 
-                                                   (title.contains("formulating", ignoreCase = true) && !isFormulatingLogic)
-                !title.contains("finished task execution", ignoreCase = true) && (isFormulatingLogic || !hasForbiddenThinkingKeywords)
-            }
-            if (filteredLogs.isNotEmpty()) {
-                WorkspaceOperationsTimeline(
-                    displayLogs = filteredLogs,
-                    isThinking = false
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-        }
-
-        Card(
-            shape = RoundedCornerShape(
-                topStart = 18.dp,
-                topEnd = 18.dp,
-                bottomStart = if (isUser) 18.dp else 6.dp,
-                bottomEnd = if (isUser) 6.dp else 18.dp
-            ),
-            colors = CardDefaults.cardColors(containerColor = bg),
-            border = BorderStroke(1.dp, border),
-            modifier = Modifier.widthIn(max = 600.dp)
+    androidx.compose.foundation.text.selection.SelectionContainer {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = align
         ) {
-            Box(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                // Background watermark: DEVELOPED BY MUSTASIM FUYAD
-                Text(
-                    text = "DEVELOPED BY MUSTASIM FUYAD",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Black,
-                    color = Color.White.copy(alpha = 0.03f),
-                    fontFamily = FontFamily.Monospace,
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .rotate(-15f),
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    maxLines = 2
-                )
+            if (!isUser && logs.isNotEmpty()) {
+                val filteredLogs = logs.filter { log ->
+                    val title = log.title
+                    val isFormulatingLogic = title.contains("formulating logic", ignoreCase = true)
+                    val hasForbiddenThinkingKeywords = title.contains("thought process", ignoreCase = true) || 
+                                                       title.contains("thinking", ignoreCase = true) || 
+                                                       (title.contains("formulating", ignoreCase = true) && !isFormulatingLogic)
+                    !title.contains("finished task execution", ignoreCase = true) && (isFormulatingLogic || !hasForbiddenThinkingKeywords)
+                }
+                if (filteredLogs.isNotEmpty()) {
+                    WorkspaceOperationsTimeline(
+                        displayLogs = filteredLogs,
+                        isThinking = false
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
 
-                Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+            Card(
+                shape = RoundedCornerShape(
+                    topStart = 18.dp,
+                    topEnd = 18.dp,
+                    bottomStart = if (isUser) 18.dp else 6.dp,
+                    bottomEnd = if (isUser) 6.dp else 18.dp
+                ),
+                colors = CardDefaults.cardColors(containerColor = bg),
+                border = BorderStroke(1.dp, border),
+                modifier = Modifier.widthIn(max = 600.dp)
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    if (isEditing) {
-                        OutlinedTextField(
-                            value = editedContent,
-                            onValueChange = { editedContent = it },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedBorderColor = Color(0xFF8B5CF6)
-                            ),
-                            textStyle = TextStyle(fontSize = 14.sp, color = Color.White, fontFamily = FontFamily.Default)
-                        )
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                            horizontalArrangement = Arrangement.End,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            TextButton(onClick = { isEditing = false }) {
-                                Text("Cancel", color = Color.Gray, fontSize = 11.sp)
-                            }
-                            Button(
-                                onClick = {
-                                    onEditMessage(message, editedContent)
-                                    isEditing = false
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6)),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                                modifier = Modifier.height(28.dp)
+                    // Background watermark: DEVELOPED BY MUSTASIM FUYAD
+                    Text(
+                        text = "DEVELOPED BY MUSTASIM FUYAD",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Black,
+                        color = Color.White.copy(alpha = 0.03f),
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .rotate(-15f),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        maxLines = 2
+                    )
+
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (isEditing) {
+                            OutlinedTextField(
+                                value = editedContent,
+                                onValueChange = { editedContent = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedBorderColor = Color(0xFF8B5CF6)
+                                ),
+                                textStyle = TextStyle(fontSize = 14.sp, color = Color.White, fontFamily = FontFamily.Default)
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                                horizontalArrangement = Arrangement.End,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("Save", color = Color.White, fontSize = 11.sp)
+                                TextButton(onClick = { isEditing = false }) {
+                                    Text("Cancel", color = Color.Gray, fontSize = 11.sp)
+                                }
+                                Button(
+                                    onClick = {
+                                        onEditMessage(message, editedContent)
+                                        isEditing = false
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6)),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                                    modifier = Modifier.height(28.dp)
+                                ) {
+                                    Text("Save", color = Color.White, fontSize = 11.sp)
+                                }
                             }
+                        } else {
+                            FormattedMarkdownText(text = message.content)
                         }
-                    } else {
-                        FormattedMarkdownText(text = message.content)
                     }
                 }
             }
-        }
 
-        if (isUser && assistantModelName != null && assistantDuration != null) {
+            if (isUser && assistantModelName != null && assistantDuration != null) {
+                Row(
+                    modifier = Modifier
+                        .padding(top = 4.dp, end = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Bolt,
+                        contentDescription = "Model Info",
+                        tint = Color(0xFFFFB020),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        text = "$assistantModelName (Took $assistantDuration)",
+                        color = Color(0xFF94A3B8),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+
+            // Message Actions
             Row(
-                modifier = Modifier
-                    .padding(top = 4.dp, end = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                modifier = Modifier.padding(top = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Default.Bolt,
-                    contentDescription = "Model Info",
-                    tint = Color(0xFFFFB020),
-                    modifier = Modifier.size(14.dp)
-                )
-                Text(
-                    text = "$assistantModelName (Took $assistantDuration)",
-                    color = Color(0xFF94A3B8),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-        }
-
-        // Message Actions
-        Row(
-            modifier = Modifier.padding(top = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (isUser && !isEditing) {
-                MessageActionButton(Icons.Default.Edit, "Edit") { isEditing = true }
-                MessageActionButton(Icons.Default.Refresh, "Regenerate") { onRegenerate(message) }
-            }
-            
-            MessageActionButton(Icons.Default.ContentCopy, "Copy") {
-                clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(message.content))
-            }
-            
-            MessageActionButton(Icons.Default.Delete, "Delete", tint = Color(0xFFEE5253).copy(alpha = 0.7f)) {
-                onDeleteMessage(message)
+                if (isUser && !isEditing) {
+                    MessageActionButton(Icons.Default.Edit, "Edit") { isEditing = true }
+                    MessageActionButton(Icons.Default.Refresh, "Regenerate") { onRegenerate(message) }
+                }
+                
+                MessageActionButton(Icons.Default.ContentCopy, "Copy") {
+                    clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(message.content))
+                }
+                
+                MessageActionButton(Icons.Default.Delete, "Delete", tint = Color(0xFFEE5253).copy(alpha = 0.7f)) {
+                    onDeleteMessage(message)
+                }
             }
         }
     }
@@ -2352,6 +2354,7 @@ fun getInlinedHtml(files: List<ProjectFileEntity>): String {
 }
 
 fun uploadToPasteEe(htmlContent: String, onSuccess: (String) -> Unit, onError: (String) -> Unit) {
+    val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
     val client = okhttp3.OkHttpClient()
     val url = "https://api.paste.ee/v1/pastes"
 
@@ -2377,13 +2380,17 @@ fun uploadToPasteEe(htmlContent: String, onSuccess: (String) -> Unit, onError: (
 
     client.newCall(request).enqueue(object : okhttp3.Callback {
         override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {
-            onError(e.message ?: "Network error")
+            mainHandler.post {
+                onError(e.message ?: "Network error")
+            }
         }
 
         override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
             response.use {
                 if (!response.isSuccessful) {
-                    onError("HTTP Error: ${response.code}")
+                    mainHandler.post {
+                        onError("HTTP Error: ${response.code}")
+                    }
                     return
                 }
                 val bodyStr = response.body?.string() ?: ""
@@ -2392,12 +2399,18 @@ fun uploadToPasteEe(htmlContent: String, onSuccess: (String) -> Unit, onError: (
                     if (respJson.getBoolean("success")) {
                         val id = respJson.getString("id")
                         val rawUrl = "https://paste.ee/r/$id"
-                        onSuccess("https://htmlpreview.github.io/?$rawUrl")
+                        mainHandler.post {
+                            onSuccess("https://htmlpreview.github.io/?$rawUrl")
+                        }
                     } else {
-                        onError("API Error: success is false")
+                        mainHandler.post {
+                            onError("API Error: success is false")
+                        }
                     }
                 } catch (e: java.lang.Exception) {
-                    onError(e.message ?: "Parsing error")
+                    mainHandler.post {
+                        onError(e.message ?: "Parsing error")
+                    }
                 }
             }
         }
@@ -2520,19 +2533,21 @@ fun PreviewTabContent(
                             onSuccess = { liveUrl ->
                                 isGeneratingLivePreview = false
                                 try {
-                                    uriHandler.openUri(liveUrl)
+                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(liveUrl)).apply {
+                                        addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    }
+                                    context.startActivity(intent)
                                 } catch (e: Exception) {
-                                    android.widget.Toast.makeText(context, "Failed to open browser", android.widget.Toast.LENGTH_SHORT).show()
+                                    try {
+                                        uriHandler.openUri(liveUrl)
+                                    } catch (e2: Exception) {
+                                        android.widget.Toast.makeText(context, "Failed to open browser: ${e2.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
                                 }
                             },
                             onError = { error ->
                                 isGeneratingLivePreview = false
-                                try {
-                                    val base64Html = android.util.Base64.encodeToString(bundledHtml.toByteArray(), android.util.Base64.NO_PADDING or android.util.Base64.NO_WRAP)
-                                    uriHandler.openUri("data:text/html;base64,$base64Html")
-                                } catch (e: Exception) {
-                                    android.widget.Toast.makeText(context, "Error generating local preview", android.widget.Toast.LENGTH_SHORT).show()
-                                }
+                                android.widget.Toast.makeText(context, "Failed to generate preview: $error", android.widget.Toast.LENGTH_LONG).show()
                             }
                         )
                     },

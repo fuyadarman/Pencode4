@@ -1913,8 +1913,11 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 """.trimIndent()
             }
 
+            val fileTreeStr = generateFileTree(_projectFiles.value)
             val systemInstruction = """
                 You are PenCode AI, a versatile AI Software Engineer and Development Assistant.
+                
+                $fileTreeStr
                 
                 :warning: if You're trying to use edit,patch or append tool without using read_file or read_file_rannge you will be punished and your request will be rejected and dont forget about exploring codebase,if you Don't explore codebase you will be rejected.
                 
@@ -3336,6 +3339,47 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
+    }
+
+    private fun generateFileTree(files: List<ProjectFileEntity>): String {
+        val visibleFiles = files.filter { it.path != "browser_memory.md" && it.path != "memory.md" }
+        if (visibleFiles.isEmpty()) return "Workspace is empty."
+        
+        val rootFiles = mutableSetOf<String>()
+        val rootDirs = mutableSetOf<String>()
+        
+        for (file in visibleFiles) {
+            val parts = file.path.split("/")
+            if (parts.size == 1) {
+                rootFiles.add(parts[0])
+            } else if (parts.size > 1 && parts[0].isNotEmpty()) {
+                rootDirs.add(parts[0] + "/")
+            }
+        }
+        
+        val sortedDirs = rootDirs.sorted()
+        val sortedFiles = rootFiles.sorted()
+        
+        val sb = java.lang.StringBuilder()
+        sb.append("PROJECT WORKSPACE ROOT DIRECTORY CONTENTS:\n")
+        
+        val allItems = sortedDirs + sortedFiles
+        for (i in allItems.indices) {
+            val item = allItems[i]
+            val isLast = i == allItems.size - 1
+            val marker = if (isLast) "└── " else "├── "
+            sb.append(marker).append(item).append("\n")
+        }
+        
+        sb.append("\nTotal files in project: ${visibleFiles.size}\n")
+        sb.append("\n[CRITICAL MANDATORY INSTRUCTION FOR THE AI AGENT]:\n")
+        sb.append("- You are ONLY shown the ROOT level files and folders to keep system context highly optimized.\n")
+        sb.append("- You are STRICTLY FORBIDDEN from assuming or guessing what files exist inside any of the folders listed above (e.g., ")
+        sb.append(sortedDirs.joinToString(", "))
+        sb.append(").\n")
+        sb.append("- If you need to read, edit, or create files within any of these directories, you MUST first run the 'scan_dir' tool on that directory path (or use search tools) to fully scan and locate the files before performing any file edits or creation. Failing to scan first will result in critical failures and incorrect paths!")
+        
+        return sb.toString()
     }
 }
 
