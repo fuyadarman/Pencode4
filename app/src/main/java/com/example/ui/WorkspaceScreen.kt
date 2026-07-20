@@ -53,6 +53,7 @@ import java.io.ByteArrayInputStream
 import android.graphics.BitmapFactory
 import androidx.compose.ui.graphics.asImageBitmap
 import kotlinx.coroutines.launch
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -2321,6 +2322,88 @@ class WebAppInspectorInterface(private val onElementSelected: (String, String) -
     }
 }
 
+fun getInlinedHtml(files: List<ProjectFileEntity>): String {
+    val htmlFile = files.find { it.path == "index.html" } ?: return ""
+    var content = htmlFile.content
+
+    val cssRegex = Regex("""<link\s+[^>]*rel=["']stylesheet["'][^>]*href=["']([^"']+)["'][^>]*>""", RegexOption.IGNORE_CASE)
+    content = cssRegex.replace(content) { matchResult ->
+        val href = matchResult.groups[1]?.value ?: ""
+        val cssFile = files.find { it.path.equals(href, ignoreCase = true) }
+        if (cssFile != null) {
+            "<style>\n${cssFile.content}\n</style>"
+        } else {
+            matchResult.value
+        }
+    }
+
+    val jsRegex = Regex("""<script\s+[^>]*src=["']([^"']+)["'][^>]*>\s*</script>""", RegexOption.IGNORE_CASE)
+    content = jsRegex.replace(content) { matchResult ->
+        val src = matchResult.groups[1]?.value ?: ""
+        val jsFile = files.find { it.path.equals(src, ignoreCase = true) }
+        if (jsFile != null) {
+            "<script>\n${jsFile.content}\n</script>"
+        } else {
+            matchResult.value
+        }
+    }
+
+    return content
+}
+
+fun uploadToPasteEe(htmlContent: String, onSuccess: (String) -> Unit, onError: (String) -> Unit) {
+    val client = okhttp3.OkHttpClient()
+    val url = "https://api.paste.ee/v1/pastes"
+
+    val json = org.json.JSONObject().apply {
+        put("key", "public")
+        put("description", "Live Web Preview")
+        val sectionsArray = org.json.JSONArray().apply {
+            put(org.json.JSONObject().apply {
+                put("name", "index.html")
+                put("syntax", "html")
+                put("contents", htmlContent)
+            })
+        }
+        put("sections", sectionsArray)
+    }
+
+    val mediaType = "application/json; charset=utf-8".toMediaTypeOrNull()
+    val body = okhttp3.RequestBody.create(mediaType, json.toString())
+    val request = okhttp3.Request.Builder()
+        .url(url)
+        .post(body)
+        .build()
+
+    client.newCall(request).enqueue(object : okhttp3.Callback {
+        override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {
+            onError(e.message ?: "Network error")
+        }
+
+        override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
+            response.use {
+                if (!response.isSuccessful) {
+                    onError("HTTP Error: ${response.code}")
+                    return
+                }
+                val bodyStr = response.body?.string() ?: ""
+                try {
+                    val respJson = org.json.JSONObject(bodyStr)
+                    if (respJson.getBoolean("success")) {
+                        val id = respJson.getString("id")
+                        val rawUrl = "https://paste.ee/r/$id"
+                        onSuccess("https://htmlpreview.github.io/?$rawUrl")
+                    } else {
+                        onError("API Error: success is false")
+                    }
+                } catch (e: java.lang.Exception) {
+                    onError(e.message ?: "Parsing error")
+                }
+            }
+        }
+    })
+}
+
 @Composable
 fun PreviewTabContent(
     files: List<ProjectFileEntity>,
@@ -2344,6 +2427,9 @@ fun PreviewTabContent(
     var isInspectorModeActive by remember { mutableStateOf(false) }
     val currentOnElementSelected by rememberUpdatedState(onInspectorElementSelected)
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
+    var isGeneratingLivePreview by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
 
     LaunchedEffect(isInspectorModeActive, webViewRef) {
         webViewRef?.evaluateJavascript("window.isInspectorModeActive = $isInspectorModeActive;", null)
@@ -2419,6 +2505,56 @@ fun PreviewTabContent(
                         tint = Color.White,
                         modifier = Modifier.size(18.dp)
                     )
+                }
+
+                IconButton(
+                    onClick = {
+                        if (htmlFile == null) {
+                            android.widget.Toast.makeText(context, "No index.html found", android.widget.Toast.LENGTH_SHORT).show()
+                            return@IconButton
+                        }
+                        isGeneratingLivePreview = true
+                        val bundledHtml = getInlinedHtml(files)
+                        uploadToPasteEe(
+                            htmlContent = bundledHtml,
+                            onSuccess = { liveUrl ->
+                                isGeneratingLivePreview = false
+                                try {
+                                    uriHandler.openUri(liveUrl)
+                                } catch (e: Exception) {
+                                    android.widget.Toast.makeText(context, "Failed to open browser", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            onError = { error ->
+                                isGeneratingLivePreview = false
+                                try {
+                                    val base64Html = android.util.Base64.encodeToString(bundledHtml.toByteArray(), android.util.Base64.NO_PADDING or android.util.Base64.NO_WRAP)
+                                    uriHandler.openUri("data:text/html;base64,$base64Html")
+                                } catch (e: Exception) {
+                                    android.widget.Toast.makeText(context, "Error generating local preview", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        )
+                    },
+                    modifier = Modifier
+                        .size(36.dp)
+                        .background(if (isGeneratingLivePreview) Color(0xFFF1C40F) else Color(0xFF2ED573), CircleShape),
+                    enabled = !isGeneratingLivePreview
+                ) {
+                    if (isGeneratingLivePreview) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            color = Color.Black,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.OpenInBrowser,
+                            contentDescription = "Live Preview in Browser",
+                            tint = Color.Black,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
         }
@@ -2911,6 +3047,32 @@ fun AndroidBuildTabContent(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(8.dp)
                     )
+
+                    val buildTabUriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Start,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Need a token? ",
+                            color = Color(0xFF80809B),
+                            fontSize = 11.sp
+                        )
+                        Text(
+                            text = "Create one on GitHub",
+                            color = Color(0xFF38BDF8),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.clickable {
+                                try {
+                                    buildTabUriHandler.openUri("https://github.com/settings/tokens/new")
+                                } catch (e: Exception) {
+                                    // Ignore
+                                }
+                            }
+                        )
+                    }
 
                     OutlinedTextField(
                         value = tempBranch,

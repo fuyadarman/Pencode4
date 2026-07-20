@@ -2333,7 +2333,10 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                             }
                             "scan_dir" -> {
                                 val rawPath = args?.path ?: args?.query ?: ""
-                                val targetPath = normalizePath(rawPath)
+                                var targetPath = normalizePath(rawPath)
+                                if (targetPath == "." || targetPath == "./" || targetPath == "/") {
+                                    targetPath = ""
+                                }
                                 val scanLog = createAiLog(
                                     title = "Scanned directory (scan_dir)",
                                     status = "thinking",
