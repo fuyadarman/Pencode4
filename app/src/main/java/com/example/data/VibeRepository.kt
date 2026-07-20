@@ -1469,6 +1469,49 @@ public class MainActivity extends FlutterActivity {
     </script>
 </body>
 </html>"""
+                ),
+                ProjectFileEntity(
+                    projectName = projectName,
+                    path = "src/main.tsx",
+                    content = """import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './app';
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);"""
+                ),
+                ProjectFileEntity(
+                    projectName = projectName,
+                    path = "src/app.tsx",
+                    content = """import React, { useState } from 'react';
+
+export default function App() {
+    const [count, setCount] = useState(0);
+    return (
+        <div className="bg-[#151726] border border-[#2b2f4a] p-8 rounded-2xl shadow-2xl max-w-md text-center">
+            <h1 className="text-3xl font-extrabold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent mb-4">
+                React Hello World!
+            </h1>
+            <p className="text-gray-400 mb-6">
+                This template is powered by React & ReactDOM directly from unpkg CDN.
+            </p>
+            <div className="p-6 bg-[#0d0e15] rounded-xl border border-[#23273f] mb-6">
+                <p className="text-sm font-semibold text-cyan-400 mb-2">Interactive Counter</p>
+                <span className="text-4xl font-bold text-white">{count}</span>
+            </div>
+            <button 
+                onClick={() => setCount(count + 1)}
+                className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-bold py-3 px-8 rounded-xl transition duration-300 transform hover:scale-105 shadow-lg shadow-cyan-500/20"
+            >
+                Click Me!
+            </button>
+        </div>
+    );
+}"""
                 )
             )
             "vanilla" -> listOf(
@@ -1718,6 +1761,63 @@ p {
     </script>
 </body>
 </html>"""
+                ),
+                ProjectFileEntity(
+                    projectName = projectName,
+                    path = "src/main.tsx",
+                    content = """import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './app';
+
+const root = ReactDOM.createRoot(document.getElementById('canvas-container'));
+root.render(<App />);"""
+                ),
+                ProjectFileEntity(
+                    projectName = projectName,
+                    path = "src/app.tsx",
+                    content = """import React, { useRef, useState } from 'react';
+import { Canvas, useFrame } from '@react-three/fiber';
+
+function RotatingCube() {
+    const meshRef = useRef<any>();
+    const [hovered, setHover] = useState(false);
+    const [active, setActive] = useState(false);
+
+    useFrame((state, delta) => {
+        if (meshRef.current) {
+            meshRef.current.rotation.x += delta * 0.5;
+            meshRef.current.rotation.y += delta * 0.8;
+        }
+    });
+
+    return (
+        <mesh
+            ref={meshRef}
+            scale={active ? 1.5 : 1.2}
+            onClick={() => setActive(!active)}
+            onPointerOver={() => setHover(true)}
+            onPointerOut={() => setHover(false)}
+        >
+            <boxGeometry args={[1.5, 1.5, 1.5]} />
+            <meshStandardMaterial
+                color={hovered ? '#00fcc7' : '#6c5ce7'}
+                roughness={0.1}
+                metalness={0.8}
+            />
+        </mesh>
+    );
+}
+
+export default function App() {
+    return (
+        <Canvas camera={{ position: [0, 0, 4] }}>
+            <ambientLight intensity={0.5} />
+            <pointLight position={[10, 10, 10]} intensity={1.5} />
+            <pointLight position={[-10, -10, -10]} intensity={0.5} />
+            <RotatingCube />
+        </Canvas>
+    );
+}"""
                 )
             )
             else -> listOf(

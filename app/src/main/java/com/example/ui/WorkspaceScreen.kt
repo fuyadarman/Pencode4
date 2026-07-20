@@ -1610,73 +1610,75 @@ fun FormattedMarkdownText(
     modifier: Modifier = Modifier
 ) {
     val lines = text.split("\n")
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        lines.forEach { line ->
-            val trimmed = line.trim()
-            if (trimmed.isEmpty()) {
-                Spacer(modifier = Modifier.height(4.dp))
-            } else if (trimmed.startsWith("###")) {
-                val headerText = trimmed.substring(3).trim()
-                Text(
-                    text = parseInlineMarkdown(headerText),
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFFF3F4F6),
-                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
-                    lineHeight = 22.sp
-                )
-            } else if (trimmed.startsWith("##")) {
-                val headerText = trimmed.substring(2).trim()
-                Text(
-                    text = parseInlineMarkdown(headerText),
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFFF3F4F6),
-                    modifier = Modifier.padding(top = 10.dp, bottom = 4.dp),
-                    lineHeight = 24.sp
-                )
-            } else if (trimmed.startsWith("#")) {
-                val headerText = trimmed.substring(1).trim()
-                Text(
-                    text = parseInlineMarkdown(headerText),
-                    fontSize = 19.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    modifier = Modifier.padding(top = 12.dp, bottom = 6.dp),
-                    lineHeight = 26.sp
-                )
-            } else if (trimmed.startsWith("-") || trimmed.startsWith("*")) {
-                val bulletText = trimmed.substring(1).trim()
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 4.dp, top = 2.dp, bottom = 2.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+    androidx.compose.foundation.text.selection.SelectionContainer {
+        Column(
+            modifier = modifier,
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            lines.forEach { line ->
+                val trimmed = line.trim()
+                if (trimmed.isEmpty()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                } else if (trimmed.startsWith("###")) {
+                    val headerText = trimmed.substring(3).trim()
                     Text(
-                        text = "•",
-                        fontSize = 14.sp,
+                        text = parseInlineMarkdown(headerText),
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF8B5CF6)
+                        color = Color(0xFFF3F4F6),
+                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                        lineHeight = 22.sp
                     )
+                } else if (trimmed.startsWith("##")) {
+                    val headerText = trimmed.substring(2).trim()
                     Text(
-                        text = parseInlineMarkdown(bulletText),
+                        text = parseInlineMarkdown(headerText),
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFF3F4F6),
+                        modifier = Modifier.padding(top = 10.dp, bottom = 4.dp),
+                        lineHeight = 24.sp
+                    )
+                } else if (trimmed.startsWith("#")) {
+                    val headerText = trimmed.substring(1).trim()
+                    Text(
+                        text = parseInlineMarkdown(headerText),
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        modifier = Modifier.padding(top = 12.dp, bottom = 6.dp),
+                        lineHeight = 26.sp
+                    )
+                } else if (trimmed.startsWith("-") || trimmed.startsWith("*")) {
+                    val bulletText = trimmed.substring(1).trim()
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 4.dp, top = 2.dp, bottom = 2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "•",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF8B5CF6)
+                        )
+                        Text(
+                            text = parseInlineMarkdown(bulletText),
+                            fontSize = 13.sp,
+                            color = Color(0xFFE5E7EB),
+                            lineHeight = 18.sp,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                } else {
+                    Text(
+                        text = parseInlineMarkdown(trimmed),
                         fontSize = 13.sp,
                         color = Color(0xFFE5E7EB),
-                        lineHeight = 18.sp,
-                        modifier = Modifier.weight(1f)
+                        lineHeight = 18.sp
                     )
                 }
-            } else {
-                Text(
-                    text = parseInlineMarkdown(trimmed),
-                    fontSize = 13.sp,
-                    color = Color(0xFFE5E7EB),
-                    lineHeight = 18.sp
-                )
             }
         }
     }
@@ -2787,6 +2789,23 @@ fun AndroidBuildTabContent(
 
     val logsScrollState = rememberScrollState()
 
+    var elapsedSeconds by remember { mutableStateOf(0) }
+    val isBuildActive = isPollingBuild && (
+        buildStatus.contains("in_progress", ignoreCase = true) ||
+        buildStatus.contains("queued", ignoreCase = true) ||
+        (buildStatus.contains("Run #", ignoreCase = true) && !buildStatus.contains("completed", ignoreCase = true))
+    )
+
+    LaunchedEffect(isBuildActive) {
+        if (isBuildActive) {
+            elapsedSeconds = 0
+            while (true) {
+                kotlinx.coroutines.delay(1000)
+                elapsedSeconds++
+            }
+        }
+    }
+
     LaunchedEffect(buildLogs) {
         if (buildLogs.isNotEmpty()) {
             logsScrollState.animateScrollTo(logsScrollState.maxValue)
@@ -3038,15 +3057,27 @@ fun AndroidBuildTabContent(
                 ) {
                     Column {
                         Text("Current Build Status", color = Color(0xFF80809B), fontSize = 11.sp)
-                        Text(
-                            text = buildStatus,
-                            color = if (buildStatus.contains("success", ignoreCase = true)) Color(0xFF2ED573)
-                                    else if (buildStatus.contains("fail", ignoreCase = true) || buildStatus.contains("error", ignoreCase = true)) Color(0xFFEE5253)
-                                    else Color.White,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(top = 2.dp)
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = buildStatus,
+                                color = if (buildStatus.contains("success", ignoreCase = true)) Color(0xFF2ED573)
+                                        else if (buildStatus.contains("fail", ignoreCase = true) || buildStatus.contains("error", ignoreCase = true)) Color(0xFFEE5253)
+                                        else Color.White,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                            if (elapsedSeconds > 0) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "(${elapsedSeconds}s)",
+                                    color = Color(0xFF38BDF8),
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(top = 2.dp)
+                                )
+                            }
+                        }
                     }
 
                     if (isPollingBuild) {
