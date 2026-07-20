@@ -1943,8 +1943,8 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 $activeTemplateInfo
                 - You MUST strictly respect the current template/framework of the project. If Vanilla JS or React CDN is selected, do NOT use React Three Fiber or Three.js unless specifically requested.
                 
-                EXPLORE BEFORE YOU BUILD (CRITICAL MANDATE):
-                - You must ALWAYS run 'list_directory' or 'ls' (using run_command) to scan the workspace and explore the codebase to understand the existing folder and file structure before you write, edit, or patch any code.
+                EXPLORE BEFORE YOU BUILD & RECURSIVE SCAN MANDATE (CRITICAL):
+                - Whenever you see, encounter, or need to explore a directory, folder, or path (including the workspace root), you MUST strictly use the 'scan_dir' tool first to recursively scan and explore all folders, subfolders, paths, and files inside it.
                 - Do NOT assume files exist or have specific contents. Always explore and read them first.
                 
                 READ-BEFORE-MODIFY & NO REDUNDANT RE-READING FOR VERIFICATION (CRITICAL SAVINGS):
@@ -2050,6 +2050,8 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                     - Required args: 'query' (the list of sub-tasks separated by the '|' character. E.g. "Implement browser|Setup files|Verify UI").
                 20. 'complete_todo_task': Mark a specific sub-task in the todo list as completed.
                     - Required args: 'query' (the 0-based index of the sub-task to mark complete, E.g. "0" for the first sub-task).
+                21. 'scan_dir': Recursively scan, explore, and list all folders, subfolders, paths, and files inside any target directory or path. This tool is MANDATORY whenever you encounter or need to explore any directory or folder.
+                    - Required args: 'path' (the target directory path to recursively scan, e.g., "app/src", or "." for the entire workspace root).
                 
                 Tool arguments structure:
                    - 'path': The file path.
@@ -2069,7 +2071,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 JSON Schema:
                 {
                   "thought": "Analysis and plan.",
-                  "tool": "list_directory" | "read_file" | "read_file_range" | "write_file" | "edit_file" | "patch_file" | "append" | "delete_file" | "rename_file" | "move_file" | "run_command" | "global_search" | "complete" | "delete_code" | "move_code" | "copy_code" | "generate_image" | "resize_image" | "browser_search" | "browser_click" | "browser_read" | "create_todo_list" | "complete_todo_task",
+                  "tool": "list_directory" | "read_file" | "read_file_range" | "write_file" | "edit_file" | "patch_file" | "append" | "delete_file" | "rename_file" | "move_file" | "run_command" | "global_search" | "complete" | "delete_code" | "move_code" | "copy_code" | "generate_image" | "resize_image" | "browser_search" | "browser_click" | "browser_read" | "create_todo_list" | "complete_todo_task" | "scan_dir",
                   "arguments": {
                     "path": "file/path.kt",
                     "destinationPath": "dest/path.kt",
@@ -2108,7 +2110,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 - When performing an 'edit_file', 'patch_file', or 'append', always be precise and target exact lines.
                 
                 MANDATORY STRATEGY RULES (CRITICAL - YOU WILL BE PUNISHED AND REJECTED IF VIOLATED):
-                1. Use list_directory to search directories/files.
+                1. Use 'scan_dir' recursively to explore and list folders/subfolders/files whenever you see, encounter, or need to explore a directory, folder, or path. This is a STRICT REQUIREMENT.
                 2. ALWAYS use the 'grep' command (run_command with grep -rn "keyword" .) to find exact files and matching lines before reading any files. You can run grep up to 5 times if you do not get any grep output, because you need to locate exact file lines.
                 3. After finding the exact file and matched lines using grep, you MUST read ONLY about 30 lines surrounding the matched code (e.g., 15 lines before and 15 lines after) using the 'read_file_range' tool.
                 4. NEVER read the full file if it is larger than 80 lines. If a file is larger than 80 lines, you are STRICTLY FORBIDDEN from reading the full file. Instead, you MUST use global_search or grep to find the exact match first, and then read only the surrounding lines of code (using 'read_file_range' with a precise window around the target).
@@ -2328,6 +2330,45 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                                 // Append results to history
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'list_directory': $result"))))
+                            }
+                            "scan_dir" -> {
+                                val rawPath = args?.path ?: args?.query ?: ""
+                                val targetPath = normalizePath(rawPath)
+                                val scanLog = createAiLog(
+                                    title = "Scanned directory (scan_dir)",
+                                    status = "thinking",
+                                    details = if (targetPath.isEmpty()) "Root workspace" else targetPath
+                                )
+                                _aiActionLogs.value = _aiActionLogs.value + scanLog
+
+                                val files = repository.getFilesForProject(project.name)
+                                val filteredFiles = if (targetPath.isEmpty()) {
+                                    files
+                                } else {
+                                    files.filter { it.path.startsWith(targetPath) }
+                                }
+
+                                val fileDetails = filteredFiles.sortedBy { it.path }.map { file ->
+                                    val lineCount = file.content.lines().size
+                                    val sizeInBytes = file.content.toByteArray(Charsets.UTF_8).size
+                                    val sizeStr = if (sizeInBytes >= 1024 * 1024) {
+                                        String.format("%.2f MB", sizeInBytes.toDouble() / (1024 * 1024))
+                                    } else {
+                                        String.format("%.2f KB", sizeInBytes.toDouble() / 1024)
+                                    }
+                                    "  - ${file.path} ($lineCount lines, $sizeStr)"
+                                }.joinToString("\n")
+
+                                val result = if (fileDetails.isEmpty()) {
+                                    "No files or subdirectories found under '$targetPath'."
+                                } else {
+                                    "Recursive scan of directory '$targetPath' succeeded. Found ${filteredFiles.size} files:\n$fileDetails"
+                                }
+
+                                updateAiLog(scanLog.id, "success", result)
+
+                                history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
+                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'scan_dir': $result"))))
                             }
                             "read_file" -> {
                                 val filePath = normalizePath(args?.path ?: "")
