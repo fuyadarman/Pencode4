@@ -25,11 +25,10 @@ class MainActivity : ComponentActivity() {
         setContent {
             // Force true dark theme for the sleek professional Cursor/Lovable feel
             MyApplicationTheme(darkTheme = true, dynamicColor = false) {
-                androidx.compose.foundation.text.selection.SelectionContainer {
-                    Surface(
-                        modifier = Modifier.fillMaxSize(),
-                        color = Color(0xFF08080C)
-                    ) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = Color(0xFF08080C)
+                ) {
                         val viewModel: VibeViewModel = viewModel()
                         
                         val currentProject by viewModel.currentProject.collectAsState()
@@ -263,7 +262,6 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                     }
-                }
             }
         }
     }
