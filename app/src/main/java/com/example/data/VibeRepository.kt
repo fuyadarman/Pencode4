@@ -906,11 +906,6 @@ android {
     composeOptions {
         kotlinCompilerExtensionVersion = "1.4.3"
     }
-    testOptions {
-        unitTests {
-            isIncludeAndroidResources = true
-        }
-    }
 }
 
 dependencies {
@@ -922,13 +917,6 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
-    
-    // Testing Dependencies
-    testImplementation("junit:junit:4.13.2")
-    testImplementation("org.robolectric:robolectric:4.10.3")
-    testImplementation("androidx.test:core-ktx:1.5.0")
-    testImplementation("androidx.test.ext:junit-ktx:1.1.5")
-    testImplementation("androidx.compose.ui:ui-test-junit4")
 }
 """
                 ),
@@ -991,52 +979,6 @@ fun Greeting(name: String, modifier: Modifier = Modifier) {
         text = "Hello ${"$"}name!",
         modifier = modifier
     )
-}
-"""
-                ),
-                ProjectFileEntity(
-                    projectName = projectName,
-                    path = "app/src/test/java/com/example/myandroidapp/ExampleUnitTest.kt",
-                    content = """package com.example.myandroidapp
-
-import org.junit.Test
-import org.junit.Assert.*
-
-class ExampleUnitTest {
-    @Test
-    fun addition_isCorrect() {
-        assertEquals(4, 2 + 2)
-    }
-    
-    @Test
-    fun subtraction_isCorrect() {
-        assertEquals(0, 2 - 2)
-    }
-}
-"""
-                ),
-                ProjectFileEntity(
-                    projectName = projectName,
-                    path = "app/src/test/java/com/example/myandroidapp/ExampleIntegrationTest.kt",
-                    content = """package com.example.myandroidapp
-
-import android.content.Context
-import androidx.test.core.app.ApplicationProvider
-import org.junit.Test
-import org.junit.Assert.*
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
-
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33])
-class ExampleIntegrationTest {
-    @Test
-    fun readStringFromContext() {
-        val context = ApplicationProvider.getApplicationContext<Context>()
-        assertNotNull(context)
-        assertEquals("My Android App", context.getString(R.string.app_name))
-    }
 }
 """
                 )

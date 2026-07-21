@@ -18,6 +18,7 @@ import com.example.ui.WorkspaceScreen
 import com.example.ui.WebConsoleError
 import com.example.ui.theme.MyApplicationTheme
 import androidx.compose.foundation.text.selection.SelectionContainer
+import com.example.api.LocalHttpServer
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -79,9 +80,6 @@ class MainActivity : ComponentActivity() {
                         val allowBuildPush by viewModel.allowBuildPush.collectAsState()
                         val allowAutoFix by viewModel.allowAutoFix.collectAsState()
                         val isLoadingWorkspace by viewModel.isLoadingWorkspace.collectAsState()
-                        val testStatus by viewModel.testStatus.collectAsState()
-                        val testLogs by viewModel.testLogs.collectAsState()
-                        val isTesting by viewModel.isTesting.collectAsState()
 
                         if (currentProject == null) {
                             HomeScreen(
@@ -113,11 +111,6 @@ class MainActivity : ComponentActivity() {
                                 aiActionLogs = aiActionLogs,
                                 terminalOutput = terminalOutput,
                                 isLoadingWorkspace = isLoadingWorkspace,
-                                testStatus = testStatus,
-                                testLogs = testLogs,
-                                isTesting = isTesting,
-                                onRunTests = { viewModel.runProjectTests() },
-                                onGenerateStarterTests = { viewModel.generateStarterTestSuite() },
                                 gitProgress = gitProgress,
                                 customProvider = customProvider,
                                 customApiKey = customApiKey,
@@ -275,5 +268,10 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        LocalHttpServer.stop()
     }
 }

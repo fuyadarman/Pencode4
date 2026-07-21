@@ -37,7 +37,6 @@ enum class WorkspaceTab {
     PREVIEW,
     TERMINAL,
     ANDROID_BUILD,
-    TESTS,
 }
 
 data class EditRecord(
@@ -1381,133 +1380,6 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     private val _isLoadingWorkspace = MutableStateFlow(false)
     val isLoadingWorkspace: StateFlow<Boolean> = _isLoadingWorkspace.asStateFlow()
 
-    private val _testStatus = MutableStateFlow("NOT_RUN") // "NOT_RUN", "RUNNING", "PASSED", "FAILED"
-    val testStatus: StateFlow<String> = _testStatus.asStateFlow()
-
-    private val _testLogs = MutableStateFlow("")
-    val testLogs: StateFlow<String> = _testLogs.asStateFlow()
-
-    private val _isTesting = MutableStateFlow(false)
-    val isTesting: StateFlow<Boolean> = _isTesting.asStateFlow()
-
-    fun runProjectTests() {
-        val project = _currentProject.value ?: return
-        if (_isTesting.value) return
-        _isTesting.value = true
-        _testStatus.value = "RUNNING"
-        _testLogs.value = "Starting project unit & integration tests...\n"
-        viewModelScope.launch {
-            try {
-                val cmd = when (project.templateKey) {
-                    "android_kotlin" -> "gradle :app:testDebugUnitTest"
-                    "flutter" -> "flutter test"
-                    "react" -> "npm test"
-                    "vanilla" -> "npm test"
-                    else -> "gradle test"
-                }
-                
-                _testLogs.value += "> $cmd\n"
-                val result = repository.executeCommand(project.name, cmd)
-                _testLogs.value += result
-                
-                if (result.contains("FAILED") || result.contains("fail") || result.contains("Error") || result.contains("Exception") || result.contains("Compilation failed")) {
-                    _testStatus.value = "FAILED"
-                } else {
-                    _testStatus.value = "PASSED"
-                }
-            } catch (e: Exception) {
-                _testLogs.value += "\nError: ${e.localizedMessage}"
-                _testStatus.value = "FAILED"
-            } finally {
-                _isTesting.value = false
-            }
-        }
-    }
-
-    fun generateStarterTestSuite() {
-        val project = _currentProject.value ?: return
-        viewModelScope.launch {
-            if (project.templateKey == "android_kotlin") {
-                val packageDir = "app/src/test/java/com/example/myandroidapp"
-                
-                // 1. ExampleUnitTest.kt
-                val unitTestPath = "$packageDir/ExampleUnitTest.kt"
-                val unitTestContent = """
-                    package com.example.myandroidapp
-                    
-                    import org.junit.Test
-                    import org.junit.Assert.*
-                    
-                    class ExampleUnitTest {
-                        @Test
-                        fun addition_isCorrect() {
-                            assertEquals(4, 2 + 2)
-                        }
-                        
-                        @Test
-                        fun subtraction_isCorrect() {
-                            assertEquals(0, 2 - 2)
-                        }
-                    }
-                """.trimIndent()
-                repository.saveFile(project.name, unitTestPath, unitTestContent)
-                
-                // 2. ExampleIntegrationTest.kt (Robolectric test)
-                val integrationTestPath = "$packageDir/ExampleIntegrationTest.kt"
-                val integrationTestContent = """
-                    package com.example.myandroidapp
-                    
-                    import android.content.Context
-                    import androidx.test.core.app.ApplicationProvider
-                    import org.junit.Test
-                    import org.junit.Assert.*
-                    import org.junit.runner.RunWith
-                    import org.robolectric.RobolectricTestRunner
-                    import org.robolectric.annotation.Config
-                    
-                    @RunWith(RobolectricTestRunner::class)
-                    @Config(sdk = [33])
-                    class ExampleIntegrationTest {
-                        @Test
-                        fun readStringFromContext() {
-                            val context = ApplicationProvider.getApplicationContext<Context>()
-                            assertNotNull(context)
-                        }
-                    }
-                """.trimIndent()
-                repository.saveFile(project.name, integrationTestPath, integrationTestContent)
-                
-                // Update build.gradle.kts if needed
-                val gradlePath = "app/build.gradle.kts"
-                val projectFiles = repository.getFilesForProject(project.name)
-                val gradleFile = projectFiles.find { it.path == gradlePath }
-                if (gradleFile != null) {
-                    var content = gradleFile.content
-                    var modified = false
-                    if (!content.contains("testImplementation")) {
-                        if (content.contains("dependencies {")) {
-                            content = content.replace("dependencies {", "dependencies {\n    testImplementation(\"junit:junit:4.13.2\")\n    testImplementation(\"org.robolectric:robolectric:4.10.3\")\n    testImplementation(\"androidx.test:core-ktx:1.5.0\")\n    testImplementation(\"androidx.test.ext:junit-ktx:1.1.5\")\n    testImplementation(\"androidx.compose.ui:ui-test-junit4\")")
-                            modified = true
-                        }
-                        if (content.contains("android {")) {
-                            content = content.replace("android {", "android {\n    testOptions {\n        unitTests {\n            isIncludeAndroidResources = true\n        }\n    }")
-                            modified = true
-                        }
-                    }
-                    if (modified) {
-                        repository.saveFile(project.name, gradlePath, content)
-                    }
-                }
-                
-                loadProjectDetails(project.name)
-                _testLogs.value = "Starter Unit & Integration Test Suite successfully generated under $packageDir!\nClick 'Run Tests' to execute."
-                _testStatus.value = "NOT_RUN"
-            } else {
-                _testLogs.value = "Starter test suite generation is currently optimized for Android Kotlin projects.\n"
-            }
-        }
-    }
-
     fun deleteMessage(message: ChatMessageEntity) {
         val project = _currentProject.value ?: return
         viewModelScope.launch {
@@ -2248,16 +2120,6 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 - GITHUB PUSH & AUTOMATIC BUILD PERMISSION: The "Allow Build & Push Permission" setting is currently set to: ${_allowBuildPush.value}.
                   * If this is true, you are FULLY AUTHORIZED to automatically trigger force pushing to GitHub and starting the build once you complete your task, without requiring user manual permission.
                   * If this is false, you must ask the user for permission at the end before attempting to push or build.
-                
-                UNIT & INTEGRATION TESTING SYSTEM (CRITICAL - NEW CAPABILITY):
-                - You are fully authorized and encouraged to generate and run Unit Tests and Integration Tests!
-                - For Android Kotlin projects, always write your tests under the directory: `app/src/test/java/com/example/myandroidapp/`.
-                - You can create/edit standard Unit Tests using JUnit 4, and high-fidelity local UI/Integration Tests using Robolectric (this allows you to assert on activity states and Composable interactions directly on the JVM without an emulator).
-                - To run your tests and verify your changes, you can execute standard test commands using the 'run_command' tool:
-                  * For Android/Kotlin: `gradle :app:testDebugUnitTest` or `gradle test`.
-                  * For React or Web: `npm test`.
-                  * For Flutter: `flutter test`.
-                - Running tests is highly encouraged to ensure your generated code does not break any existing functionality!
             """.trimIndent()
 
             val useCustom = _useCustomModel.value

@@ -101,11 +101,6 @@ fun WorkspaceScreen(
     onSaveAllowBuildPush: (Boolean) -> Unit = {},
     onSaveAllowAutoFix: (Boolean) -> Unit = {},
     isLoadingWorkspace: Boolean = false,
-    testStatus: String = "NOT_RUN",
-    testLogs: String = "",
-    isTesting: Boolean = false,
-    onRunTests: () -> Unit = {},
-    onGenerateStarterTests: () -> Unit = {},
     onSaveMaxActionSteps: (Int) -> Unit = {},
     onSaveGithubToken: (String) -> Unit,
     onSaveExplorerGithubToken: (String) -> Unit = {},
@@ -470,16 +465,6 @@ fun WorkspaceScreen(
                                 }
                             )
                         }
-                        WorkspaceTab.TESTS -> {
-                            TestsTabContent(
-                                project = project,
-                                testStatus = testStatus,
-                                testLogs = testLogs,
-                                isTesting = isTesting,
-                                onRunTests = onRunTests,
-                                onGenerateStarterTests = onGenerateStarterTests
-                            )
-                        }
                     }
                 }
             }
@@ -692,19 +677,6 @@ fun WorkspaceBottomNavigation(
             colors = NavigationBarItemDefaults.colors(
                 selectedIconColor = Color(0xFFEC4899),
                 selectedTextColor = Color(0xFFEC4899),
-                unselectedIconColor = Color(0xFF4F5575),
-                unselectedTextColor = Color(0xFF4F5575),
-                indicatorColor = Color(0xFF141A29)
-            )
-        )
-        NavigationBarItem(
-            selected = currentTab == WorkspaceTab.TESTS,
-            onClick = { onTabSelected(WorkspaceTab.TESTS) },
-            icon = { Icon(Icons.Default.Science, contentDescription = "Run Tests") },
-            label = { Text("Tests", fontWeight = FontWeight.Bold, fontSize = 11.sp) },
-            colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = Color(0xFF10B981),
-                selectedTextColor = Color(0xFF10B981),
                 unselectedIconColor = Color(0xFF4F5575),
                 unselectedTextColor = Color(0xFF4F5575),
                 indicatorColor = Color(0xFF141A29)
@@ -2385,13 +2357,19 @@ fun getInlinedHtml(files: List<ProjectFileEntity>): String {
 fun uploadToPasteEe(htmlContent: String, onSuccess: (String) -> Unit, onError: (String) -> Unit) {
     val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
     val client = okhttp3.OkHttpClient()
-    val url = "https://paste.rs"
+    val url = "https://uguu.se/api.php?d=upload-tool"
 
-    val mediaType = "text/plain; charset=utf-8".toMediaTypeOrNull()
-    val body = okhttp3.RequestBody.create(mediaType, htmlContent)
+    val mediaType = "text/html; charset=utf-8".toMediaTypeOrNull()
+    val fileBody = okhttp3.RequestBody.create(mediaType, htmlContent)
+    val requestBody = okhttp3.MultipartBody.Builder()
+        .setType(okhttp3.MultipartBody.FORM)
+        .addFormDataPart("files[]", "index.html", fileBody)
+        .build()
+
     val request = okhttp3.Request.Builder()
         .url(url)
-        .post(body)
+        .header("User-Agent", "Mozilla/5.0 (Android; Mobile)")
+        .post(requestBody)
         .build()
 
     client.newCall(request).enqueue(object : okhttp3.Callback {
@@ -2409,14 +2387,31 @@ fun uploadToPasteEe(htmlContent: String, onSuccess: (String) -> Unit, onError: (
                     }
                     return
                 }
-                val rawUrl = response.body?.string()?.trim() ?: ""
-                if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
-                    mainHandler.post {
-                        onSuccess("https://htmlpreview.github.io/?$rawUrl")
+                val bodyString = response.body?.string() ?: ""
+                try {
+                    val json = org.json.JSONObject(bodyString)
+                    val success = json.optBoolean("success", false)
+                    if (success) {
+                        val filesArray = json.getJSONArray("files")
+                        if (filesArray.length() > 0) {
+                            val fileObj = filesArray.getJSONObject(0)
+                            val rawUrl = fileObj.getString("url")
+                            mainHandler.post {
+                                onSuccess(rawUrl)
+                            }
+                        } else {
+                            mainHandler.post {
+                                onError("Upload returned empty files list")
+                            }
+                        }
+                    } else {
+                        mainHandler.post {
+                            onError("Upload failed on server side")
+                        }
                     }
-                } else {
+                } catch (e: Exception) {
                     mainHandler.post {
-                        onError("Invalid response from paste service")
+                        onError("JSON parsing error: ${e.message}")
                     }
                 }
             }
@@ -2436,6 +2431,14 @@ fun PreviewTabContent(
 ) {
     val htmlFile = remember(files) { files.find { it.path == "index.html" } }
     var refreshTrigger by remember { mutableStateOf(0) }
+
+    LaunchedEffect(files) {
+        com.example.api.LocalHttpServer.updateFiles(files)
+    }
+
+    LaunchedEffect(Unit) {
+        com.example.api.LocalHttpServer.start()
+    }
 
     LaunchedEffect(webPreviewRefreshTrigger) {
         if (webPreviewRefreshTrigger > 0) {
@@ -2533,50 +2536,33 @@ fun PreviewTabContent(
                             android.widget.Toast.makeText(context, "No index.html found", android.widget.Toast.LENGTH_SHORT).show()
                             return@IconButton
                         }
-                        isGeneratingLivePreview = true
-                        val bundledHtml = getInlinedHtml(files)
-                        uploadToPasteEe(
-                            htmlContent = bundledHtml,
-                            onSuccess = { liveUrl ->
-                                isGeneratingLivePreview = false
-                                try {
-                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(liveUrl)).apply {
-                                        addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    }
-                                    context.startActivity(intent)
-                                } catch (e: Exception) {
-                                    try {
-                                        uriHandler.openUri(liveUrl)
-                                    } catch (e2: Exception) {
-                                        android.widget.Toast.makeText(context, "Failed to open browser: ${e2.message}", android.widget.Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                            },
-                            onError = { error ->
-                                isGeneratingLivePreview = false
-                                android.widget.Toast.makeText(context, "Failed to generate preview: $error", android.widget.Toast.LENGTH_LONG).show()
+                        com.example.api.LocalHttpServer.start()
+                        com.example.api.LocalHttpServer.updateFiles(files)
+
+                        val localUrl = "http://127.0.0.1:8080/index.html"
+                        try {
+                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(localUrl)).apply {
+                                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                             }
-                        )
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            try {
+                                uriHandler.openUri(localUrl)
+                            } catch (e2: Exception) {
+                                android.widget.Toast.makeText(context, "Failed to open browser: ${e2.message}", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        }
                     },
                     modifier = Modifier
                         .size(36.dp)
-                        .background(if (isGeneratingLivePreview) Color(0xFFF1C40F) else Color(0xFF2ED573), CircleShape),
-                    enabled = !isGeneratingLivePreview
+                        .background(Color(0xFF2ED573), CircleShape)
                 ) {
-                    if (isGeneratingLivePreview) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            color = Color.Black,
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.OpenInBrowser,
-                            contentDescription = "Live Preview in Browser",
-                            tint = Color.Black,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Default.OpenInBrowser,
+                        contentDescription = "Live Preview in Browser",
+                        tint = Color.Black,
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
         }
@@ -2687,7 +2673,18 @@ fun PreviewTabContent(
                                     ): WebResourceResponse? {
                                         val urlString = request?.url?.toString() ?: return null
                                         if (urlString.startsWith("https://virtual-app/")) {
-                                            val path = urlString.removePrefix("https://virtual-app/")
+                                            var path = urlString.removePrefix("https://virtual-app/")
+                                            if (path.contains("?")) {
+                                                path = path.substringBefore("?")
+                                            }
+                                            if (path.contains("#")) {
+                                                path = path.substringBefore("#")
+                                            }
+                                            try {
+                                                path = java.net.URLDecoder.decode(path, "UTF-8")
+                                            } catch (e: Exception) {
+                                                // ignore
+                                            }
                                             val matchingFile = files.find { it.path.equals(path, ignoreCase = true) }
                                             if (matchingFile != null) {
                                                 val mimeType = when {
@@ -5393,240 +5390,6 @@ fun WorkspaceOperationsTimeline(
                             )
                         }
                     }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun TestsTabContent(
-    project: ProjectEntity,
-    testStatus: String,
-    testLogs: String,
-    isTesting: Boolean,
-    onRunTests: () -> Unit,
-    onGenerateStarterTests: () -> Unit
-) {
-    val scrollState = rememberScrollState()
-
-    LaunchedEffect(testLogs) {
-        if (testLogs.isNotEmpty()) {
-            scrollState.animateScrollTo(scrollState.maxValue)
-        }
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFF050508))
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Tab Header
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Icon(
-                    imageVector = Icons.Default.Science,
-                    contentDescription = null,
-                    tint = Color(0xFF10B981),
-                    modifier = Modifier.size(24.dp)
-                )
-                Column {
-                    Text(
-                        text = "Testing Suite Dashboard",
-                        color = Color.White,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "Framework: ${project.templateKey?.replace("_", " ")?.replaceFirstChar { it.uppercase() } ?: "Android Kotlin"}",
-                        color = Color(0xFF9CA3AF),
-                        fontSize = 12.sp
-                    )
-                }
-            }
-        }
-
-        // Status Card
-        val cardBgColor = when (testStatus) {
-            "PASSED" -> Color(0xFF064E3B)
-            "FAILED" -> Color(0xFF7F1D1D)
-            "RUNNING" -> Color(0xFF1E3A8A)
-            else -> Color(0xFF111827)
-        }
-        val statusText = when (testStatus) {
-            "PASSED" -> "All Tests Passed Successfully"
-            "FAILED" -> "Test Execution Failed"
-            "RUNNING" -> "Running Tests..."
-            else -> "Tests Not Run"
-        }
-        val statusIcon = when (testStatus) {
-            "PASSED" -> Icons.Default.CheckCircle
-            "FAILED" -> Icons.Default.Error
-            "RUNNING" -> Icons.Default.HourglassEmpty
-            else -> Icons.Default.PlayArrow
-        }
-        val iconTint = when (testStatus) {
-            "PASSED" -> Color(0xFF34D399)
-            "FAILED" -> Color(0xFFF87171)
-            "RUNNING" -> Color(0xFF60A5FA)
-            else -> Color(0xFF9CA3AF)
-        }
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = cardBgColor),
-            border = BorderStroke(1.dp, iconTint.copy(alpha = 0.3f))
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                if (testStatus == "RUNNING") {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = Color.White,
-                        strokeWidth = 2.dp
-                    )
-                } else {
-                    Icon(
-                        imageVector = statusIcon,
-                        contentDescription = null,
-                        tint = iconTint,
-                        modifier = Modifier.size(32.dp)
-                    )
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = statusText,
-                        color = Color.White,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = when (testStatus) {
-                            "PASSED" -> "Your unit and integration tests are robust and fully compile and execute green."
-                            "FAILED" -> "Please view the logs below to fix compilation errors or failed test assertions."
-                            "RUNNING" -> "Executing local JUnit & Robolectric test suite on background JVM thread..."
-                            else -> "Trigger execution of the local JUnit & Robolectric test runner to verify codebase."
-                        },
-                        color = Color.White.copy(alpha = 0.7f),
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                }
-            }
-        }
-
-        // Action Buttons Row
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Button(
-                onClick = onRunTests,
-                enabled = !isTesting,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF10B981),
-                    contentColor = Color.White,
-                    disabledContainerColor = Color(0xFF065F46)
-                ),
-                modifier = Modifier.weight(1f)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = if (isTesting) "Running..." else "Run Tests",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp
-                )
-            }
-
-            if (project.templateKey == "android_kotlin") {
-                Button(
-                    onClick = onGenerateStarterTests,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF1F2937),
-                        contentColor = Color.White
-                    ),
-                    modifier = Modifier.weight(1.3f)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Star,
-                        contentDescription = null,
-                        tint = Color(0xFFFBBF24),
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Generate Starter Tests",
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 13.sp
-                    )
-                }
-            }
-        }
-
-        // Logs Console Card
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF0B0F19)),
-            border = BorderStroke(1.dp, Color(0xFF1F2937))
-        ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                // Console Header
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color(0xFF111827))
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.Terminal,
-                            contentDescription = null,
-                            tint = Color(0xFF9CA3AF),
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Text(
-                            text = "Test Execution Logs",
-                            color = Color(0xFFD1D5DB),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-
-                // Console Output
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(12.dp)
-                        .verticalScroll(scrollState)
-                ) {
-                    Text(
-                        text = if (testLogs.isEmpty()) "No execution logs yet. Click 'Run Tests' above to execute tests." else testLogs,
-                        color = if (testStatus == "FAILED" && testLogs.contains("Exception")) Color(0xFFF87171) else Color(0xFF10B981),
-                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                        fontSize = 11.sp,
-                        lineHeight = 16.sp
-                    )
                 }
             }
         }
