@@ -210,9 +210,28 @@ class VibeRepository(private val dao: VibeDao, private val context: Context) {
         val oldFile = File(projectDir, oldPath)
         val newFile = File(projectDir, newPath)
         
+        val dbFile = dao.getFileByPath(projectName, oldPath)
+        if (!oldFile.exists() && dbFile == null) {
+            throw java.io.FileNotFoundException("Source file '$oldPath' does not exist.")
+        }
+
         if (oldFile.exists()) {
             newFile.parentFile?.mkdirs()
-            oldFile.renameTo(newFile)
+            val renameResult = oldFile.renameTo(newFile)
+            if (!renameResult) {
+                try {
+                    oldFile.copyTo(newFile, overwrite = true)
+                    oldFile.delete()
+                } catch (e: Exception) {
+                    throw Exception("Failed to rename file on disk: ${e.message}")
+                }
+            }
+        }
+        
+        if (dbFile != null) {
+            dao.deleteFile(projectName, newPath)
+            dao.updateFile(dbFile.copy(path = newPath))
+        } else {
             syncStorageToDatabase(projectName)
         }
     }
@@ -887,6 +906,11 @@ android {
     composeOptions {
         kotlinCompilerExtensionVersion = "1.4.3"
     }
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
 }
 
 dependencies {
@@ -898,6 +922,13 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
+    
+    // Testing Dependencies
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.10.3")
+    testImplementation("androidx.test:core-ktx:1.5.0")
+    testImplementation("androidx.test.ext:junit-ktx:1.1.5")
+    testImplementation("androidx.compose.ui:ui-test-junit4")
 }
 """
                 ),
@@ -960,6 +991,52 @@ fun Greeting(name: String, modifier: Modifier = Modifier) {
         text = "Hello ${"$"}name!",
         modifier = modifier
     )
+}
+"""
+                ),
+                ProjectFileEntity(
+                    projectName = projectName,
+                    path = "app/src/test/java/com/example/myandroidapp/ExampleUnitTest.kt",
+                    content = """package com.example.myandroidapp
+
+import org.junit.Test
+import org.junit.Assert.*
+
+class ExampleUnitTest {
+    @Test
+    fun addition_isCorrect() {
+        assertEquals(4, 2 + 2)
+    }
+    
+    @Test
+    fun subtraction_isCorrect() {
+        assertEquals(0, 2 - 2)
+    }
+}
+"""
+                ),
+                ProjectFileEntity(
+                    projectName = projectName,
+                    path = "app/src/test/java/com/example/myandroidapp/ExampleIntegrationTest.kt",
+                    content = """package com.example.myandroidapp
+
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import org.junit.Test
+import org.junit.Assert.*
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [33])
+class ExampleIntegrationTest {
+    @Test
+    fun readStringFromContext() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        assertNotNull(context)
+        assertEquals("My Android App", context.getString(R.string.app_name))
+    }
 }
 """
                 )
@@ -1650,174 +1727,6 @@ p {
         }
     }
 });"""
-                )
-            )
-            "fiber" -> listOf(
-                ProjectFileEntity(
-                    projectName = projectName,
-                    path = "index.html",
-                    content = """<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>React Three Fiber Hello World</title>
-    <!-- Import ImportMap to load ESM modules comfortably in browser -->
-    <script type="importmap">
-      {
-        "imports": {
-          "react": "https://esm.sh/react@18.2.0",
-          "react-dom": "https://esm.sh/react-dom@18.2.0",
-          "three": "https://esm.sh/three@0.150.0",
-          "@react-three/fiber": "https://esm.sh/@react-three/fiber@8.12.0?external=three",
-          "@react-three/drei": "https://esm.sh/@react-three/drei@9.80.0?external=three"
-        }
-      }
-    </script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
-    <style>
-        body {
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: #050508;
-            overflow: hidden;
-        }
-        #canvas-container {
-            width: 100vw;
-            height: 100vh;
-        }
-    </style>
-</head>
-<body>
-    <div id="canvas-container"></div>
-    
-    <!-- UI Overlay -->
-    <div class="absolute top-6 left-6 z-10 bg-[#0d0d12]/80 border border-[#1b1c2b] p-6 rounded-2xl shadow-xl max-w-xs backdrop-blur-md pointer-events-auto">
-        <h1 class="text-xl font-bold bg-gradient-to-r from-cyan-400 to-purple-500 bg-clip-text text-transparent mb-2">
-            React Three Fiber
-        </h1>
-        <h2 class="text-md font-semibold text-gray-300 mb-2">Hello, World!</h2>
-        <p class="text-xs text-gray-400 leading-relaxed mb-4">
-            A beautiful interactive 3D Hello World canvas using Three.js and React Three Fiber loaded via ESM CDN.
-        </p>
-        <div class="text-[10px] text-cyan-300 bg-cyan-950/40 p-2 rounded border border-cyan-800/30">
-            🖱️ Click and drag to rotate the cube!
-        </div>
-    </div>
-
-    <script type="module">
-        import React, { useRef, useState } from 'react';
-        import ReactDOM from 'react-dom';
-        import { Canvas, useFrame } from '@react-three/fiber';
-
-        function RotatingCube() {
-            const meshRef = useRef();
-            const [hovered, setHover] = useState(false);
-            const [active, setActive] = useState(false);
-
-            useFrame((state, delta) => {
-                meshRef.current.rotation.x += delta * 0.5;
-                meshRef.current.rotation.y += delta * 0.8;
-            });
-
-            return React.createElement(
-                'mesh',
-                {
-                    ref: meshRef,
-                    scale: active ? 1.5 : 1.2,
-                    onClick: () => setActive(!active),
-                    onPointerOver: () => setHover(true),
-                    onPointerOut: () => setHover(false)
-                },
-                React.createElement('boxGeometry', { args: [1.5, 1.5, 1.5] }),
-                React.createElement('meshStandardMaterial', {
-                    color: hovered ? '#00fcc7' : '#6c5ce7',
-                    wireframe: false,
-                    roughness: 0.1,
-                    metalness: 0.8
-                })
-            );
-        }
-
-        function App() {
-            return React.createElement(
-                Canvas,
-                {
-                    camera: { position: [0, 0, 4] }
-                },
-                React.createElement('ambientLight', { intensity: 0.5 }),
-                React.createElement('pointLight', { position: [10, 10, 10], intensity: 1.5 }),
-                React.createElement('pointLight', { position: [-10, -10, -10], intensity: 0.5 }),
-                React.createElement(RotatingCube, null)
-            );
-        }
-
-        ReactDOM.render(
-            React.createElement(App, null),
-            document.getElementById('canvas-container')
-        );
-    </script>
-</body>
-</html>"""
-                ),
-                ProjectFileEntity(
-                    projectName = projectName,
-                    path = "src/main.tsx",
-                    content = """import React from 'react';
-import ReactDOM from 'react-dom/client';
-import App from './app';
-
-const root = ReactDOM.createRoot(document.getElementById('canvas-container'));
-root.render(<App />);"""
-                ),
-                ProjectFileEntity(
-                    projectName = projectName,
-                    path = "src/app.tsx",
-                    content = """import React, { useRef, useState } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
-
-function RotatingCube() {
-    const meshRef = useRef<any>();
-    const [hovered, setHover] = useState(false);
-    const [active, setActive] = useState(false);
-
-    useFrame((state, delta) => {
-        if (meshRef.current) {
-            meshRef.current.rotation.x += delta * 0.5;
-            meshRef.current.rotation.y += delta * 0.8;
-        }
-    });
-
-    return (
-        <mesh
-            ref={meshRef}
-            scale={active ? 1.5 : 1.2}
-            onClick={() => setActive(!active)}
-            onPointerOver={() => setHover(true)}
-            onPointerOut={() => setHover(false)}
-        >
-            <boxGeometry args={[1.5, 1.5, 1.5]} />
-            <meshStandardMaterial
-                color={hovered ? '#00fcc7' : '#6c5ce7'}
-                roughness={0.1}
-                metalness={0.8}
-            />
-        </mesh>
-    );
-}
-
-export default function App() {
-    return (
-        <Canvas camera={{ position: [0, 0, 4] }}>
-            <ambientLight intensity={0.5} />
-            <pointLight position={[10, 10, 10]} intensity={1.5} />
-            <pointLight position={[-10, -10, -10]} intensity={0.5} />
-            <RotatingCube />
-        </Canvas>
-    );
-}"""
                 )
             )
             else -> listOf(

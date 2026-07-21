@@ -95,12 +95,17 @@ fun WorkspaceScreen(
     onSaveExplorerGithubRepo: (String) -> Unit = {},
     onSaveExplorerGithubBranch: (String) -> Unit = {},
     onSaveSettings: (String, String, String, String, Boolean) -> Unit,
-    maxActionSteps: Int = 35,
+    maxActionSteps: Int = 50,
     allowBuildPush: Boolean = false,
     allowAutoFix: Boolean = false,
     onSaveAllowBuildPush: (Boolean) -> Unit = {},
     onSaveAllowAutoFix: (Boolean) -> Unit = {},
     isLoadingWorkspace: Boolean = false,
+    testStatus: String = "NOT_RUN",
+    testLogs: String = "",
+    isTesting: Boolean = false,
+    onRunTests: () -> Unit = {},
+    onGenerateStarterTests: () -> Unit = {},
     onSaveMaxActionSteps: (Int) -> Unit = {},
     onSaveGithubToken: (String) -> Unit,
     onSaveExplorerGithubToken: (String) -> Unit = {},
@@ -255,6 +260,7 @@ fun WorkspaceScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .imePadding()
                 .background(Color(0xFF08080C))
         ) {
             Row(modifier = Modifier.fillMaxSize()) {
@@ -462,6 +468,16 @@ fun WorkspaceScreen(
                                 onTriggerBuild = {
                                     onPushGitRepo(githubRepo, githubToken, githubBranch, true) { _ -> }
                                 }
+                            )
+                        }
+                        WorkspaceTab.TESTS -> {
+                            TestsTabContent(
+                                project = project,
+                                testStatus = testStatus,
+                                testLogs = testLogs,
+                                isTesting = isTesting,
+                                onRunTests = onRunTests,
+                                onGenerateStarterTests = onGenerateStarterTests
                             )
                         }
                     }
@@ -676,6 +692,19 @@ fun WorkspaceBottomNavigation(
             colors = NavigationBarItemDefaults.colors(
                 selectedIconColor = Color(0xFFEC4899),
                 selectedTextColor = Color(0xFFEC4899),
+                unselectedIconColor = Color(0xFF4F5575),
+                unselectedTextColor = Color(0xFF4F5575),
+                indicatorColor = Color(0xFF141A29)
+            )
+        )
+        NavigationBarItem(
+            selected = currentTab == WorkspaceTab.TESTS,
+            onClick = { onTabSelected(WorkspaceTab.TESTS) },
+            icon = { Icon(Icons.Default.Science, contentDescription = "Run Tests") },
+            label = { Text("Tests", fontWeight = FontWeight.Bold, fontSize = 11.sp) },
+            colors = NavigationBarItemDefaults.colors(
+                selectedIconColor = Color(0xFF10B981),
+                selectedTextColor = Color(0xFF10B981),
                 unselectedIconColor = Color(0xFF4F5575),
                 unselectedTextColor = Color(0xFF4F5575),
                 indicatorColor = Color(0xFF141A29)
@@ -2356,23 +2385,10 @@ fun getInlinedHtml(files: List<ProjectFileEntity>): String {
 fun uploadToPasteEe(htmlContent: String, onSuccess: (String) -> Unit, onError: (String) -> Unit) {
     val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
     val client = okhttp3.OkHttpClient()
-    val url = "https://api.paste.ee/v1/pastes"
+    val url = "https://paste.rs"
 
-    val json = org.json.JSONObject().apply {
-        put("key", "public")
-        put("description", "Live Web Preview")
-        val sectionsArray = org.json.JSONArray().apply {
-            put(org.json.JSONObject().apply {
-                put("name", "index.html")
-                put("syntax", "html")
-                put("contents", htmlContent)
-            })
-        }
-        put("sections", sectionsArray)
-    }
-
-    val mediaType = "application/json; charset=utf-8".toMediaTypeOrNull()
-    val body = okhttp3.RequestBody.create(mediaType, json.toString())
+    val mediaType = "text/plain; charset=utf-8".toMediaTypeOrNull()
+    val body = okhttp3.RequestBody.create(mediaType, htmlContent)
     val request = okhttp3.Request.Builder()
         .url(url)
         .post(body)
@@ -2393,23 +2409,14 @@ fun uploadToPasteEe(htmlContent: String, onSuccess: (String) -> Unit, onError: (
                     }
                     return
                 }
-                val bodyStr = response.body?.string() ?: ""
-                try {
-                    val respJson = org.json.JSONObject(bodyStr)
-                    if (respJson.getBoolean("success")) {
-                        val id = respJson.getString("id")
-                        val rawUrl = "https://paste.ee/r/$id"
-                        mainHandler.post {
-                            onSuccess("https://htmlpreview.github.io/?$rawUrl")
-                        }
-                    } else {
-                        mainHandler.post {
-                            onError("API Error: success is false")
-                        }
-                    }
-                } catch (e: java.lang.Exception) {
+                val rawUrl = response.body?.string()?.trim() ?: ""
+                if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
                     mainHandler.post {
-                        onError(e.message ?: "Parsing error")
+                        onSuccess("https://htmlpreview.github.io/?$rawUrl")
+                    }
+                } else {
+                    mainHandler.post {
+                        onError("Invalid response from paste service")
                     }
                 }
             }
@@ -2598,9 +2605,18 @@ fun PreviewTabContent(
                                 settings.apply {
                                     javaScriptEnabled = true
                                     domStorageEnabled = true
+                                    databaseEnabled = true
                                     allowFileAccess = true
                                     allowContentAccess = true
+                                    useWideViewPort = true
+                                    loadWithOverviewMode = true
+                                    setSupportZoom(true)
+                                    builtInZoomControls = true
+                                    displayZoomControls = false
                                 }
+                                isFocusable = true
+                                isFocusableInTouchMode = true
+                                scrollBarStyle = android.view.View.SCROLLBARS_INSIDE_OVERLAY
                                 
                                 webChromeClient = object : WebChromeClient() {
                                     override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
@@ -4170,7 +4186,7 @@ fun CustomSettingsDialog(
     openaiModels: List<String> = emptyList(),
     claudeModels: List<String> = emptyList(),
     mistralModels: List<String> = emptyList(),
-    maxActionSteps: Int = 35,
+    maxActionSteps: Int = 50,
     allowBuildPush: Boolean = false,
     allowAutoFix: Boolean = false,
     onSaveAllowBuildPush: (Boolean) -> Unit = {},
@@ -4240,7 +4256,7 @@ fun CustomSettingsDialog(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Configure maximum tool calls and action perform steps. (Default is 35 steps)",
+                        text = "Configure maximum tool calls and action perform steps. (Default is 50 steps)",
                         color = Color(0xFF80809B),
                         fontSize = 11.sp,
                         lineHeight = 14.sp
@@ -4602,7 +4618,7 @@ fun CustomSettingsDialog(
                 ) {
                     TextButton(
                         onClick = {
-                            val steps = stepsInput.toIntOrNull() ?: 35
+                            val steps = stepsInput.toIntOrNull() ?: 50
                             onSaveMaxActionSteps(steps)
                             onSaveAllowBuildPush(allowBuildPushState)
                             onSaveAllowAutoFix(allowAutoFixState)
@@ -4624,7 +4640,7 @@ fun CustomSettingsDialog(
                                     true
                                 )
                             }
-                            val steps = stepsInput.toIntOrNull() ?: 35
+                            val steps = stepsInput.toIntOrNull() ?: 50
                             onSaveMaxActionSteps(steps)
                             onSaveAllowBuildPush(allowBuildPushState)
                             onSaveAllowAutoFix(allowAutoFixState)
@@ -5377,6 +5393,240 @@ fun WorkspaceOperationsTimeline(
                             )
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun TestsTabContent(
+    project: ProjectEntity,
+    testStatus: String,
+    testLogs: String,
+    isTesting: Boolean,
+    onRunTests: () -> Unit,
+    onGenerateStarterTests: () -> Unit
+) {
+    val scrollState = rememberScrollState()
+
+    LaunchedEffect(testLogs) {
+        if (testLogs.isNotEmpty()) {
+            scrollState.animateScrollTo(scrollState.maxValue)
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF050508))
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Tab Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(
+                    imageVector = Icons.Default.Science,
+                    contentDescription = null,
+                    tint = Color(0xFF10B981),
+                    modifier = Modifier.size(24.dp)
+                )
+                Column {
+                    Text(
+                        text = "Testing Suite Dashboard",
+                        color = Color.White,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Framework: ${project.templateKey?.replace("_", " ")?.replaceFirstChar { it.uppercase() } ?: "Android Kotlin"}",
+                        color = Color(0xFF9CA3AF),
+                        fontSize = 12.sp
+                    )
+                }
+            }
+        }
+
+        // Status Card
+        val cardBgColor = when (testStatus) {
+            "PASSED" -> Color(0xFF064E3B)
+            "FAILED" -> Color(0xFF7F1D1D)
+            "RUNNING" -> Color(0xFF1E3A8A)
+            else -> Color(0xFF111827)
+        }
+        val statusText = when (testStatus) {
+            "PASSED" -> "All Tests Passed Successfully"
+            "FAILED" -> "Test Execution Failed"
+            "RUNNING" -> "Running Tests..."
+            else -> "Tests Not Run"
+        }
+        val statusIcon = when (testStatus) {
+            "PASSED" -> Icons.Default.CheckCircle
+            "FAILED" -> Icons.Default.Error
+            "RUNNING" -> Icons.Default.HourglassEmpty
+            else -> Icons.Default.PlayArrow
+        }
+        val iconTint = when (testStatus) {
+            "PASSED" -> Color(0xFF34D399)
+            "FAILED" -> Color(0xFFF87171)
+            "RUNNING" -> Color(0xFF60A5FA)
+            else -> Color(0xFF9CA3AF)
+        }
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = cardBgColor),
+            border = BorderStroke(1.dp, iconTint.copy(alpha = 0.3f))
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                if (testStatus == "RUNNING") {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = Color.White,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Icon(
+                        imageVector = statusIcon,
+                        contentDescription = null,
+                        tint = iconTint,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = statusText,
+                        color = Color.White,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = when (testStatus) {
+                            "PASSED" -> "Your unit and integration tests are robust and fully compile and execute green."
+                            "FAILED" -> "Please view the logs below to fix compilation errors or failed test assertions."
+                            "RUNNING" -> "Executing local JUnit & Robolectric test suite on background JVM thread..."
+                            else -> "Trigger execution of the local JUnit & Robolectric test runner to verify codebase."
+                        },
+                        color = Color.White.copy(alpha = 0.7f),
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+            }
+        }
+
+        // Action Buttons Row
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Button(
+                onClick = onRunTests,
+                enabled = !isTesting,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF10B981),
+                    contentColor = Color.White,
+                    disabledContainerColor = Color(0xFF065F46)
+                ),
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = if (isTesting) "Running..." else "Run Tests",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp
+                )
+            }
+
+            if (project.templateKey == "android_kotlin") {
+                Button(
+                    onClick = onGenerateStarterTests,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF1F2937),
+                        contentColor = Color.White
+                    ),
+                    modifier = Modifier.weight(1.3f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Star,
+                        contentDescription = null,
+                        tint = Color(0xFFFBBF24),
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Generate Starter Tests",
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+        }
+
+        // Logs Console Card
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF0B0F19)),
+            border = BorderStroke(1.dp, Color(0xFF1F2937))
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Console Header
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFF111827))
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Icon(
+                            imageVector = Icons.Default.Terminal,
+                            contentDescription = null,
+                            tint = Color(0xFF9CA3AF),
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text = "Test Execution Logs",
+                            color = Color(0xFFD1D5DB),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+
+                // Console Output
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(12.dp)
+                        .verticalScroll(scrollState)
+                ) {
+                    Text(
+                        text = if (testLogs.isEmpty()) "No execution logs yet. Click 'Run Tests' above to execute tests." else testLogs,
+                        color = if (testStatus == "FAILED" && testLogs.contains("Exception")) Color(0xFFF87171) else Color(0xFF10B981),
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        fontSize = 11.sp,
+                        lineHeight = 16.sp
+                    )
                 }
             }
         }

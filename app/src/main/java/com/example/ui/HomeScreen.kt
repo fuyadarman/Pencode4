@@ -394,8 +394,7 @@ fun CreateProjectDialog(
         TemplateOption("android_kotlin", "Android Kotlin", "Native Android App scaffold with Jetpack Compose & Github Action Build."),
         TemplateOption("flutter", "Flutter", "Flutter App scaffold with main.dart, pubspec.yaml & Github Action Build."),
         TemplateOption("react", "React CDN", "Babel-powered interactive React Hello World with count state."),
-        TemplateOption("vanilla", "Vanilla JS", "Pure HTML, CSS & JS with animated floating neon particles."),
-        TemplateOption("fiber", "React Three Fiber", "Interactive 3D canvas with ambient lighting & rotating cube.")
+        TemplateOption("vanilla", "Vanilla JS", "Pure HTML, CSS & JS with animated floating neon particles.")
     )
 
     Dialog(onDismissRequest = onDismiss) {
@@ -890,62 +889,6 @@ fun TemplateIcon(key: String, modifier: Modifier = Modifier) {
                             modifier = Modifier.padding(end = 1.dp, bottom = 0.5.dp),
                             lineHeight = 9.sp
                         )
-                    }
-                }
-            }
-            "fiber" -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.linearGradient(
-                                colors = listOf(Color(0xFFEC4899).copy(alpha = 0.12f), Color(0xFF0D0F14))
-                            )
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    androidx.compose.foundation.Canvas(modifier = Modifier.size(20.dp)) {
-                        val w = size.width
-                        val h = size.height
-                        val cx = w / 2f
-                        val cy = h / 2f
-                        val dx = w * 0.45f
-                        val dy = h * 0.25f
-                        
-                        val t = androidx.compose.ui.geometry.Offset(cx, cy - 1.8f * dy)
-                        val b = androidx.compose.ui.geometry.Offset(cx, cy + 1.8f * dy)
-                        val lt = androidx.compose.ui.geometry.Offset(cx - dx, cy - 0.9f * dy)
-                        val lb = androidx.compose.ui.geometry.Offset(cx - dx, cy + 0.9f * dy)
-                        val rt = androidx.compose.ui.geometry.Offset(cx + dx, cy - 0.9f * dy)
-                        val rb = androidx.compose.ui.geometry.Offset(cx + dx, cy + 0.9f * dy)
-                        val c = androidx.compose.ui.geometry.Offset(cx, cy)
-                        
-                        val topPath = androidx.compose.ui.graphics.Path().apply {
-                            moveTo(t.x, t.y)
-                            lineTo(rt.x, rt.y)
-                            lineTo(c.x, c.y)
-                            lineTo(lt.x, lt.y)
-                            close()
-                        }
-                        drawPath(topPath, color = Color(0xFF38BDF8))
-                        
-                        val leftPath = androidx.compose.ui.graphics.Path().apply {
-                            moveTo(lt.x, lt.y)
-                            lineTo(c.x, c.y)
-                            lineTo(b.x, b.y)
-                            lineTo(lb.x, lb.y)
-                            close()
-                        }
-                        drawPath(leftPath, color = Color(0xFF6366F1))
-                        
-                        val rightPath = androidx.compose.ui.graphics.Path().apply {
-                            moveTo(rt.x, rt.y)
-                            lineTo(c.x, c.y)
-                            lineTo(b.x, b.y)
-                            lineTo(rb.x, rb.y)
-                            close()
-                        }
-                        drawPath(rightPath, color = Color(0xFFEC4899))
                     }
                 }
             }

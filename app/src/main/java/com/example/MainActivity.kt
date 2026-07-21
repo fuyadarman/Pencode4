@@ -17,6 +17,7 @@ import com.example.ui.VibeViewModel
 import com.example.ui.WorkspaceScreen
 import com.example.ui.WebConsoleError
 import com.example.ui.theme.MyApplicationTheme
+import androidx.compose.foundation.text.selection.SelectionContainer
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -29,6 +30,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = Color(0xFF08080C)
                 ) {
+                    SelectionContainer {
                         val viewModel: VibeViewModel = viewModel()
                         
                         val currentProject by viewModel.currentProject.collectAsState()
@@ -77,6 +79,9 @@ class MainActivity : ComponentActivity() {
                         val allowBuildPush by viewModel.allowBuildPush.collectAsState()
                         val allowAutoFix by viewModel.allowAutoFix.collectAsState()
                         val isLoadingWorkspace by viewModel.isLoadingWorkspace.collectAsState()
+                        val testStatus by viewModel.testStatus.collectAsState()
+                        val testLogs by viewModel.testLogs.collectAsState()
+                        val isTesting by viewModel.isTesting.collectAsState()
 
                         if (currentProject == null) {
                             HomeScreen(
@@ -108,6 +113,11 @@ class MainActivity : ComponentActivity() {
                                 aiActionLogs = aiActionLogs,
                                 terminalOutput = terminalOutput,
                                 isLoadingWorkspace = isLoadingWorkspace,
+                                testStatus = testStatus,
+                                testLogs = testLogs,
+                                isTesting = isTesting,
+                                onRunTests = { viewModel.runProjectTests() },
+                                onGenerateStarterTests = { viewModel.generateStarterTestSuite() },
                                 gitProgress = gitProgress,
                                 customProvider = customProvider,
                                 customApiKey = customApiKey,
@@ -262,6 +272,7 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                     }
+                }
             }
         }
     }

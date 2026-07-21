@@ -37,6 +37,7 @@ enum class WorkspaceTab {
     PREVIEW,
     TERMINAL,
     ANDROID_BUILD,
+    TESTS,
 }
 
 data class EditRecord(
@@ -481,7 +482,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     private val _useCustomModel = MutableStateFlow(sharedPrefs.getBoolean("use_custom_model", true)) // Default to true now since we removed "default"
     val useCustomModel = _useCustomModel.asStateFlow()
 
-    private val _maxActionSteps = MutableStateFlow(sharedPrefs.getInt("max_action_steps", 35))
+    private val _maxActionSteps = MutableStateFlow(sharedPrefs.getInt("max_action_steps", 50))
     val maxActionSteps = _maxActionSteps.asStateFlow()
 
     private val _allowBuildPush = MutableStateFlow(sharedPrefs.getBoolean("allow_build_push", false))
@@ -1380,6 +1381,133 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     private val _isLoadingWorkspace = MutableStateFlow(false)
     val isLoadingWorkspace: StateFlow<Boolean> = _isLoadingWorkspace.asStateFlow()
 
+    private val _testStatus = MutableStateFlow("NOT_RUN") // "NOT_RUN", "RUNNING", "PASSED", "FAILED"
+    val testStatus: StateFlow<String> = _testStatus.asStateFlow()
+
+    private val _testLogs = MutableStateFlow("")
+    val testLogs: StateFlow<String> = _testLogs.asStateFlow()
+
+    private val _isTesting = MutableStateFlow(false)
+    val isTesting: StateFlow<Boolean> = _isTesting.asStateFlow()
+
+    fun runProjectTests() {
+        val project = _currentProject.value ?: return
+        if (_isTesting.value) return
+        _isTesting.value = true
+        _testStatus.value = "RUNNING"
+        _testLogs.value = "Starting project unit & integration tests...\n"
+        viewModelScope.launch {
+            try {
+                val cmd = when (project.templateKey) {
+                    "android_kotlin" -> "gradle :app:testDebugUnitTest"
+                    "flutter" -> "flutter test"
+                    "react" -> "npm test"
+                    "vanilla" -> "npm test"
+                    else -> "gradle test"
+                }
+                
+                _testLogs.value += "> $cmd\n"
+                val result = repository.executeCommand(project.name, cmd)
+                _testLogs.value += result
+                
+                if (result.contains("FAILED") || result.contains("fail") || result.contains("Error") || result.contains("Exception") || result.contains("Compilation failed")) {
+                    _testStatus.value = "FAILED"
+                } else {
+                    _testStatus.value = "PASSED"
+                }
+            } catch (e: Exception) {
+                _testLogs.value += "\nError: ${e.localizedMessage}"
+                _testStatus.value = "FAILED"
+            } finally {
+                _isTesting.value = false
+            }
+        }
+    }
+
+    fun generateStarterTestSuite() {
+        val project = _currentProject.value ?: return
+        viewModelScope.launch {
+            if (project.templateKey == "android_kotlin") {
+                val packageDir = "app/src/test/java/com/example/myandroidapp"
+                
+                // 1. ExampleUnitTest.kt
+                val unitTestPath = "$packageDir/ExampleUnitTest.kt"
+                val unitTestContent = """
+                    package com.example.myandroidapp
+                    
+                    import org.junit.Test
+                    import org.junit.Assert.*
+                    
+                    class ExampleUnitTest {
+                        @Test
+                        fun addition_isCorrect() {
+                            assertEquals(4, 2 + 2)
+                        }
+                        
+                        @Test
+                        fun subtraction_isCorrect() {
+                            assertEquals(0, 2 - 2)
+                        }
+                    }
+                """.trimIndent()
+                repository.saveFile(project.name, unitTestPath, unitTestContent)
+                
+                // 2. ExampleIntegrationTest.kt (Robolectric test)
+                val integrationTestPath = "$packageDir/ExampleIntegrationTest.kt"
+                val integrationTestContent = """
+                    package com.example.myandroidapp
+                    
+                    import android.content.Context
+                    import androidx.test.core.app.ApplicationProvider
+                    import org.junit.Test
+                    import org.junit.Assert.*
+                    import org.junit.runner.RunWith
+                    import org.robolectric.RobolectricTestRunner
+                    import org.robolectric.annotation.Config
+                    
+                    @RunWith(RobolectricTestRunner::class)
+                    @Config(sdk = [33])
+                    class ExampleIntegrationTest {
+                        @Test
+                        fun readStringFromContext() {
+                            val context = ApplicationProvider.getApplicationContext<Context>()
+                            assertNotNull(context)
+                        }
+                    }
+                """.trimIndent()
+                repository.saveFile(project.name, integrationTestPath, integrationTestContent)
+                
+                // Update build.gradle.kts if needed
+                val gradlePath = "app/build.gradle.kts"
+                val projectFiles = repository.getFilesForProject(project.name)
+                val gradleFile = projectFiles.find { it.path == gradlePath }
+                if (gradleFile != null) {
+                    var content = gradleFile.content
+                    var modified = false
+                    if (!content.contains("testImplementation")) {
+                        if (content.contains("dependencies {")) {
+                            content = content.replace("dependencies {", "dependencies {\n    testImplementation(\"junit:junit:4.13.2\")\n    testImplementation(\"org.robolectric:robolectric:4.10.3\")\n    testImplementation(\"androidx.test:core-ktx:1.5.0\")\n    testImplementation(\"androidx.test.ext:junit-ktx:1.1.5\")\n    testImplementation(\"androidx.compose.ui:ui-test-junit4\")")
+                            modified = true
+                        }
+                        if (content.contains("android {")) {
+                            content = content.replace("android {", "android {\n    testOptions {\n        unitTests {\n            isIncludeAndroidResources = true\n        }\n    }")
+                            modified = true
+                        }
+                    }
+                    if (modified) {
+                        repository.saveFile(project.name, gradlePath, content)
+                    }
+                }
+                
+                loadProjectDetails(project.name)
+                _testLogs.value = "Starter Unit & Integration Test Suite successfully generated under $packageDir!\nClick 'Run Tests' to execute."
+                _testStatus.value = "NOT_RUN"
+            } else {
+                _testLogs.value = "Starter test suite generation is currently optimized for Android Kotlin projects.\n"
+            }
+        }
+    }
+
     fun deleteMessage(message: ChatMessageEntity) {
         val project = _currentProject.value ?: return
         viewModelScope.launch {
@@ -1885,7 +2013,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 "android_kotlin" -> """
                     ACTIVE TEMPLATE: Native Android Kotlin (Jetpack Compose).
                     - CRITICAL constraint: You must ONLY write Native Android Kotlin code, XML layout files, and Gradle build configurations!
-                    - DO NOT use React, HTML, CSS, JavaScript, or React Three Fiber.
+                    - DO NOT use React, HTML, CSS, or JavaScript.
                 """.trimIndent()
                 "flutter" -> """
                     ACTIVE TEMPLATE: Flutter (Dart).
@@ -1895,17 +2023,13 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 "react" -> """
                     ACTIVE TEMPLATE: React CDN (Web).
                     - CRITICAL constraint: The project is built using React & ReactDOM directly loaded from a CDN.
-                    - DO NOT use React Three Fiber or Three.js unless explicitly asked!
+                    - DO NOT use Three.js unless explicitly asked!
                     - Build components as standard modern React CDN files.
                 """.trimIndent()
                 "vanilla" -> """
                     ACTIVE TEMPLATE: Vanilla JS (Web).
                     - CRITICAL constraint: The project uses pure Vanilla JS (standard HTML, CSS, and pure Native JavaScript).
-                    - DO NOT use React, ReactDOM, Three.js, or React Three Fiber! If you write React or JSX in a Vanilla JS project, it will fail to compile. This is a strict constraint.
-                """.trimIndent()
-                "fiber" -> """
-                    ACTIVE TEMPLATE: React Three Fiber (3D Web).
-                    - You can use Three.js and @react-three/fiber with Import Maps.
+                    - DO NOT use React, ReactDOM, or Three.js! If you write React or JSX in a Vanilla JS project, it will fail to compile. This is a strict constraint.
                 """.trimIndent()
                 else -> """
                     ACTIVE TEMPLATE: ${project.templateKey ?: "Empty Workspace"}.
@@ -1944,7 +2068,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 
                 CRITICAL CONSTRAINT - RESPECT THE ACTIVE FRAMEWORK:
                 $activeTemplateInfo
-                - You MUST strictly respect the current template/framework of the project. If Vanilla JS or React CDN is selected, do NOT use React Three Fiber or Three.js unless specifically requested.
+                - You MUST strictly respect the current template/framework of the project. If Vanilla JS or React CDN is selected, do NOT use Three.js unless specifically requested.
                 
                 EXPLORE BEFORE YOU BUILD & RECURSIVE SCAN MANDATE (CRITICAL):
                 - Whenever you see, encounter, or need to explore a directory, folder, or path (including the workspace root), you MUST strictly use the 'scan_dir' tool first to recursively scan and explore all folders, subfolders, paths, and files inside it.
@@ -1964,23 +2088,20 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                   * FALLBACK SEARCH ENGINES: If you encounter any problem, captcha, error, or issue while using Brave Search, you are fully authorized and encouraged to fall back to searching via Bing, Yahoo, or DuckDuckGo search engines.
                   * If the user provides a URL or link (e.g., starting with http://, https://, or containing a domain name like github.com, etc.) in their message, you MUST immediately call 'browser_search' with that URL to load, read, and process its live contents in order to answer the user's request. Always open user-supplied links!
                 
-                THREE.JS & REACT THREE FIBER VERSION MATCHING RULE (CRITICAL - For Web projects):
+                THREE.JS VERSION MATCHING RULE (CRITICAL - For Web projects):
                 - When building 3D or Three.js applications, always use 'three@0.150.0'.
-                - If using @react-three/fiber or @react-three/drei, you MUST always append '?external=three' to their esm.sh URLs so they resolve to the mapped version of three.js. This prevents runtime errors like "does not provide an export named 'LinearEncoding'".
                 - Always define this exact Import Map in the HTML file's head:
                   {
                     "imports": {
                       "react": "https://esm.sh/react@18.2.0",
                       "react-dom": "https://esm.sh/react-dom@18.2.0",
-                      "three": "https://esm.sh/three@0.150.0",
-                      "@react-three/fiber": "https://esm.sh/@react-three/fiber@8.12.0?external=three",
-                      "@react-three/drei": "https://esm.sh/@react-three/drei@9.80.0?external=three"
+                      "three": "https://esm.sh/three@0.150.0"
                     }
                   }
                               SURGICAL EDITING & FILE MODIFICATION RULES (CRITICAL):
                 - Use 'patch_file' (alias 'patch') for very small, surgical changes (1-3 lines). This is mandatory for precise fixes.
                 - Use 'edit_file' (alias 'edit') for larger modifications involving multiple lines or structural changes.
-                - Use 'write_file' (alias 'create') ONLY when creating a NEW file. NEVER use write_file/create to overwrite an existing file for applying small edits. Overwriting existing files using write_file is strictly prohibited and will cause a fatal failure!
+                - Use 'create_file' ONLY when creating a NEW file. This tool will fail if the file already exists. NEVER attempt to overwrite or recreate an existing file to apply changes. To modify existing files, you MUST use 'edit_file' or 'patch_file'. Overwriting existing files is strictly prohibited and there are no tools available to overwrite or recreate files!
                 - NEVER overwrite an entire file for small changes. Always read the file first and then apply surgical edits with edit_file or patch_file.
                 
                 CHRONOLOGICAL TRACKER:
@@ -2023,7 +2144,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                                 AVAILABLE TOOLS:
                 1. 'read_file': Read content of a file. MANDATORY before any edit.
                 2. 'read_file_range': Read specific line ranges. Required args: 'path' (file path), 'startLine' (first line to read, integer), 'endLine' (last line to read, integer). Alternatively, you can specify 'lineRange' (string, e.g., "100-130").
-                3. 'write_file' (alias 'create'): Use ONLY for creating a NEW file.
+                3. 'create_file': Use ONLY for creating a NEW file. This tool will fail if the file already exists.
                 4. 'edit_file' (alias 'edit'): Replace a precise unique block of code with new code.
                 5. 'patch_file' (alias 'patch'): Replace a small, precise snippet of code.
                 6. 'delete_code': Safely delete a specific unique block of code from a file.
@@ -2074,11 +2195,11 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 JSON Schema:
                 {
                   "thought": "Analysis and plan.",
-                  "tool": "read_file" | "read_file_range" | "write_file" | "edit_file" | "patch_file" | "append" | "delete_file" | "rename_file" | "move_file" | "run_command" | "global_search" | "complete" | "delete_code" | "move_code" | "copy_code" | "generate_image" | "resize_image" | "browser_search" | "browser_click" | "browser_read" | "create_todo_list" | "complete_todo_task" | "scan_dir",
+                  "tool": "read_file" | "read_file_range" | "create_file" | "edit_file" | "patch_file" | "append" | "delete_file" | "rename_file" | "move_file" | "run_command" | "global_search" | "complete" | "delete_code" | "move_code" | "copy_code" | "generate_image" | "resize_image" | "browser_search" | "browser_click" | "browser_read" | "create_todo_list" | "complete_todo_task" | "scan_dir",
                   "arguments": {
                     "path": "file/path.kt",
                     "destinationPath": "dest/path.kt",
-                    "content": "Full content for write_file/append",
+                    "content": "Full content for create_file/append",
                     "search": "Exact block to find or CSS/XPath",
                     "destinationSearch": "Exact block in destination to insert after",
                     "replace": "New block",
@@ -2127,6 +2248,16 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 - GITHUB PUSH & AUTOMATIC BUILD PERMISSION: The "Allow Build & Push Permission" setting is currently set to: ${_allowBuildPush.value}.
                   * If this is true, you are FULLY AUTHORIZED to automatically trigger force pushing to GitHub and starting the build once you complete your task, without requiring user manual permission.
                   * If this is false, you must ask the user for permission at the end before attempting to push or build.
+                
+                UNIT & INTEGRATION TESTING SYSTEM (CRITICAL - NEW CAPABILITY):
+                - You are fully authorized and encouraged to generate and run Unit Tests and Integration Tests!
+                - For Android Kotlin projects, always write your tests under the directory: `app/src/test/java/com/example/myandroidapp/`.
+                - You can create/edit standard Unit Tests using JUnit 4, and high-fidelity local UI/Integration Tests using Robolectric (this allows you to assert on activity states and Composable interactions directly on the JVM without an emulator).
+                - To run your tests and verify your changes, you can execute standard test commands using the 'run_command' tool:
+                  * For Android/Kotlin: `gradle :app:testDebugUnitTest` or `gradle test`.
+                  * For React or Web: `npm test`.
+                  * For Flutter: `flutter test`.
+                - Running tests is highly encouraged to ensure your generated code does not break any existing functionality!
             """.trimIndent()
 
             val useCustom = _useCustomModel.value
@@ -2482,34 +2613,41 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'read_file_range': $result"))))
                             }
-                            "create", "write_file" -> {
+                            "create_file" -> {
                                 val filePath = normalizePath(args?.path ?: "")
                                 val fileContent = args?.content ?: ""
-                                val writeLog = createAiLog(
-                                    title = "Created/Updated file",
+                                val createLog = createAiLog(
+                                    title = "Created new file",
                                     status = "thinking",
                                     details = "$filePath",
                                     lineRange = args?.lineRange ?: "all"
                                 )
-                                _aiActionLogs.value = _aiActionLogs.value + writeLog
+                                _aiActionLogs.value = _aiActionLogs.value + createLog
 
-                                val result = try {
-                                    repository.saveFile(project.name, filePath, fileContent)
-                                    filesModifiedThisPrompt = true
-                                    _editHistory.value = _editHistory.value + EditRecord(
-                                        tool = "create",
-                                        path = filePath,
-                                        lines = "all"
-                                    )
-                                    "Successfully created/wrote file '$filePath'"
-                                } catch (e: Exception) {
-                                    "Error writing file: ${e.localizedMessage}"
+                                val existingFiles = _projectFiles.value
+                                val fileAlreadyExists = existingFiles.any { it.path == filePath }
+
+                                val result = if (fileAlreadyExists) {
+                                    "Error: File '$filePath' already exists. Overwriting or recreating existing files is strictly prohibited. You MUST use 'edit_file' or 'patch_file' to modify existing files."
+                                } else {
+                                    try {
+                                        repository.saveFile(project.name, filePath, fileContent)
+                                        filesModifiedThisPrompt = true
+                                        _editHistory.value = _editHistory.value + EditRecord(
+                                            tool = "create_file",
+                                            path = filePath,
+                                            lines = "all"
+                                        )
+                                        "Successfully created new file '$filePath'"
+                                    } catch (e: Exception) {
+                                        "Error creating file: ${e.localizedMessage}"
+                                    }
                                 }
 
-                                updateAiLog(writeLog.id, "success", filePath)
+                                updateAiLog(createLog.id, if (result.startsWith("Error")) "failed" else "success", filePath)
 
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
-                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': $result"))))
+                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'create_file': $result"))))
                             }
                             "append" -> {
                                 val filePath = normalizePath(args?.path ?: "")
@@ -3336,7 +3474,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                     
                     _isThinking.value = false
                     _chatMessages.value = repository.getChatsForProject(project.name)
-                    if (project.templateKey == "vanilla" || project.templateKey == "react" || project.templateKey == "fiber") {
+                    if (project.templateKey == "vanilla" || project.templateKey == "react") {
                         _webPreviewRefreshTrigger.value += 1
                     }
                 }
