@@ -2347,34 +2347,37 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                                 )
                                 _aiActionLogs.value = _aiActionLogs.value + scanLog
 
-                                val files = repository.getFilesForProject(project.name)
-                                val filteredFiles = if (targetPath.isEmpty()) {
-                                    files
+                                if (targetPath.isEmpty()) {
+                                    val errorMsg = "Error: Scanning the entire project root with 'scan_dir' is strictly forbidden to protect the context limit. You MUST specify a specific target subdirectory path (e.g., 'app', 'app/src', 'app/src/main/java/com/example') to scan its contents. This is a mandatory safety rule."
+                                    updateAiLog(scanLog.id, "failed", errorMsg)
+                                    history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
+                                    history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'scan_dir': $errorMsg"))))
                                 } else {
-                                    files.filter { it.path.startsWith(targetPath) }
-                                }
+                                    val files = repository.getFilesForProject(project.name)
+                                    val filteredFiles = files.filter { it.path.startsWith(targetPath) }
 
-                                val fileDetails = filteredFiles.sortedBy { it.path }.map { file ->
-                                    val lineCount = file.content.lines().size
-                                    val sizeInBytes = file.content.toByteArray(Charsets.UTF_8).size
-                                    val sizeStr = if (sizeInBytes >= 1024 * 1024) {
-                                        String.format("%.2f MB", sizeInBytes.toDouble() / (1024 * 1024))
+                                    val fileDetails = filteredFiles.sortedBy { it.path }.map { file ->
+                                        val lineCount = file.content.lines().size
+                                        val sizeInBytes = file.content.toByteArray(Charsets.UTF_8).size
+                                        val sizeStr = if (sizeInBytes >= 1024 * 1024) {
+                                            String.format("%.2f MB", sizeInBytes.toDouble() / (1024 * 1024))
+                                        } else {
+                                            String.format("%.2f KB", sizeInBytes.toDouble() / 1024)
+                                        }
+                                        "  - ${file.path} ($lineCount lines, $sizeStr)"
+                                    }.joinToString("\n")
+
+                                    val result = if (fileDetails.isEmpty()) {
+                                        "No files or subdirectories found under '$targetPath'."
                                     } else {
-                                        String.format("%.2f KB", sizeInBytes.toDouble() / 1024)
+                                        "Recursive scan of directory '$targetPath' succeeded. Found ${filteredFiles.size} files:\n$fileDetails"
                                     }
-                                    "  - ${file.path} ($lineCount lines, $sizeStr)"
-                                }.joinToString("\n")
 
-                                val result = if (fileDetails.isEmpty()) {
-                                    "No files or subdirectories found under '$targetPath'."
-                                } else {
-                                    "Recursive scan of directory '$targetPath' succeeded. Found ${filteredFiles.size} files:\n$fileDetails"
+                                    updateAiLog(scanLog.id, "success", result)
+
+                                    history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
+                                    history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'scan_dir': $result"))))
                                 }
-
-                                updateAiLog(scanLog.id, "success", result)
-
-                                history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
-                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'scan_dir': $result"))))
                             }
                             "read_file" -> {
                                 val filePath = normalizePath(args?.path ?: "")
@@ -3371,13 +3374,17 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             sb.append(marker).append(item).append("\n")
         }
         
-        sb.append("\nTotal files in project: ${visibleFiles.size}\n")
+        sb.append("\n==================================================\n")
+        sb.append("TOTAL FILES IN THE ENTIRE PROJECT WORKSPACE: ${visibleFiles.size}\n")
+        sb.append("==================================================\n")
         sb.append("\n[CRITICAL MANDATORY INSTRUCTION FOR THE AI AGENT]:\n")
         sb.append("- You are ONLY shown the ROOT level files and folders to keep system context highly optimized.\n")
-        sb.append("- You are STRICTLY FORBIDDEN from assuming or guessing what files exist inside any of the folders listed above (e.g., ")
+        sb.append("- You are STRICTLY FORBIDDEN from assuming, guessing, or hallucinatory imagining what files exist inside any of the folders listed above (e.g., ")
         sb.append(sortedDirs.joinToString(", "))
         sb.append(").\n")
-        sb.append("- If you need to read, edit, or create files within any of these directories, you MUST first run the 'scan_dir' tool on that directory path (or use search tools) to fully scan and locate the files before performing any file edits or creation. Failing to scan first will result in critical failures and incorrect paths!")
+        sb.append("- You are STRICTLY FORBIDDEN from running 'scan_dir' on the root directory (using '.', '/', './', or empty path). Doing so will return a failure error!\n")
+        sb.append("- Instead, you MUST pass a specific folder name or sub-directory path (such as 'app', 'app/src', etc.) to the 'scan_dir' tool to inspect its subfolders and files recursively.\n")
+        sb.append("- For example, running `scan_dir` with path = \"app\" will return all paths inside \"app\" recursively (such as 'app/bin/files/file1.kt', etc.) and their structures, allowing you to correctly locate and reference them before editing or creating files. This is a MANDATORY prerequsite.")
         
         return sb.toString()
     }
