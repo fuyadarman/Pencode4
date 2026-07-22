@@ -136,6 +136,11 @@ fun WorkspaceScreen(
     onClearErrors: () -> Unit = {},
     onFixErrors: () -> Unit = {},
     detectedAndroidBuildErrors: List<AndroidBuildError> = emptyList(),
+    scannedModels: List<String> = emptyList(),
+    isScanningModels: Boolean = false,
+    scanError: String? = null,
+    onScanModels: (String, String, String) -> Unit = { _, _, _ -> },
+    onClearScannedModels: () -> Unit = {},
     onToggleAndroidBuildError: (String) -> Unit = {},
     onToggleAllAndroidBuildErrors: (Boolean) -> Unit = {},
     onClearAndroidBuildErrors: () -> Unit = {},
@@ -494,6 +499,11 @@ fun WorkspaceScreen(
             openaiModels = openaiModels,
             claudeModels = claudeModels,
             mistralModels = mistralModels,
+            scannedModels = scannedModels,
+            isScanningModels = isScanningModels,
+            scanError = scanError,
+            onScanModels = onScanModels,
+            onClearScannedModels = onClearScannedModels,
             maxActionSteps = maxActionSteps,
             allowBuildPush = allowBuildPush,
             allowAutoFix = allowAutoFix,
@@ -4183,6 +4193,11 @@ fun CustomSettingsDialog(
     openaiModels: List<String> = emptyList(),
     claudeModels: List<String> = emptyList(),
     mistralModels: List<String> = emptyList(),
+    scannedModels: List<String> = emptyList(),
+    isScanningModels: Boolean = false,
+    scanError: String? = null,
+    onScanModels: (String, String, String) -> Unit = { _, _, _ -> },
+    onClearScannedModels: () -> Unit = {},
     maxActionSteps: Int = 50,
     allowBuildPush: Boolean = false,
     allowAutoFix: Boolean = false,
@@ -4398,7 +4413,7 @@ fun CustomSettingsDialog(
                         )
 
                         // Provider Picker
-                        val providers = listOf("gemini", "openai", "claude", "mistral", "custom")
+                        val providers = listOf("gemini", "openai", "claude", "mistral", "groq", "cohere", "openrouter", "ollama_cloud", "cloudflare", "custom")
                         Text("Provider", color = Color(0xFF80809B), fontSize = 11.sp)
                         Row(
                             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -4413,24 +4428,41 @@ fun CustomSettingsDialog(
                                         .border(BorderStroke(1.dp, if (isSelected) Color(0xFF38BDF8) else Color(0xFF222533)), RoundedCornerShape(10.dp))
                                         .clickable { 
                                             pInput = p 
-                                            // Set some defaults but let user change
-                                            if (modelInput.isBlank()) {
-                                                modelInput = when(p) {
-                                                    "gemini" -> "gemini-2.0-flash"
-                                                    "openai" -> "gpt-4o"
-                                                    "mistral" -> "mistral-large-latest"
-                                                    else -> ""
-                                                }
+                                            // Set defaults based on provider but let user customize freely
+                                            modelInput = when(p) {
+                                                "gemini" -> "gemini-2.0-flash"
+                                                "openai" -> "gpt-4o"
+                                                "mistral" -> "mistral-large-latest"
+                                                "groq" -> "llama-3.3-70b-versatile"
+                                                "cohere" -> "command-r-plus"
+                                                "openrouter" -> "google/gemini-2.5-flash"
+                                                "ollama_cloud" -> "llama3.3"
+                                                "cloudflare" -> "@cf/meta/llama-3.3-70b-instruct"
+                                                else -> ""
                                             }
-                                            if (p == "custom" && baseInput.isBlank()) {
-                                                baseInput = "https://api.example.com/v1"
+                                            baseInput = when(p) {
+                                                "groq" -> "https://api.groq.com/openai"
+                                                "cohere" -> "https://api.cohere.com"
+                                                "openrouter" -> "https://openrouter.ai/api/v1"
+                                                "ollama_cloud" -> "https://api.ollama.com"
+                                                "cloudflare" -> "https://api.cloudflare.com/client/v4/accounts/YOUR_ACCOUNT_ID/ai/run"
+                                                "custom" -> "https://api.example.com/v1"
+                                                else -> ""
                                             }
                                         }
                                         .padding(horizontal = 14.dp, vertical = 10.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
+                                    val displayName = when(p) {
+                                        "ollama_cloud" -> "Ollama Cloud"
+                                        "cloudflare" -> "Cloudflare"
+                                        "cohere" -> "Cohere"
+                                        "groq" -> "Groq"
+                                        "openrouter" -> "OpenRouter"
+                                        else -> p.replaceFirstChar { it.uppercase() }
+                                    }
                                     Text(
-                                        text = p.replaceFirstChar { it.uppercase() },
+                                        text = displayName,
                                         color = if (isSelected) Color.Black else Color.White,
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold
@@ -4439,7 +4471,7 @@ fun CustomSettingsDialog(
                             }
                         }
 
-                        if (pInput == "custom") {
+                        if (pInput == "custom" || pInput == "groq" || pInput == "cohere" || pInput == "openrouter" || pInput == "ollama_cloud" || pInput == "cloudflare") {
                             OutlinedTextField(
                                 value = baseInput,
                                 onValueChange = { baseInput = it },
@@ -4485,6 +4517,105 @@ fun CustomSettingsDialog(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp)
                         )
+
+                        // Scan Models UI Section
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    onScanModels(pInput, keyInput, baseInput)
+                                },
+                                enabled = !isScanningModels,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF1E293B),
+                                    contentColor = Color(0xFF38BDF8)
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f).border(1.dp, Color(0xFF38BDF8), RoundedCornerShape(8.dp))
+                            ) {
+                                if (isScanningModels) {
+                                    androidx.compose.material3.CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        color = Color(0xFF38BDF8),
+                                        strokeWidth = 2.dp
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Scanning...", fontSize = 12.sp, color = Color(0xFF38BDF8))
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.Search,
+                                        contentDescription = "Scan",
+                                        modifier = Modifier.size(16.dp),
+                                        tint = Color(0xFF38BDF8)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Scan Active Models", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF38BDF8))
+                                }
+                            }
+                            
+                            if (scannedModels.isNotEmpty()) {
+                                Button(
+                                    onClick = { onClearScannedModels() },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color.Transparent,
+                                        contentColor = Color.Red
+                                    ),
+                                    shape = RoundedCornerShape(8.dp),
+                                ) {
+                                    Text("Clear", fontSize = 12.sp, color = Color.Red)
+                                }
+                            }
+                        }
+
+                        if (!scanError.isNullOrEmpty()) {
+                            Text(
+                                text = scanError!!,
+                                color = Color.Red,
+                                fontSize = 11.sp,
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
+                            )
+                        }
+
+                        if (scannedModels.isNotEmpty()) {
+                            Text(
+                                text = "Available Models (Click to paste):",
+                                color = Color(0xFF80809B),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 130.dp)
+                                    .horizontalScroll(rememberScrollState())
+                                    .background(Color(0xFF0D0E15), RoundedCornerShape(8.dp))
+                                    .border(1.dp, Color(0xFF222533), RoundedCornerShape(8.dp))
+                                    .padding(8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                scannedModels.forEach { scannedModel ->
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(Color(0xFF1E293B))
+                                            .clickable {
+                                                modelInput = scannedModel
+                                            }
+                                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                                    ) {
+                                        Text(
+                                            text = scannedModel,
+                                            color = Color.White,
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
 
                         OutlinedTextField(
                             value = aliasInput,

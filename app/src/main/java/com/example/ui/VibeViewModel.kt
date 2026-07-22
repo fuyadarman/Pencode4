@@ -466,6 +466,15 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         "codestral-latest"
     )
 
+    val openrouterModels = listOf(
+        "google/gemini-2.5-flash",
+        "google/gemini-2.5-pro",
+        "meta-llama/llama-3.3-70b-instruct",
+        "deepseek/deepseek-chat",
+        "anthropic/claude-3.5-sonnet",
+        "qwen/qwen-2.5-72b-instruct"
+    )
+
     private val _customProvider = MutableStateFlow(sharedPrefs.getString("custom_provider", "gemini") ?: "gemini")
     val customProvider = _customProvider.asStateFlow()
 
@@ -480,6 +489,15 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _useCustomModel = MutableStateFlow(sharedPrefs.getBoolean("use_custom_model", true)) // Default to true now since we removed "default"
     val useCustomModel = _useCustomModel.asStateFlow()
+
+    private val _scannedModels = MutableStateFlow<List<String>>(emptyList())
+    val scannedModels = _scannedModels.asStateFlow()
+
+    private val _isScanningModels = MutableStateFlow(false)
+    val isScanningModels = _isScanningModels.asStateFlow()
+
+    private val _scanError = MutableStateFlow<String?>(null)
+    val scanError = _scanError.asStateFlow()
 
     private val _maxActionSteps = MutableStateFlow(sharedPrefs.getInt("max_action_steps", 50))
     val maxActionSteps = _maxActionSteps.asStateFlow()
@@ -575,6 +593,27 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _detectedFramework = MutableStateFlow("")
     val detectedFramework = _detectedFramework.asStateFlow()
+
+    data class WriteFileConfirmInfo(
+        val path: String,
+        val newContent: String,
+        val existingLinesCount: Int
+    )
+
+    private val _writeFileConfirmInfo = MutableStateFlow<WriteFileConfirmInfo?>(null)
+    val writeFileConfirmInfo = _writeFileConfirmInfo.asStateFlow()
+
+    private var writeFileConfirmationDeferred: kotlinx.coroutines.CompletableDeferred<Boolean>? = null
+
+    fun approveWriteFile() {
+        writeFileConfirmationDeferred?.complete(true)
+        _writeFileConfirmInfo.value = null
+    }
+
+    fun rejectWriteFile() {
+        writeFileConfirmationDeferred?.complete(false)
+        _writeFileConfirmInfo.value = null
+    }
 
     private var lastDownloadedRunId: Long = 0
 
@@ -1180,6 +1219,121 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             .putString("custom_model_id", modelId)
             .putBoolean("use_custom_model", useCustom)
             .apply()
+    }
+
+    fun clearScannedModels() {
+        _scannedModels.value = emptyList()
+        _scanError.value = null
+    }
+
+    fun scanModels(provider: String, apiKey: String, baseUrl: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _isScanningModels.value = true
+            _scanError.value = null
+            _scannedModels.value = emptyList()
+            
+            try {
+                val client = OkHttpClient()
+                val url = when (provider) {
+                    "gemini" -> {
+                        val key = apiKey.ifBlank { BuildConfig.GEMINI_API_KEY }
+                        "https://generativelanguage.googleapis.com/v1beta/models?key=$key"
+                    }
+                    "cohere" -> "https://api.cohere.com/v1/models"
+                    "openai" -> if (baseUrl.isNotBlank()) "${baseUrl.trimEnd('/')}/models" else "https://api.openai.com/v1/models"
+                    "openrouter" -> if (baseUrl.isNotBlank()) "${baseUrl.trimEnd('/')}/models" else "https://openrouter.ai/api/v1/models"
+                    "groq" -> if (baseUrl.isNotBlank()) "${baseUrl.trimEnd('/')}/models" else "https://api.groq.com/openai/v1/models"
+                    "ollama_cloud" -> if (baseUrl.isNotBlank()) "${baseUrl.trimEnd('/')}/v1/models" else "https://api.ollama.com/v1/models"
+                    else -> {
+                        if (baseUrl.isNotBlank()) {
+                            if (baseUrl.contains("cloudflare")) {
+                                "https://api.cloudflare.com/client/v4/accounts/YOUR_ACCOUNT_ID/ai/run"
+                            } else {
+                                "${baseUrl.trimEnd('/')}/models"
+                            }
+                        } else {
+                            ""
+                        }
+                    }
+                }
+
+                if (url.isBlank()) {
+                    _scanError.value = "Invalid or unsupported provider/base URL for scanning."
+                    _isScanningModels.value = false
+                    return@launch
+                }
+
+                if (provider == "cloudflare") {
+                    val cfModels = listOf(
+                        "@cf/meta/llama-3.3-70b-instruct",
+                        "@cf/meta/llama-3-8b-instruct",
+                        "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
+                        "@cf/qwen/qwen1.5-14b-chat",
+                        "@cf/mistral/mistral-7b-instruct-v0.1"
+                    )
+                    _scannedModels.value = cfModels
+                    _isScanningModels.value = false
+                    return@launch
+                }
+
+                val requestBuilder = Request.Builder().url(url)
+                if (apiKey.isNotBlank() && provider != "gemini") {
+                    requestBuilder.header("Authorization", "Bearer $apiKey")
+                } else if (provider == "openrouter" && apiKey.isNotBlank()) {
+                    requestBuilder.header("Authorization", "Bearer $apiKey")
+                } else if (provider == "cohere" && apiKey.isNotBlank()) {
+                    requestBuilder.header("Authorization", "Bearer $apiKey")
+                }
+
+                val request = requestBuilder.get().build()
+                val response = client.newCall(request).execute()
+                val bodyStr = response.body?.string()
+
+                if (!response.isSuccessful || bodyStr == null) {
+                    _scanError.value = "Error ${response.code}: ${bodyStr ?: "No response body"}"
+                    _isScanningModels.value = false
+                    return@launch
+                }
+
+                val modelsList = mutableListOf<String>()
+                val json = JSONObject(bodyStr)
+
+                if (json.has("data")) {
+                    val dataArray = json.getJSONArray("data")
+                    for (i in 0 until dataArray.length()) {
+                        val item = dataArray.getJSONObject(i)
+                        if (item.has("id")) {
+                            modelsList.add(item.getString("id"))
+                        }
+                    }
+                } else if (json.has("models")) {
+                    val modelsArray = json.getJSONArray("models")
+                    for (i in 0 until modelsArray.length()) {
+                        val item = modelsArray.getJSONObject(i)
+                        if (item.has("name")) {
+                            val name = item.getString("name")
+                            modelsList.add(name)
+                            if (name.startsWith("models/")) {
+                                modelsList.add(name.substringAfter("models/"))
+                            }
+                        } else if (item.has("id")) {
+                            modelsList.add(item.getString("id"))
+                        }
+                    }
+                }
+
+                if (modelsList.isEmpty()) {
+                    _scanError.value = "No models found in the API response. Make sure your API key is correct."
+                } else {
+                    _scannedModels.value = modelsList.distinct()
+                }
+
+            } catch (e: Exception) {
+                _scanError.value = "Scan failed: ${e.localizedMessage}"
+            } finally {
+                _isScanningModels.value = false
+            }
+        }
     }
 
     fun saveMaxActionSteps(steps: Int) {
@@ -1970,10 +2124,17 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                       "three": "https://esm.sh/three@0.150.0"
                     }
                   }
-                              SURGICAL EDITING & FILE MODIFICATION RULES (CRITICAL):
+                STRICT AGENT TERMINATION & ANTI-LOOPING RULES (CRITICAL):
+                - LOOP PREVENTION: AI agents must NEVER loop endlessly. If you have completed the modifications requested by the user, you MUST STOP immediately by calling the 'complete' tool.
+                - NO TRIVIAL RE-READING OR PADDING: Do not perform repetitive file reads, edits, or search queries that do not add any value. Once files are updated, compile/build and complete the task.
+                - BE EFFICIENT LIKE BOLT/V0/LOVABLE: Professional developers execute changes in a single robust step and exit immediately. Make all edits in one turn where possible, and immediately finish.
+
+                SURGICAL EDITING & FILE MODIFICATION RULES (CRITICAL):
                 - Use 'patch_file' (alias 'patch') for very small, surgical changes (1-3 lines). This is mandatory for precise fixes.
                 - Use 'edit_file' (alias 'edit') for larger modifications involving multiple lines or structural changes.
-                - Use 'create_file' ONLY when creating a NEW file. This tool will fail if the file already exists. NEVER attempt to overwrite or recreate an existing file to apply changes. To modify existing files, you MUST use 'edit_file' or 'patch_file'. Overwriting existing files is strictly prohibited and there are no tools available to overwrite or recreate files!
+                - Use 'create_file' ONLY when creating a NEW file. This tool will fail if the file already exists.
+                - Use 'write_file' (alias 'write') to overwrite or recreate an existing file with the specified content, or create a new file.
+                  * CRITICAL LIMITATION: If the file already exists and has more than 50 lines, the system will pause and ask the user for explicit permission/confirmation. Writing without permission is only allowed for files with 50 lines or less.
                 - NEVER overwrite an entire file for small changes. Always read the file first and then apply surgical edits with edit_file or patch_file.
                 
                 CHRONOLOGICAL TRACKER:
@@ -2017,6 +2178,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 1. 'read_file': Read content of a file. MANDATORY before any edit.
                 2. 'read_file_range': Read specific line ranges. Required args: 'path' (file path), 'startLine' (first line to read, integer), 'endLine' (last line to read, integer). Alternatively, you can specify 'lineRange' (string, e.g., "100-130").
                 3. 'create_file': Use ONLY for creating a NEW file. This tool will fail if the file already exists.
+                3b. 'write_file' (alias 'write'): Overwrite or recreate an existing file with the specified content, or create a new file if it doesn't exist. Required args: 'path' (file path), 'content' (the complete content to write). (Note: Overwriting existing files with > 50 lines requires explicit user confirmation).
                 4. 'edit_file' (alias 'edit'): Replace a precise unique block of code with new code.
                 5. 'patch_file' (alias 'patch'): Replace a small, precise snippet of code.
                 6. 'delete_code': Safely delete a specific unique block of code from a file.
@@ -2067,11 +2229,11 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 JSON Schema:
                 {
                   "thought": "Analysis and plan.",
-                  "tool": "read_file" | "read_file_range" | "create_file" | "edit_file" | "patch_file" | "append" | "delete_file" | "rename_file" | "move_file" | "run_command" | "global_search" | "complete" | "delete_code" | "move_code" | "copy_code" | "generate_image" | "resize_image" | "browser_search" | "browser_click" | "browser_read" | "create_todo_list" | "complete_todo_task" | "scan_dir",
+                  "tool": "read_file" | "read_file_range" | "create_file" | "write_file" | "write" | "edit_file" | "patch_file" | "append" | "delete_file" | "rename_file" | "move_file" | "run_command" | "global_search" | "complete" | "delete_code" | "move_code" | "copy_code" | "generate_image" | "resize_image" | "browser_search" | "browser_click" | "browser_read" | "create_todo_list" | "complete_todo_task" | "scan_dir",
                   "arguments": {
                     "path": "file/path.kt",
                     "destinationPath": "dest/path.kt",
-                    "content": "Full content for create_file/append",
+                    "content": "Full content for create_file/write_file/append",
                     "search": "Exact block to find or CSS/XPath",
                     "destinationSearch": "Exact block in destination to insert after",
                     "replace": "New block",
@@ -2510,6 +2672,57 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
 
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'create_file': $result"))))
+                            }
+                            "write_file", "write" -> {
+                                val filePath = normalizePath(args?.path ?: "")
+                                val fileContent = args?.content ?: ""
+                                val writeLog = createAiLog(
+                                    title = "Writing file",
+                                    status = "thinking",
+                                    details = "$filePath",
+                                    lineRange = args?.lineRange ?: "all"
+                                )
+                                _aiActionLogs.value = _aiActionLogs.value + writeLog
+
+                                val existingFiles = _projectFiles.value
+                                val targetFile = existingFiles.find { it.path == filePath }
+                                val linesCount = targetFile?.content?.lines()?.size ?: 0
+
+                                var allowed = true
+                                if (targetFile != null && linesCount > 50) {
+                                    _writeFileConfirmInfo.value = WriteFileConfirmInfo(filePath, fileContent, linesCount)
+                                    val deferred = kotlinx.coroutines.CompletableDeferred<Boolean>()
+                                    writeFileConfirmationDeferred = deferred
+                                    
+                                    _agentStatus.value = "Waiting for user permission to overwrite $filePath..."
+                                    allowed = deferred.await()
+                                }
+
+                                val result = if (!allowed) {
+                                    "Error: Overwriting '$filePath' (which has $linesCount lines) was denied by the user. You must use 'edit_file' or 'patch_file' instead."
+                                } else {
+                                    try {
+                                        repository.saveFile(project.name, filePath, fileContent)
+                                        filesModifiedThisPrompt = true
+                                        _editHistory.value = _editHistory.value + EditRecord(
+                                            tool = "write_file",
+                                            path = filePath,
+                                            lines = "all"
+                                        )
+                                        if (targetFile != null) {
+                                            "Successfully overwrote existing file '$filePath'"
+                                        } else {
+                                            "Successfully created new file '$filePath'"
+                                        }
+                                    } catch (e: Exception) {
+                                        "Error writing file: ${e.localizedMessage}"
+                                    }
+                                }
+
+                                updateAiLog(writeLog.id, if (result.startsWith("Error")) "failed" else "success", filePath)
+
+                                history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
+                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'write_file': $result"))))
                             }
                             "append" -> {
                                 val filePath = normalizePath(args?.path ?: "")

@@ -19,6 +19,16 @@ import com.example.ui.WebConsoleError
 import com.example.ui.theme.MyApplicationTheme
 import androidx.compose.foundation.text.selection.SelectionContainer
 import com.example.api.LocalHttpServer
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -70,6 +80,7 @@ class MainActivity : ComponentActivity() {
                         val customModels by viewModel.customModels.collectAsState()
                         val selectedModelId by viewModel.selectedModelId.collectAsState()
                         val showGithubPushPrompt by viewModel.showGithubPushPrompt.collectAsState()
+                        val writeFileConfirmInfo by viewModel.writeFileConfirmInfo.collectAsState()
                         val webPreviewRefreshTrigger by viewModel.webPreviewRefreshTrigger.collectAsState()
                         val detectedFramework by viewModel.detectedFramework.collectAsState()
                         val todoList by viewModel.todoList.collectAsState()
@@ -80,6 +91,9 @@ class MainActivity : ComponentActivity() {
                         val allowBuildPush by viewModel.allowBuildPush.collectAsState()
                         val allowAutoFix by viewModel.allowAutoFix.collectAsState()
                         val isLoadingWorkspace by viewModel.isLoadingWorkspace.collectAsState()
+                        val scannedModels by viewModel.scannedModels.collectAsState()
+                        val isScanningModels by viewModel.isScanningModels.collectAsState()
+                        val scanError by viewModel.scanError.collectAsState()
 
                         if (currentProject == null) {
                             HomeScreen(
@@ -139,6 +153,11 @@ class MainActivity : ComponentActivity() {
                                 onSaveExplorerGithubBranch = { viewModel.saveExplorerGithubBranch(it) },
                                 detectedWebErrors = detectedWebErrors,
                                 detectedAndroidBuildErrors = detectedAndroidBuildErrors,
+                                scannedModels = scannedModels,
+                                isScanningModels = isScanningModels,
+                                scanError = scanError,
+                                onScanModels = { provider, apiKey, baseUrl -> viewModel.scanModels(provider, apiKey, baseUrl) },
+                                onClearScannedModels = { viewModel.clearScannedModels() },
                                 customModels = customModels,
                                 selectedModelId = selectedModelId,
                                 geminiModels = viewModel.geminiModels,
@@ -261,6 +280,38 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onClearWebConsoleLogs = {
                                     viewModel.clearWebConsoleLogs()
+                                }
+                            )
+                        }
+
+                        if (writeFileConfirmInfo != null) {
+                            AlertDialog(
+                                onDismissRequest = { viewModel.rejectWriteFile() },
+                                title = { Text("Overwrite Confirmation") },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text("The AI is trying to use the 'write_file' tool to overwrite/recreate the file:")
+                                        Text(
+                                            text = writeFileConfirmInfo!!.path,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                        Text("This file is large (${writeFileConfirmInfo!!.existingLinesCount} lines).")
+                                        Text("Are you sure you want to allow the AI to completely overwrite and recreate this file?")
+                                    }
+                                },
+                                confirmButton = {
+                                    Button(
+                                        onClick = { viewModel.approveWriteFile() },
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                    ) {
+                                        Text("Allow (অনুমতি দিন)", color = Color.White)
+                                    }
+                                },
+                                dismissButton = {
+                                    OutlinedButton(onClick = { viewModel.rejectWriteFile() }) {
+                                        Text("Deny (প্রত্যাখ্যান করুন)")
+                                    }
                                 }
                             )
                         }

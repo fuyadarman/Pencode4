@@ -239,10 +239,127 @@ object GeminiClient {
         val mediaType = "application/json; charset=utf-8".toMediaType()
 
         when {
-            useCustom && (provider == "mistral" || provider == "openai" || provider == "custom") -> {
+            useCustom && (provider == "cloudflare" || provider == "cloudrafer") -> {
+                val baseUrl = if (!customBaseUrl.isNullOrBlank()) customBaseUrl.trimEnd('/') else "https://api.cloudflare.com/client/v4/accounts/YOUR_ACCOUNT_ID/ai/run"
+                val url = if (baseUrl.endsWith("/")) "$baseUrl$modelId" else "$baseUrl/$modelId"
+
+                val messages = mutableListOf<Map<String, Any>>()
+                messages.add(mapOf("role" to "system", "content" to systemInstruction))
+                conversationHistory.forEach { content ->
+                    val textPart = content.parts.firstOrNull()?.text ?: ""
+                    val role = if (content.role == "model") "assistant" else "user"
+                    messages.add(mapOf("role" to role, "content" to textPart))
+                }
+
+                val bodyMap = mapOf(
+                    "messages" to messages
+                )
+
+                val bodyJson = moshi.adapter(Map::class.java).toJson(bodyMap)
+                val body = bodyJson.toRequestBody(mediaType)
+
+                val request = Request.Builder()
+                    .url(url)
+                    .header("Authorization", "Bearer $activeApiKey")
+                    .post(body)
+                    .build()
+
+                try {
+                    var attempt = 0
+                    val maxAttempts = 10
+                    var response: okhttp3.Response? = null
+                    var rawResponse: String? = null
+                    var lastCode = 0
+
+                    while (attempt < maxAttempts) {
+                        try {
+                            response?.close()
+                            response = client.newCall(request).execute()
+                            lastCode = response.code
+                            rawResponse = response.body?.string()
+                            Log.d(TAG, "Cloudflare Raw Response code: $lastCode")
+
+                             if (!response.isSuccessful) {
+                                attempt++
+                                if (attempt < maxAttempts) {
+                                    val isRateLimit = (lastCode == 429)
+                                    val backoff = if (isRateLimit) {
+                                        val base = 2000L * (1 shl (attempt - 1))
+                                        val jitter = (Math.random() * 500).toLong()
+                                        base + jitter
+                                    } else {
+                                        1000L * attempt
+                                    }
+                                    Log.w(TAG, "Cloudflare API Error $lastCode. Retrying in ${backoff}ms (Attempt $attempt of $maxAttempts)...")
+                                    Thread.sleep(backoff)
+                                    continue
+                                }
+                            }
+                            break
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Exception during Cloudflare execute", e)
+                            attempt++
+                            if (attempt < maxAttempts) {
+                                val isRateLimit = e.message?.contains("429") == true || e.message?.lowercase()?.contains("rate limit") == true
+                                val backoff = if (isRateLimit) {
+                                    val base = 2000L * (1 shl (attempt - 1))
+                                    val jitter = (Math.random() * 500).toLong()
+                                    base + jitter
+                                } else {
+                                    1000L * attempt
+                                }
+                                Log.w(TAG, "Cloudflare API call threw exception. Retrying in ${backoff}ms (Attempt $attempt of $maxAttempts)...")
+                                Thread.sleep(backoff)
+                                continue
+                            } else {
+                                throw e
+                            }
+                        }
+                    }
+
+                    if (response == null || !response.isSuccessful || rawResponse == null) {
+                        Log.e(TAG, "Cloudflare Error response: $rawResponse")
+                        return@withContext ToolCallResponse(
+                            thought = "Cloudflare API call failed with status $lastCode.",
+                            tool = "complete",
+                            arguments = ToolArguments(message = "Cloudflare API Provider Error (Code $lastCode): $rawResponse")
+                        )
+                    }
+
+                    val responseMap = moshi.adapter(Map::class.java).fromJson(rawResponse) as? Map<*, *>
+                    val resultObj = responseMap?.get("result") as? Map<*, *>
+                    val responseText = resultObj?.get("response") as? String
+
+                    if (responseText == null) {
+                        return@withContext ToolCallResponse(
+                            thought = "Empty content from Cloudflare response.",
+                            tool = "complete",
+                            arguments = ToolArguments(message = "Empty text content received from Cloudflare model. Response was: $rawResponse")
+                        )
+                    }
+
+                    val cleaned = cleanJsonString(responseText)
+                    return@withContext parseToolCallResponse(cleaned, responseText)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Exception during Cloudflare API call", e)
+                    return@withContext ToolCallResponse(
+                        thought = "Exception caught.",
+                        tool = "complete",
+                        arguments = ToolArguments(message = "An error occurred during Cloudflare communication: ${e.localizedMessage}")
+                    )
+                }
+            }
+
+            useCustom && (provider == "mistral" || provider == "openai" || provider == "custom" || provider == "groq" || provider == "cohere" || provider == "ollama_cloud" || provider == "ollama" || provider == "openrouter") -> {
                 val baseUrl = when {
                     provider == "mistral" -> "https://api.mistral.ai"
                     provider == "openai" -> "https://api.openai.com"
+                    provider == "groq" -> "https://api.groq.com/openai"
+                    provider == "cohere" -> "https://api.cohere.com"
+                    provider == "openrouter" -> "https://openrouter.ai/api"
+                    provider == "ollama_cloud" || provider == "ollama" -> {
+                        if (!customBaseUrl.isNullOrBlank()) customBaseUrl.trimEnd('/') else "https://api.ollama.com"
+                    }
                     !customBaseUrl.isNullOrBlank() -> customBaseUrl.trimEnd('/')
                     else -> "https://api.openai.com"
                 }
@@ -268,9 +385,8 @@ object GeminiClient {
                     "temperature" to 0.4f
                 )
                 
-                // Use response_format for OpenAI and Mistral to enforce JSON mode
-                // Some custom providers might fail with response_format, so we only apply it to known compatible ones or if not Anthropic-like
-                val supportsJsonMode = provider == "openai" || provider == "mistral" || 
+                // Use response_format for OpenAI, Mistral and Groq to enforce JSON mode
+                val supportsJsonMode = provider == "openai" || provider == "mistral" || provider == "groq" || provider == "openrouter" ||
                                       (provider == "custom" && !baseUrl.contains("anthropic") && !baseUrl.contains("groq"))
                 
                 if (supportsJsonMode) {
@@ -280,11 +396,17 @@ object GeminiClient {
                 val bodyJson = moshi.adapter(Map::class.java).toJson(bodyMap)
                 val body = bodyJson.toRequestBody(mediaType)
 
-                val request = Request.Builder()
+                val requestBuilder = Request.Builder()
                     .url(url)
                     .header("Authorization", "Bearer $activeApiKey")
                     .post(body)
-                    .build()
+
+                if (provider == "openrouter") {
+                    requestBuilder.header("HTTP-Referer", "https://ai.studio/build")
+                    requestBuilder.header("X-Title", "AI Studio Android")
+                }
+
+                val request = requestBuilder.build()
 
                 try {
                     var attempt = 0
