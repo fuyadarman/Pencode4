@@ -2352,9 +2352,21 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 _aiActionLogs.value = _aiActionLogs.value + thinkingLog
 
                 try {
+                    val remainingSteps = maxActionSteps - actionsCount
+                    val dynamicSystemInstruction = """
+                        $systemInstruction
+                        
+                        DYNAMIC AGENT TOOL EXECUTION BUDGET (CRITICAL UPDATES):
+                        - Total Step Execution Limit: $maxActionSteps
+                        - Steps Already Executed: $actionsCount
+                        - Steps Remaining: $remainingSteps
+                        - You are currently at step ${actionsCount + 1}. You have exactly $remainingSteps actions/tool calls remaining for this task.
+                        - Plan your tasks and use the 'complete' tool to terminate before you run out of actions!
+                    """.trimIndent()
+
                     val stepResponse = GeminiClient.generateAgentStep(
                         apiKey = activeApiKey,
-                        systemInstruction = systemInstruction,
+                        systemInstruction = dynamicSystemInstruction,
                         conversationHistory = optimizeConversationHistory(history),
                         provider = provider,
                         modelId = modelId,
@@ -3195,9 +3207,9 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                                 val oldPath = normalizePath(args?.oldPath ?: "")
                                 val newPath = normalizePath(args?.newPath ?: "")
                                 val renameLog = AiActionLog(
-                                    title = "Moved / Extracted code",
+                                    title = "Renamed file",
                                     status = "thinking",
-                                    details = "$newPath"
+                                    details = "Renaming '$oldPath' to '$newPath'"
                                 )
                                 _aiActionLogs.value = _aiActionLogs.value + renameLog
 
@@ -3219,9 +3231,9 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                                 val oldPath = normalizePath(args?.oldPath ?: "")
                                 val newPath = normalizePath(args?.newPath ?: "")
                                 val moveLog = AiActionLog(
-                                    title = "Moved / Extracted code",
+                                    title = "Moved file",
                                     status = "thinking",
-                                    details = "$newPath"
+                                    details = "Moving '$oldPath' to '$newPath'"
                                 )
                                 _aiActionLogs.value = _aiActionLogs.value + moveLog
 

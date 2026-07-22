@@ -390,9 +390,17 @@ class VibeRepository(private val dao: VibeDao, private val context: Context) {
         } else {
             // Run general POSIX shell commands
             try {
+                var finalCommand = trimmed
+                if (finalCommand.contains("src/") && !File(workingDir, "src").exists() && File(workingDir, "app/src").exists()) {
+                    finalCommand = finalCommand.replace("src/", "app/src/")
+                }
+                if (finalCommand.endsWith(" src") && !File(workingDir, "src").exists() && File(workingDir, "app/src").exists()) {
+                    finalCommand = finalCommand.substring(0, finalCommand.length - 4) + " app/src"
+                }
+
                 val shellPath = if (File("/system/bin/sh").exists()) "/system/bin/sh" else "sh"
                 val process = ProcessBuilder()
-                    .command(shellPath, "-c", trimmed)
+                    .command(shellPath, "-c", finalCommand)
                     .directory(workingDir)
                     .redirectErrorStream(true)
                     .start()
@@ -403,10 +411,23 @@ class VibeRepository(private val dao: VibeDao, private val context: Context) {
                 // Sync any modified files back into Database
                 syncStorageToDatabase(projectName)
                 
+                val exitCode = process.exitValue()
+                val isGrep = finalCommand.contains("grep ") || finalCommand.startsWith("grep")
+
                 if (output.isEmpty()) {
-                    if (process.exitValue() == 0) "" else "Command failed with exit status: ${process.exitValue()}"
+                    if (exitCode == 0) {
+                        ""
+                    } else if (isGrep && exitCode == 1) {
+                        "(No matches found)"
+                    } else {
+                        "Command failed with exit status: $exitCode"
+                    }
                 } else {
-                    output.trimEnd()
+                    if (isGrep && exitCode == 1) {
+                        output.trimEnd() + "\n(No matches found)"
+                    } else {
+                        output.trimEnd()
+                    }
                 }
             } catch (e: Exception) {
                 "Error executing shell command: ${e.localizedMessage}"
@@ -569,7 +590,20 @@ class VibeRepository(private val dao: VibeDao, private val context: Context) {
                     }
                 }
             } else {
-                val targetFile = File(workingDir, pathStr).canonicalFile
+                var targetFile = File(workingDir, pathStr).canonicalFile
+                if (!targetFile.exists()) {
+                    if (pathStr == "src" || pathStr == "src/") {
+                        val fallback = File(workingDir, "app/src").canonicalFile
+                        if (fallback.exists()) {
+                            targetFile = fallback
+                        }
+                    } else if (pathStr.startsWith("src/")) {
+                        val fallback = File(workingDir, "app/" + pathStr).canonicalFile
+                        if (fallback.exists()) {
+                            targetFile = fallback
+                        }
+                    }
+                }
                 if (!targetFile.exists()) {
                     results.add("grep: $pathStr: No such file or directory")
                     continue
