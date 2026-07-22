@@ -1241,6 +1241,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     "cohere" -> "https://api.cohere.com/v1/models"
                     "openai" -> if (baseUrl.isNotBlank()) "${baseUrl.trimEnd('/')}/models" else "https://api.openai.com/v1/models"
+                    "mistral" -> if (baseUrl.isNotBlank()) "${baseUrl.trimEnd('/')}/models" else "https://api.mistral.ai/v1/models"
                     "openrouter" -> if (baseUrl.isNotBlank()) "${baseUrl.trimEnd('/')}/models" else "https://openrouter.ai/api/v1/models"
                     "groq" -> if (baseUrl.isNotBlank()) "${baseUrl.trimEnd('/')}/models" else "https://api.groq.com/openai/v1/models"
                     "ollama_cloud" -> if (baseUrl.isNotBlank()) "${baseUrl.trimEnd('/')}/v1/models" else "https://api.ollama.com/v1/models"
@@ -1887,6 +1888,16 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 optimized[i] = content.copy(parts = updatedParts)
             }
         }
+        if (optimized.size > 16) {
+            val pruned = mutableListOf<Content>()
+            pruned.add(optimized.first())
+            pruned.add(Content(
+                role = "user",
+                parts = listOf(Part(text = "[System Note: Older agent execution history has been archived to maintain optimal processing speeds and prevent looping. The last few operations are retained below. Proceed with finishing the task.]"))
+            ))
+            pruned.addAll(optimized.takeLast(14))
+            return pruned
+        }
         return optimized
     }
 
@@ -2133,8 +2144,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 - Use 'patch_file' (alias 'patch') for very small, surgical changes (1-3 lines). This is mandatory for precise fixes.
                 - Use 'edit_file' (alias 'edit') for larger modifications involving multiple lines or structural changes.
                 - Use 'create_file' ONLY when creating a NEW file. This tool will fail if the file already exists.
-                - Use 'write_file' (alias 'write') to overwrite or recreate an existing file with the specified content, or create a new file.
-                  * CRITICAL LIMITATION: If the file already exists and has more than 50 lines, the system will pause and ask the user for explicit permission/confirmation. Writing without permission is only allowed for files with 50 lines or less.
+                - Use 'write_file' (alias 'write') ONLY as a RESTRICTED tool. You are STRICTLY FORBIDDEN from using 'write_file' to overwrite or recreate an existing file unless the user explicitly asks you to "recreate", "overwrite", "rewrite", or "replace" the entire file. For all normal edits, fixes, or modifications, you MUST use 'edit_file', 'patch_file', or 'append' instead.
                 - NEVER overwrite an entire file for small changes. Always read the file first and then apply surgical edits with edit_file or patch_file.
                 
                 CHRONOLOGICAL TRACKER:
@@ -2178,7 +2188,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 1. 'read_file': Read content of a file. MANDATORY before any edit.
                 2. 'read_file_range': Read specific line ranges. Required args: 'path' (file path), 'startLine' (first line to read, integer), 'endLine' (last line to read, integer). Alternatively, you can specify 'lineRange' (string, e.g., "100-130").
                 3. 'create_file': Use ONLY for creating a NEW file. This tool will fail if the file already exists.
-                3b. 'write_file' (alias 'write'): Overwrite or recreate an existing file with the specified content, or create a new file if it doesn't exist. Required args: 'path' (file path), 'content' (the complete content to write). (Note: Overwriting existing files with > 50 lines requires explicit user confirmation).
+                3b. 'write_file' (alias 'write'): RESTRICTED TOOL. Use ONLY if the user explicitly requests to "recreate", "overwrite", "rewrite", or "replace" the entire file. For normal edits, use 'edit_file', 'patch_file', or 'append' instead. Required args: 'path' (file path), 'content' (the complete content to write).
                 4. 'edit_file' (alias 'edit'): Replace a precise unique block of code with new code.
                 5. 'patch_file' (alias 'patch'): Replace a small, precise snippet of code.
                 6. 'delete_code': Safely delete a specific unique block of code from a file.
@@ -2689,7 +2699,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                                 val linesCount = targetFile?.content?.lines()?.size ?: 0
 
                                 var allowed = true
-                                if (targetFile != null && linesCount > 50) {
+                                if (false) {
                                     _writeFileConfirmInfo.value = WriteFileConfirmInfo(filePath, fileContent, linesCount)
                                     val deferred = kotlinx.coroutines.CompletableDeferred<Boolean>()
                                     writeFileConfirmationDeferred = deferred

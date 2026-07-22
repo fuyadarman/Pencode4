@@ -55,7 +55,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun WorkspaceScreen(
     project: ProjectEntity,
@@ -249,10 +249,12 @@ fun WorkspaceScreen(
             )
         },
         bottomBar = {
-            WorkspaceBottomNavigation(
-                currentTab = currentTab,
-                onTabSelected = onTabSelected
-            )
+            if (!androidx.compose.foundation.layout.WindowInsets.isImeVisible) {
+                WorkspaceBottomNavigation(
+                    currentTab = currentTab,
+                    onTabSelected = onTabSelected
+                )
+            }
         },
         containerColor = Color(0xFF0A0B10)
     ) { innerPadding ->
