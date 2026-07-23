@@ -1650,6 +1650,18 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         repository = VibeRepository(database.vibeDao(), application)
         loadProjects()
         loadCustomModels()
+
+        com.example.api.GeminiClient.onRetryListener = { provider, attempt, maxAttempts, error ->
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                _agentStatus.value = "Retrying API ($attempt/$maxAttempts) due to: $error"
+                val retryLog = createAiLog(
+                    title = "API Retry ($attempt/$maxAttempts)",
+                    status = "thinking",
+                    details = "Automatic retry for $provider: $error"
+                )
+                _aiActionLogs.value = _aiActionLogs.value + retryLog
+            }
+        }
     }
 
     fun loadProjects() {
@@ -1837,6 +1849,48 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             val resultStr = if (result.isEmpty()) "" else "\n$result"
             _terminalOutput.value += "$resultStr\n\n$"
             loadProjectDetails(project.name)
+        }
+    }
+
+    private fun isSameWork(a: com.example.api.ToolCallItem, b: com.example.api.ToolCallItem): Boolean {
+        if (a.tool != b.tool) return false
+        val argsA = a.arguments ?: return b.arguments == null
+        val argsB = b.arguments ?: return false
+
+        return when (a.tool) {
+            "run_command" -> {
+                val cmdA = argsA.command?.trim()?.replace("\\s+".toRegex(), " ") ?: ""
+                val cmdB = argsB.command?.trim()?.replace("\\s+".toRegex(), " ") ?: ""
+                cmdA.isNotEmpty() && cmdA == cmdB
+            }
+            "edit_file", "patch_file" -> {
+                val pathA = argsA.path?.trim() ?: ""
+                val pathB = argsB.path?.trim() ?: ""
+                val searchA = argsA.search?.trim() ?: ""
+                val searchB = argsB.search?.trim() ?: ""
+                val replaceA = argsA.replace?.trim() ?: ""
+                val replaceB = argsB.replace?.trim() ?: ""
+                pathA == pathB && searchA == searchB && replaceA == replaceB
+            }
+            "create_file", "write_file", "write", "append" -> {
+                val pathA = argsA.path?.trim() ?: ""
+                val pathB = argsB.path?.trim() ?: ""
+                val contentA = argsA.content?.trim() ?: ""
+                val contentB = argsB.content?.trim() ?: ""
+                pathA == pathB && contentA == contentB
+            }
+            "read_file", "view_file" -> {
+                val pathA = argsA.path?.trim() ?: ""
+                val pathB = argsB.path?.trim() ?: ""
+                val startA = argsA.startLine
+                val startB = argsB.startLine
+                val endA = argsA.endLine
+                val endB = argsB.endLine
+                pathA == pathB && startA == startB && endA == endB
+            }
+            else -> {
+                argsA == argsB
+            }
         }
     }
 
@@ -2445,13 +2499,12 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                                     val prev = recentToolCallsHistory[size - 2]
                                     val prev2 = recentToolCallsHistory[size - 3]
                                     
-                                    if (last.tool == prev.tool && last.arguments == prev.arguments &&
-                                        last.tool == prev2.tool && last.arguments == prev2.arguments) {
+                                    if (isSameWork(last, prev) && isSameWork(last, prev2)) {
                                         
                                         var consecutiveCount = 3
                                         for (idx in size - 4 downTo 0) {
                                             val item = recentToolCallsHistory[idx]
-                                            if (item.tool == last.tool && item.arguments == last.arguments) {
+                                            if (isSameWork(last, item)) {
                                                 consecutiveCount++
                                             } else {
                                                 break
@@ -2464,7 +2517,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                                             val loopAbortedLog = createAiLog(
                                                 title = "Infinite Loop Blocked",
                                                 status = "failed",
-                                                details = "Aborted execution: AI was stuck in an infinite loop, executing the same tool '$tool' with the exact same arguments $consecutiveCount times consecutively."
+                                                details = "Aborted execution: AI was stuck in an infinite loop, repeating the same task/action $consecutiveCount times consecutively."
                                             )
                                             _aiActionLogs.value = _aiActionLogs.value + loopAbortedLog
                                             loopCompleted = true
@@ -2473,7 +2526,8 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                                             // Soft intervention: inject a strong warning into the history for the LLM
                                             val warningText = """
                                                 SYSTEM ALERT (INFINITE LOOP DETECTED):
-                                                You have called the tool '$tool' with the exact same arguments $consecutiveCount times consecutively.
+                                                You have performed the exact same action/task $consecutiveCount times consecutively.
+                                                Tool: $tool
                                                 Arguments: ${args?.toString() ?: "None"}
                                                 
                                                 This has resulted in the same outcome and is leading to an infinite loop! 
@@ -2494,7 +2548,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                                             val warningLog = createAiLog(
                                                 title = "Loop warning injected",
                                                 status = "failed",
-                                                details = "Injected loop-breaking instructions because AI repeated '$tool' consecutively $consecutiveCount times."
+                                                details = "Injected loop-breaking instructions because AI repeated the exact same task consecutively $consecutiveCount times."
                                             )
                                             _aiActionLogs.value = _aiActionLogs.value + warningLog
                                         }

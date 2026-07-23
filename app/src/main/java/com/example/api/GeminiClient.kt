@@ -111,6 +111,8 @@ object GeminiClient {
     private const val TAG = "GeminiClient"
     private const val MODEL_NAME = "gemini-2.0-flash" // Standard fast model
 
+    var onRetryListener: ((provider: String, attempt: Int, maxAttempts: Int, error: String) -> Unit)? = null
+
     private val moshi = Moshi.Builder()
         .addLast(KotlinJsonAdapterFactory())
         .build()
@@ -266,7 +268,7 @@ object GeminiClient {
 
                 try {
                     var attempt = 0
-                    val maxAttempts = 10
+                    val maxAttempts = 5
                     var response: okhttp3.Response? = null
                     var rawResponse: String? = null
                     var lastCode = 0
@@ -290,6 +292,8 @@ object GeminiClient {
                                     } else {
                                         1000L * attempt
                                     }
+                                    val errStr = "API Error $lastCode"
+                                    onRetryListener?.invoke("Cloudflare", attempt, maxAttempts, errStr)
                                     Log.w(TAG, "Cloudflare API Error $lastCode. Retrying in ${backoff}ms (Attempt $attempt of $maxAttempts)...")
                                     Thread.sleep(backoff)
                                     continue
@@ -308,6 +312,8 @@ object GeminiClient {
                                 } else {
                                     1000L * attempt
                                 }
+                                val errStr = e.message ?: "Network Exception"
+                                onRetryListener?.invoke("Cloudflare", attempt, maxAttempts, errStr)
                                 Log.w(TAG, "Cloudflare API call threw exception. Retrying in ${backoff}ms (Attempt $attempt of $maxAttempts)...")
                                 Thread.sleep(backoff)
                                 continue
@@ -410,7 +416,7 @@ object GeminiClient {
 
                 try {
                     var attempt = 0
-                    val maxAttempts = 10
+                    val maxAttempts = 5
                     var response: okhttp3.Response? = null
                     var rawResponse: String? = null
                     var lastCode = 0
@@ -434,6 +440,8 @@ object GeminiClient {
                                     } else {
                                         1000L * attempt
                                     }
+                                    val errStr = "API Error $lastCode"
+                                    onRetryListener?.invoke(provider, attempt, maxAttempts, errStr)
                                     Log.w(TAG, "API Error $lastCode. Retrying in ${backoff}ms (Attempt $attempt of $maxAttempts)...")
                                     Thread.sleep(backoff)
                                     continue
@@ -452,6 +460,8 @@ object GeminiClient {
                                 } else {
                                     1000L * attempt
                                 }
+                                val errStr = e.message ?: "Network Exception"
+                                onRetryListener?.invoke(provider, attempt, maxAttempts, errStr)
                                 Log.w(TAG, "API call threw exception. Retrying in ${backoff}ms (Attempt $attempt of $maxAttempts)...")
                                 Thread.sleep(backoff)
                                 continue
@@ -561,7 +571,7 @@ object GeminiClient {
 
                 try {
                     var attempt = 0
-                    val maxAttempts = 10
+                    val maxAttempts = 5
                     var response: okhttp3.Response? = null
                     var rawResponse: String? = null
                     var lastCode = 0
@@ -585,6 +595,8 @@ object GeminiClient {
                                     } else {
                                         1000L * attempt
                                     }
+                                    val errStr = "API Error $lastCode"
+                                    onRetryListener?.invoke("Claude", attempt, maxAttempts, errStr)
                                     Log.w(TAG, "Claude API Error $lastCode. Retrying in ${backoff}ms (Attempt $attempt of $maxAttempts)...")
                                     Thread.sleep(backoff)
                                     continue
@@ -603,6 +615,8 @@ object GeminiClient {
                                 } else {
                                     1000L * attempt
                                 }
+                                val errStr = e.message ?: "Network Exception"
+                                onRetryListener?.invoke("Claude", attempt, maxAttempts, errStr)
                                 Log.w(TAG, "Claude API call threw exception. Retrying in ${backoff}ms (Attempt $attempt of $maxAttempts)...")
                                 Thread.sleep(backoff)
                                 continue
@@ -697,7 +711,7 @@ object GeminiClient {
 
                 try {
                     var attempt = 0
-                    val maxAttempts = 10
+                    val maxAttempts = 5
                     var response: okhttp3.Response? = null
                     var rawResponse: String? = null
                     var lastCode = 0
@@ -721,6 +735,8 @@ object GeminiClient {
                                     } else {
                                         1000L * attempt
                                     }
+                                    val errStr = "API Error $lastCode"
+                                    onRetryListener?.invoke("Gemini", attempt, maxAttempts, errStr)
                                     Log.w(TAG, "Gemini API Error $lastCode. Retrying in ${backoff}ms (Attempt $attempt of $maxAttempts)...")
                                     Thread.sleep(backoff)
                                     continue
@@ -739,6 +755,8 @@ object GeminiClient {
                                 } else {
                                     1000L * attempt
                                 }
+                                val errStr = e.message ?: "Network Exception"
+                                onRetryListener?.invoke("Gemini", attempt, maxAttempts, errStr)
                                 Log.w(TAG, "Gemini API call threw exception. Retrying in ${backoff}ms (Attempt $attempt of $maxAttempts)...")
                                 Thread.sleep(backoff)
                                 continue
@@ -850,7 +868,7 @@ object GeminiClient {
             .build()
 
         var attempt = 0
-        val maxAttempts = 10
+        val maxAttempts = 5
         var response: okhttp3.Response? = null
         var rawResponse: String? = null
         var lastCode = 0
@@ -875,6 +893,8 @@ object GeminiClient {
                             } else {
                                 1000L * attempt
                             }
+                            val errStr = "API Error $lastCode"
+                            onRetryListener?.invoke("Direct Gemini", attempt, maxAttempts, errStr)
                             Log.w(TAG, "Direct Gemini API Error $lastCode. Retrying in ${backoff}ms (Attempt $attempt of $maxAttempts)...")
                             Thread.sleep(backoff)
                             continue
@@ -893,6 +913,8 @@ object GeminiClient {
                         } else {
                             1000L * attempt
                         }
+                        val errStr = e.message ?: "Network Exception"
+                        onRetryListener?.invoke("Direct Gemini", attempt, maxAttempts, errStr)
                         Log.w(TAG, "Direct Gemini call threw exception. Retrying in ${backoff}ms (Attempt $attempt of $maxAttempts)...")
                         Thread.sleep(backoff)
                         continue
