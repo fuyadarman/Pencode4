@@ -2362,6 +2362,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             var maxActionSteps = _maxActionSteps.value
             var agentMessageSaved = false
             var lastThought: String? = null
+            val recentToolCallsHistory = mutableListOf<com.example.api.ToolCallItem>()
 
             try {
                 while (!loopCompleted && turn <= 500 && actionsCount < maxActionSteps) {
@@ -2436,6 +2437,90 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                             val args = call.arguments
                             
                             if (tool != "complete") {
+                                // Track tool call to detect infinite loops
+                                recentToolCallsHistory.add(call)
+                                val size = recentToolCallsHistory.size
+                                if (size >= 3) {
+                                    val last = recentToolCallsHistory[size - 1]
+                                    val prev = recentToolCallsHistory[size - 2]
+                                    val prev2 = recentToolCallsHistory[size - 3]
+                                    
+                                    if (last.tool == prev.tool && last.arguments == prev.arguments &&
+                                        last.tool == prev2.tool && last.arguments == prev2.arguments) {
+                                        
+                                        var consecutiveCount = 3
+                                        for (idx in size - 4 downTo 0) {
+                                            val item = recentToolCallsHistory[idx]
+                                            if (item.tool == last.tool && item.arguments == last.arguments) {
+                                                consecutiveCount++
+                                            } else {
+                                                break
+                                            }
+                                        }
+                                        
+                                        if (consecutiveCount >= 5) {
+                                            // Hard interrupt to prevent runaway execution
+                                            _isInterrupted.value = true
+                                            val loopAbortedLog = createAiLog(
+                                                title = "Infinite Loop Blocked",
+                                                status = "failed",
+                                                details = "Aborted execution: AI was stuck in an infinite loop, executing the same tool '$tool' with the exact same arguments $consecutiveCount times consecutively."
+                                            )
+                                            _aiActionLogs.value = _aiActionLogs.value + loopAbortedLog
+                                            loopCompleted = true
+                                            break
+                                        } else {
+                                            // Soft intervention: inject a strong warning into the history for the LLM
+                                            val warningText = """
+                                                SYSTEM ALERT (INFINITE LOOP DETECTED):
+                                                You have called the tool '$tool' with the exact same arguments $consecutiveCount times consecutively.
+                                                Arguments: ${args?.toString() ?: "None"}
+                                                
+                                                This has resulted in the same outcome and is leading to an infinite loop! 
+                                                You MUST stop repeating the exact same command or edit.
+                                                
+                                                HOW TO BREAK THE LOOP:
+                                                1. Do NOT execute the same command or edit tool again.
+                                                2. If you are trying to edit a file but getting 'Target content not found', you MUST read the file range or use 'grep' first to verify the file contents and structure.
+                                                3. If a compilation or shell command is failing, analyze the error output carefully, change your code logic, or ask the user for clarification.
+                                                4. Change your strategy or use alternative tools to proceed.
+                                            """.trimIndent()
+                                            
+                                            history.add(Content(
+                                                role = "user",
+                                                parts = listOf(Part(text = warningText))
+                                            ))
+                                            
+                                            val warningLog = createAiLog(
+                                                title = "Loop warning injected",
+                                                status = "failed",
+                                                details = "Injected loop-breaking instructions because AI repeated '$tool' consecutively $consecutiveCount times."
+                                            )
+                                            _aiActionLogs.value = _aiActionLogs.value + warningLog
+                                        }
+                                    }
+                                }
+
+                                // General consecutive failures detection (last 5 actions failed)
+                                val recentLogs = _aiActionLogs.value.takeLast(5)
+                                if (recentLogs.size >= 5 && recentLogs.all { it.status == "failed" }) {
+                                    val warningText = """
+                                        SYSTEM WARNING (CONSECUTIVE FAILURES):
+                                        Your last 5 consecutive tool executions have all failed.
+                                        This usually means you are making incorrect assumptions about file contents, file paths, or line ranges.
+                                        
+                                        Before you try any more edit or write operations:
+                                        1. Run a 'grep' command to locate the file and the exact lines you are targeting.
+                                        2. Read the surrounding lines of the target file to verify its structure and syntax.
+                                        3. Adjust your path or content matching to be perfectly accurate.
+                                    """.trimIndent()
+                                    
+                                    history.add(Content(
+                                        role = "user",
+                                        parts = listOf(Part(text = warningText))
+                                    ))
+                                }
+
                                 if (actionsCount >= maxActionSteps) {
                                     _isInterrupted.value = true
                                     val limitLog = createAiLog(
