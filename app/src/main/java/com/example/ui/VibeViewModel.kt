@@ -502,7 +502,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     private val _scanError = MutableStateFlow<String?>(null)
     val scanError = _scanError.asStateFlow()
 
-    private val _maxActionSteps = MutableStateFlow(sharedPrefs.getInt("max_action_steps", 50))
+    private val _maxActionSteps = MutableStateFlow(sharedPrefs.getInt("max_action_steps", 80))
     val maxActionSteps = _maxActionSteps.asStateFlow()
 
     private val _allowBuildPush = MutableStateFlow(sharedPrefs.getBoolean("allow_build_push", false))
@@ -2296,8 +2296,10 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                     - Required args: 'query' (the list of sub-tasks separated by the '|' character. E.g. "Implement browser|Setup files|Verify UI").
                 20. 'complete_todo_task': Mark a specific sub-task in the todo list as completed.
                     - Required args: 'query' (the 0-based index of the sub-task to mark complete, E.g. "0" for the first sub-task).
-                21. 'scan_dir': Recursively scan, explore, and list all folders, subfolders, paths, and files inside any target directory or path. This tool is MANDATORY whenever you encounter or need to explore any directory or folder.
+             21. 'scan_dir': Recursively scan, explore, and list all folders, subfolders, paths, and files inside any target directory or path. This tool is MANDATORY whenever you encounter or need to explore any directory or folder.
                     - Required args: 'path' (the target directory path to recursively scan, e.g., "app/src", or "." for the entire workspace root).
+                22. 'ai_response': Document and explain your formulating logic, thought process, plans, or observations after any action or task step.
+                    - Required args: 'message' (the detailing string containing your formulating logic, plans, or thoughts).
                 
                 Tool arguments structure:
                    - 'path': The file path.
@@ -2313,11 +2315,12 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                    - 'height': For generate_image/resize_image, the desired height in pixels.
                    - 'format': For resize_image, the output format.
                    - 'query': For browser_search, create_todo_list, complete_todo_task, the search term or website URL or list of tasks or task index.
-                  
+                   - 'message': The formulating logic, plans, thoughts, or observations for 'ai_response' or 'complete' tool.
+                   
                 JSON Schema:
                 {
                   "thought": "Analysis and plan.",
-                  "tool": "read_file" | "read_file_range" | "create_file" | "write_file" | "write" | "edit_file" | "patch_file" | "append" | "delete_file" | "rename_file" | "move_file" | "run_command" | "global_search" | "complete" | "delete_code" | "move_code" | "copy_code" | "generate_image" | "resize_image" | "browser_search" | "browser_click" | "browser_read" | "create_todo_list" | "complete_todo_task" | "scan_dir",
+                  "tool": "read_file" | "read_file_range" | "create_file" | "write_file" | "write" | "edit_file" | "patch_file" | "append" | "delete_file" | "rename_file" | "move_file" | "run_command" | "global_search" | "complete" | "delete_code" | "move_code" | "copy_code" | "generate_image" | "resize_image" | "browser_search" | "browser_click" | "browser_read" | "create_todo_list" | "complete_todo_task" | "scan_dir" | "ai_response",
                   "arguments": {
                     "path": "file/path.kt",
                     "destinationPath": "dest/path.kt",
@@ -2333,9 +2336,15 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                     "width": 512,
                     "height": 512,
                     "format": "png",
-                    "query": "Google search query or URL"
+                    "query": "Google search query or URL",
+                    "message": "Formulating logic, thoughts, or completion summary"
                   }
                 }
+                
+                AI RESPONSE MANDATE (CRITICAL):
+                - You MUST call the 'ai_response' tool to explain your formulating logic, thought process, and planned action AFTER every operation or task step you perform!
+                - The system will NOT automatically generate or force the formulating logic log anymore; it is completely under your control via the 'ai_response' tool.
+                - You are strictly forbidden from bypassing or ignoring this rule! Always call 'ai_response' to document your reasoning, findings, and next steps.
                 
                 AI THINKING RULE (CRITICAL):
                 - You MUST keep your "thought" (formulating logic) extremely short, concise, and direct (at most 1-2 sentences). You can also choose to completely skip outputting thoughts or skip 'ai formulating logic' entirely to respond as fast as possible. Never write long essays or paragraph blocks under the 'thought' field!
@@ -2422,14 +2431,6 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 while (!loopCompleted && turn <= 500 && actionsCount < maxActionSteps) {
                 _agentStatus.value = "AI thinking (Turn $turn, Action $actionsCount/$maxActionSteps)..."
                 
-                // Add Thinking Log entry
-                val thinkingLog = createAiLog(
-                    title = "AI formulating logic",
-                    status = "thinking",
-                    details = "Formulating step-by-step agent instructions..."
-                )
-                _aiActionLogs.value = _aiActionLogs.value + thinkingLog
-
                 try {
                     val remainingSteps = maxActionSteps - actionsCount
                     val dynamicSystemInstruction = """
@@ -2453,17 +2454,9 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                         useCustom = useCustom
                     )
                     
-                    // Mark current thinking log as completed or failed
                     val thought = stepResponse?.thought ?: ""
                     if (thought.isNotBlank()) {
                         lastThought = thought
-                    }
-                    val shouldIgnoreLog = thought.contains("ignore_formulating_logic", ignoreCase = true) || thought.startsWith("[ignore]", ignoreCase = true)
-                    
-                    if (shouldIgnoreLog) {
-                        _aiActionLogs.value = _aiActionLogs.value.filter { it.id != thinkingLog.id }
-                    } else {
-                        updateAiLog(thinkingLog.id, "success", thought.ifBlank { "Parsed response" })
                     }
 
                     if (stepResponse != null) {
@@ -2491,88 +2484,137 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                             val args = call.arguments
                             
                             if (tool != "complete") {
-                                // Track tool call to detect infinite loops
+                                // Track tool call to detect infinite loops (direct and oscillating sequence patterns)
                                 recentToolCallsHistory.add(call)
                                 val size = recentToolCallsHistory.size
-                                if (size >= 3) {
-                                    val last = recentToolCallsHistory[size - 1]
-                                    val prev = recentToolCallsHistory[size - 2]
-                                    val prev2 = recentToolCallsHistory[size - 3]
-                                    
-                                    if (isSameWork(last, prev) && isSameWork(last, prev2)) {
-                                        
-                                        var consecutiveCount = 3
-                                        for (idx in size - 4 downTo 0) {
-                                            val item = recentToolCallsHistory[idx]
-                                            if (isSameWork(last, item)) {
-                                                consecutiveCount++
-                                            } else {
+                                var loopHandled = false
+
+                                // Pattern-based sequence loop detection for pattern length k from 1 to 4
+                                for (k in 1..4) {
+                                    if (loopHandled) break
+                                    if (size >= k * 2) {
+                                        var isMatch = true
+                                        for (i in 0 until k) {
+                                            if (!isSameWork(recentToolCallsHistory[size - 1 - i], recentToolCallsHistory[size - 1 - k - i])) {
+                                                isMatch = false
                                                 break
                                             }
                                         }
-                                        
-                                        if (consecutiveCount >= 5) {
-                                            // Hard interrupt to prevent runaway execution
-                                            _isInterrupted.value = true
-                                            val loopAbortedLog = createAiLog(
-                                                title = "Infinite Loop Blocked",
-                                                status = "failed",
-                                                details = "Aborted execution: AI was stuck in an infinite loop, repeating the same task/action $consecutiveCount times consecutively."
-                                            )
-                                            _aiActionLogs.value = _aiActionLogs.value + loopAbortedLog
-                                            loopCompleted = true
-                                            break
-                                        } else {
-                                            // Soft intervention: inject a strong warning into the history for the LLM
-                                            val warningText = """
-                                                SYSTEM ALERT (INFINITE LOOP DETECTED):
-                                                You have performed the exact same action/task $consecutiveCount times consecutively.
-                                                Tool: $tool
-                                                Arguments: ${args?.toString() ?: "None"}
-                                                
-                                                This has resulted in the same outcome and is leading to an infinite loop! 
-                                                You MUST stop repeating the exact same command or edit.
-                                                
-                                                HOW TO BREAK THE LOOP:
-                                                1. Do NOT execute the same command or edit tool again.
-                                                2. If you are trying to edit a file but getting 'Target content not found', you MUST read the file range or use 'grep' first to verify the file contents and structure.
-                                                3. If a compilation or shell command is failing, analyze the error output carefully, change your code logic, or ask the user for clarification.
-                                                4. Change your strategy or use alternative tools to proceed.
-                                            """.trimIndent()
-                                            
-                                            history.add(Content(
-                                                role = "user",
-                                                parts = listOf(Part(text = warningText))
-                                            ))
-                                            
-                                            val warningLog = createAiLog(
-                                                title = "Loop warning injected",
-                                                status = "failed",
-                                                details = "Injected loop-breaking instructions because AI repeated the exact same task consecutively $consecutiveCount times."
-                                            )
-                                            _aiActionLogs.value = _aiActionLogs.value + warningLog
+                                        if (isMatch) {
+                                            var cycles = 2
+                                            var offset = size - 1 - 2 * k
+                                            while (offset - k + 1 >= 0) {
+                                                var cycleMatch = true
+                                                for (i in 0 until k) {
+                                                    if (!isSameWork(recentToolCallsHistory[size - 1 - i], recentToolCallsHistory[offset - i])) {
+                                                        cycleMatch = false
+                                                        break
+                                                    }
+                                                }
+                                                if (cycleMatch) {
+                                                    cycles++
+                                                    offset -= k
+                                                } else {
+                                                    break
+                                                }
+                                            }
+
+                                            if (k == 1) {
+                                                if (cycles >= 5) {
+                                                    _isInterrupted.value = true
+                                                    val loopAbortedLog = createAiLog(
+                                                        title = "Infinite Loop Blocked",
+                                                        status = "failed",
+                                                        details = "Aborted execution: AI was stuck in an infinite loop, repeating the same task $cycles times consecutively."
+                                                    )
+                                                    _aiActionLogs.value = _aiActionLogs.value + loopAbortedLog
+                                                    loopCompleted = true
+                                                    loopHandled = true
+                                                    break
+                                                } else if (cycles >= 3) {
+                                                    val warningText = """
+                                                        SYSTEM ALERT (INFINITE LOOP WARNING):
+                                                        You have performed the exact same action $cycles times consecutively.
+                                                        Tool: $tool
+                                                        Arguments: ${args?.toString() ?: "None"}
+                                                        
+                                                        This has resulted in the same outcome!
+                                                        You MUST stop repeating this action. Use 'grep' or 'read_file' to check the file state first before taking another action.
+                                                    """.trimIndent()
+                                                    
+                                                    history.add(Content(
+                                                        role = "user",
+                                                        parts = listOf(Part(text = warningText))
+                                                    ))
+                                                    
+                                                    val warningLog = createAiLog(
+                                                        title = "Loop warning injected",
+                                                        status = "failed",
+                                                        details = "Injected warning: AI repeated tool '$tool' $cycles times consecutively."
+                                                    )
+                                                    _aiActionLogs.value = _aiActionLogs.value + warningLog
+                                                    loopHandled = true
+                                                }
+                                            } else {
+                                                if (cycles >= 3) {
+                                                    _isInterrupted.value = true
+                                                    val loopAbortedLog = createAiLog(
+                                                        title = "Sequence Loop Blocked",
+                                                        status = "failed",
+                                                        details = "Aborted execution: AI was stuck in a $k-step sequence infinite loop repeated $cycles cycles."
+                                                    )
+                                                    _aiActionLogs.value = _aiActionLogs.value + loopAbortedLog
+                                                    loopCompleted = true
+                                                    loopHandled = true
+                                                    break
+                                                } else if (cycles >= 2) {
+                                                    val seqNames = (0 until k).map { idx -> recentToolCallsHistory[size - k + idx].tool }.joinToString(" -> ")
+                                                    val warningText = """
+                                                        SYSTEM ALERT (SEQUENCE LOOP DETECTED):
+                                                        You are repeating a $k-step sequence cycle ($seqNames) for $cycles cycles!
+                                                        This indicates an oscillating infinite loop where previous steps keep failing or reverting.
+                                                        
+                                                        You MUST stop this sequence cycle immediately! Try a completely different approach or use 'grep' to inspect code before proceeding.
+                                                    """.trimIndent()
+                                                    
+                                                    history.add(Content(
+                                                        role = "user",
+                                                        parts = listOf(Part(text = warningText))
+                                                    ))
+                                                    
+                                                    val warningLog = createAiLog(
+                                                        title = "Sequence loop warning injected",
+                                                        status = "failed",
+                                                        details = "Injected warning: $k-step sequence pattern ($seqNames) repeated $cycles times."
+                                                    )
+                                                    _aiActionLogs.value = _aiActionLogs.value + warningLog
+                                                    loopHandled = true
+                                                }
+                                            }
                                         }
                                     }
                                 }
 
-                                // General consecutive failures detection (last 5 actions failed)
-                                val recentLogs = _aiActionLogs.value.takeLast(5)
-                                if (recentLogs.size >= 5 && recentLogs.all { it.status == "failed" }) {
-                                    val warningText = """
-                                        SYSTEM WARNING (CONSECUTIVE FAILURES):
-                                        Your last 5 consecutive tool executions have all failed.
-                                        This usually means you are making incorrect assumptions about file contents, file paths, or line ranges.
+                                // Consecutive failures detection (last 3 actions failed)
+                                if (!loopHandled) {
+                                    val recentLogs = _aiActionLogs.value.takeLast(3)
+                                    if (recentLogs.size >= 3 && recentLogs.all { it.status == "failed" }) {
+                                        val warningText = """
+                                            SYSTEM WARNING (CONSECUTIVE FAILURES):
+                                            Your last 3 consecutive tool executions have failed.
+                                            Stop guessing file contents or line ranges!
+                                            
+                                            Before you try any more edits:
+                                            1. Run a 'grep' command to locate the file and exact lines.
+                                            2. Read the surrounding lines of the target file to verify its structure and syntax.
+                                            3. Adjust your path or content matching to be perfectly accurate.
+                                        """.trimIndent()
                                         
-                                        Before you try any more edit or write operations:
-                                        1. Run a 'grep' command to locate the file and the exact lines you are targeting.
-                                        2. Read the surrounding lines of the target file to verify its structure and syntax.
-                                        3. Adjust your path or content matching to be perfectly accurate.
-                                    """.trimIndent()
-                                    
-                                    history.add(Content(
-                                        role = "user",
-                                        parts = listOf(Part(text = warningText))
-                                    ))
+                                        history.add(Content(
+                                            role = "user",
+                                            parts = listOf(Part(text = warningText))
+                                        ))
+                                    }
                                 }
 
                                 if (actionsCount >= maxActionSteps) {
@@ -2645,6 +2687,18 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                                         }
                                     }
                                 }
+                            }
+                            "ai_response" -> {
+                                val message = args?.message ?: args?.query ?: args?.content ?: "Documenting formulating logic."
+                                val responseLog = createAiLog(
+                                    title = "AI formulating logic",
+                                    status = "success",
+                                    details = message
+                                )
+                                _aiActionLogs.value = _aiActionLogs.value + responseLog
+
+                                history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
+                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'ai_response': Formulating logic logged successfully. Proceed with your plan."))))
                             }
                             "list_directory" -> {
                                 val targetPath = args?.path ?: "."

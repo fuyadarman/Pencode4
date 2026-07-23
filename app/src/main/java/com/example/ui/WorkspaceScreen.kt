@@ -95,7 +95,7 @@ fun WorkspaceScreen(
     onSaveExplorerGithubRepo: (String) -> Unit = {},
     onSaveExplorerGithubBranch: (String) -> Unit = {},
     onSaveSettings: (String, String, String, String, Boolean) -> Unit,
-    maxActionSteps: Int = 50,
+    maxActionSteps: Int = 80,
     allowBuildPush: Boolean = false,
     allowAutoFix: Boolean = false,
     allowBackgroundExecution: Boolean = false,
@@ -4204,7 +4204,7 @@ fun CustomSettingsDialog(
     scanError: String? = null,
     onScanModels: (String, String, String) -> Unit = { _, _, _ -> },
     onClearScannedModels: () -> Unit = {},
-    maxActionSteps: Int = 50,
+    maxActionSteps: Int = 80,
     allowBuildPush: Boolean = false,
     allowAutoFix: Boolean = false,
     allowBackgroundExecution: Boolean = false,
@@ -4277,7 +4277,7 @@ fun CustomSettingsDialog(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Configure maximum tool calls and action perform steps. (Default is 50 steps)",
+                        text = "Configure maximum tool calls and action perform steps. (Default is 80 steps)",
                         color = Color(0xFF80809B),
                         fontSize = 11.sp,
                         lineHeight = 14.sp
@@ -4798,7 +4798,7 @@ fun CustomSettingsDialog(
                 ) {
                     TextButton(
                         onClick = {
-                            val steps = stepsInput.toIntOrNull() ?: 50
+                            val steps = stepsInput.toIntOrNull() ?: 80
                             onSaveMaxActionSteps(steps)
                             onSaveAllowBuildPush(allowBuildPushState)
                             onSaveAllowAutoFix(allowAutoFixState)
@@ -4821,7 +4821,7 @@ fun CustomSettingsDialog(
                                     true
                                 )
                             }
-                            val steps = stepsInput.toIntOrNull() ?: 50
+                            val steps = stepsInput.toIntOrNull() ?: 80
                             onSaveMaxActionSteps(steps)
                             onSaveAllowBuildPush(allowBuildPushState)
                             onSaveAllowAutoFix(allowAutoFixState)
