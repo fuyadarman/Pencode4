@@ -98,8 +98,10 @@ fun WorkspaceScreen(
     maxActionSteps: Int = 50,
     allowBuildPush: Boolean = false,
     allowAutoFix: Boolean = false,
+    allowBackgroundExecution: Boolean = false,
     onSaveAllowBuildPush: (Boolean) -> Unit = {},
     onSaveAllowAutoFix: (Boolean) -> Unit = {},
+    onSaveAllowBackgroundExecution: (Boolean) -> Unit = {},
     isLoadingWorkspace: Boolean = false,
     onSaveMaxActionSteps: (Int) -> Unit = {},
     onSaveGithubToken: (String) -> Unit,
@@ -509,8 +511,10 @@ fun WorkspaceScreen(
             maxActionSteps = maxActionSteps,
             allowBuildPush = allowBuildPush,
             allowAutoFix = allowAutoFix,
+            allowBackgroundExecution = allowBackgroundExecution,
             onSaveAllowBuildPush = onSaveAllowBuildPush,
             onSaveAllowAutoFix = onSaveAllowAutoFix,
+            onSaveAllowBackgroundExecution = onSaveAllowBackgroundExecution,
             onSaveMaxActionSteps = onSaveMaxActionSteps,
             onAddCustomModel = onAddCustomModel,
             onDeleteCustomModel = onDeleteCustomModel,
@@ -4203,8 +4207,10 @@ fun CustomSettingsDialog(
     maxActionSteps: Int = 50,
     allowBuildPush: Boolean = false,
     allowAutoFix: Boolean = false,
+    allowBackgroundExecution: Boolean = false,
     onSaveAllowBuildPush: (Boolean) -> Unit = {},
     onSaveAllowAutoFix: (Boolean) -> Unit = {},
+    onSaveAllowBackgroundExecution: (Boolean) -> Unit = {},
     onSaveMaxActionSteps: (Int) -> Unit = {},
     onAddCustomModel: (String, String, String, String, String) -> Unit = { _, _, _, _, _ -> },
     onDeleteCustomModel: (String) -> Unit = {},
@@ -4221,6 +4227,7 @@ fun CustomSettingsDialog(
     var stepsInput by remember { mutableStateOf(maxActionSteps.toString()) }
     var allowBuildPushState by remember { mutableStateOf(allowBuildPush) }
     var allowAutoFixState by remember { mutableStateOf(allowAutoFix) }
+    var allowBackgroundExecutionState by remember { mutableStateOf(allowBackgroundExecution) }
 
     var showAddNewForm by remember { mutableStateOf(false) }
 
@@ -4372,6 +4379,49 @@ fun CustomSettingsDialog(
                         Switch(
                             checked = allowAutoFixState,
                             onCheckedChange = { allowAutoFixState = it },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.Black,
+                                checkedTrackColor = Color(0xFF38BDF8),
+                                uncheckedThumbColor = Color(0xFF80809B),
+                                uncheckedTrackColor = Color(0xFF161822)
+                            )
+                        )
+                    }
+                }
+
+                // Allow Background Agent Execution Toggle
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFF161822), RoundedCornerShape(16.dp))
+                        .border(BorderStroke(1.dp, Color(0xFF222533)), RoundedCornerShape(16.dp))
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Run AI Agent in Background",
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Keep the AI Agent and the application fully running and working in the background even if you minimize or close the app.",
+                                color = Color(0xFF80809B),
+                                fontSize = 11.sp,
+                                lineHeight = 14.sp
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Switch(
+                            checked = allowBackgroundExecutionState,
+                            onCheckedChange = { allowBackgroundExecutionState = it },
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = Color.Black,
                                 checkedTrackColor = Color(0xFF38BDF8),
@@ -4752,6 +4802,7 @@ fun CustomSettingsDialog(
                             onSaveMaxActionSteps(steps)
                             onSaveAllowBuildPush(allowBuildPushState)
                             onSaveAllowAutoFix(allowAutoFixState)
+                            onSaveAllowBackgroundExecution(allowBackgroundExecutionState)
                             onDismiss()
                         }
                     ) {
@@ -4774,6 +4825,7 @@ fun CustomSettingsDialog(
                             onSaveMaxActionSteps(steps)
                             onSaveAllowBuildPush(allowBuildPushState)
                             onSaveAllowAutoFix(allowAutoFixState)
+                            onSaveAllowBackgroundExecution(allowBackgroundExecutionState)
                             onDismiss()
                         },
                         enabled = selectedModelId.isNotEmpty(),

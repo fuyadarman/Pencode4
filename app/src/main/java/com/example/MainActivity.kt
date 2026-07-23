@@ -90,6 +90,7 @@ class MainActivity : ComponentActivity() {
                         val maxActionSteps by viewModel.maxActionSteps.collectAsState()
                         val allowBuildPush by viewModel.allowBuildPush.collectAsState()
                         val allowAutoFix by viewModel.allowAutoFix.collectAsState()
+                        val allowBackgroundExecution by viewModel.allowBackgroundExecution.collectAsState()
                         val isLoadingWorkspace by viewModel.isLoadingWorkspace.collectAsState()
                         val scannedModels by viewModel.scannedModels.collectAsState()
                         val isScanningModels by viewModel.isScanningModels.collectAsState()
@@ -204,8 +205,10 @@ class MainActivity : ComponentActivity() {
                                 maxActionSteps = maxActionSteps,
                                 allowBuildPush = allowBuildPush,
                                 allowAutoFix = allowAutoFix,
+                                allowBackgroundExecution = allowBackgroundExecution,
                                 onSaveAllowBuildPush = { viewModel.saveAllowBuildPush(it) },
                                 onSaveAllowAutoFix = { viewModel.saveAllowAutoFix(it) },
+                                onSaveAllowBackgroundExecution = { viewModel.saveAllowBackgroundExecution(it) },
                                 onSaveMaxActionSteps = { viewModel.saveMaxActionSteps(it) },
                                 onSaveGithubToken = { token ->
                                     viewModel.saveGithubToken(token)

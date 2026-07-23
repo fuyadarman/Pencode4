@@ -1,6 +1,8 @@
 package com.example.ui
 
 import android.app.Application
+import android.content.Intent
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.BuildConfig
@@ -15,6 +17,7 @@ import com.example.data.ProjectEntity
 import com.example.data.ProjectFileEntity
 import com.example.data.VibeDatabase
 import com.example.data.VibeRepository
+import com.example.data.VibeAgentService
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
@@ -507,6 +510,9 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _allowAutoFix = MutableStateFlow(sharedPrefs.getBoolean("allow_auto_fix", false))
     val allowAutoFix = _allowAutoFix.asStateFlow()
+
+    private val _allowBackgroundExecution = MutableStateFlow(sharedPrefs.getBoolean("allow_background_execution", false))
+    val allowBackgroundExecution = _allowBackgroundExecution.asStateFlow()
 
     private var lastAutoFixedRunId: Long = -1L
     private var isAutoFixingWebErrors = false
@@ -1352,6 +1358,11 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         sharedPrefs.edit().putBoolean("allow_auto_fix", allowed).apply()
     }
 
+    fun saveAllowBackgroundExecution(allowed: Boolean) {
+        _allowBackgroundExecution.value = allowed
+        sharedPrefs.edit().putBoolean("allow_background_execution", allowed).apply()
+    }
+
     fun loadCustomModels() {
         val jsonStr = sharedPrefs.getString("custom_models_json", null)
         val list = mutableListOf<CustomModelConfig>()
@@ -1910,7 +1921,20 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         val project = _currentProject.value ?: return
         if (userPrompt.isBlank() && attachments.isEmpty()) return
 
-        currentAiJob = viewModelScope.launch {
+        if (_allowBackgroundExecution.value) {
+            try {
+                val context = getApplication<Application>()
+                val startIntent = Intent(context, VibeAgentService::class.java).apply {
+                    action = VibeAgentService.ACTION_START
+                }
+                ContextCompat.startForegroundService(context, startIntent)
+            } catch (e: Exception) {
+                Log.e("VibeViewModel", "Error starting service", e)
+            }
+        }
+
+        val scope = if (_allowBackgroundExecution.value) backgroundScope else viewModelScope
+        currentAiJob = scope.launch {
             autoSaveActiveFile()
             var finalPrompt = userPrompt
             attachments.forEach { file ->
@@ -3204,8 +3228,8 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'delete_file': $result"))))
                             }
                             "rename_file" -> {
-                                val oldPath = normalizePath(args?.oldPath ?: "")
-                                val newPath = normalizePath(args?.newPath ?: "")
+                                val oldPath = normalizePath(if (!args?.oldPath.isNullOrBlank()) args.oldPath else args?.path ?: "")
+                                val newPath = normalizePath(if (!args?.newPath.isNullOrBlank()) args.newPath else args?.destinationPath ?: "")
                                 val renameLog = AiActionLog(
                                     title = "Renamed file",
                                     status = "thinking",
@@ -3214,22 +3238,26 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                                 _aiActionLogs.value = _aiActionLogs.value + renameLog
 
                                 val result = try {
-                                    repository.renameFile(project.name, oldPath, newPath)
-                                    "Successfully renamed '$oldPath' to '$newPath'"
+                                    if (oldPath.isBlank() || newPath.isBlank()) {
+                                        "Error: both old path and new path are required for rename_file."
+                                    } else {
+                                        repository.renameFile(project.name, oldPath, newPath)
+                                        "Successfully renamed '$oldPath' to '$newPath'"
+                                    }
                                 } catch (e: Exception) {
                                     "Error renaming file: ${e.localizedMessage}"
                                 }
 
                                 _aiActionLogs.value = _aiActionLogs.value.map { log ->
-                                    if (log.id == renameLog.id) log.copy(status = "success", details = result) else log
+                                    if (log.id == renameLog.id) log.copy(status = if (result.startsWith("Successfully")) "success" else "failed", details = result) else log
                                 }
 
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'rename_file': $result"))))
                             }
                             "move_file" -> {
-                                val oldPath = normalizePath(args?.oldPath ?: "")
-                                val newPath = normalizePath(args?.newPath ?: "")
+                                val oldPath = normalizePath(if (!args?.oldPath.isNullOrBlank()) args.oldPath else args?.path ?: "")
+                                val newPath = normalizePath(if (!args?.newPath.isNullOrBlank()) args.newPath else args?.destinationPath ?: "")
                                 val moveLog = AiActionLog(
                                     title = "Moved file",
                                     status = "thinking",
@@ -3238,14 +3266,18 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                                 _aiActionLogs.value = _aiActionLogs.value + moveLog
 
                                 val result = try {
-                                    repository.moveFile(project.name, oldPath, newPath)
-                                    "Successfully moved '$oldPath' to '$newPath'"
+                                    if (oldPath.isBlank() || newPath.isBlank()) {
+                                        "Error: both source path and destination path are required for move_file."
+                                    } else {
+                                        repository.moveFile(project.name, oldPath, newPath)
+                                        "Successfully moved '$oldPath' to '$newPath'"
+                                    }
                                 } catch (e: Exception) {
                                     "Error moving file: ${e.localizedMessage}"
                                 }
 
                                 _aiActionLogs.value = _aiActionLogs.value.map { log ->
-                                    if (log.id == moveLog.id) log.copy(status = "success", details = result) else log
+                                    if (log.id == moveLog.id) log.copy(status = if (result.startsWith("Successfully")) "success" else "failed", details = result) else log
                                 }
 
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
@@ -3574,6 +3606,16 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                     if (project.templateKey == "vanilla" || project.templateKey == "react") {
                         _webPreviewRefreshTrigger.value += 1
                     }
+
+                    try {
+                        val context = getApplication<Application>()
+                        val stopIntent = Intent(context, VibeAgentService::class.java).apply {
+                            action = VibeAgentService.ACTION_STOP
+                        }
+                        context.startService(stopIntent)
+                    } catch (e: Exception) {
+                        Log.e("VibeViewModel", "Error stopping service", e)
+                    }
                 }
             }
         }
@@ -3622,6 +3664,12 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         sb.append("- For example, running `scan_dir` with path = \"app\" will return all paths inside \"app\" recursively (such as 'app/bin/files/file1.kt', etc.) and their structures, allowing you to correctly locate and reference them before editing or creating files. This is a MANDATORY prerequsite.")
         
         return sb.toString()
+    }
+
+    companion object {
+        private val backgroundScope = kotlinx.coroutines.CoroutineScope(
+            kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main
+        )
     }
 }
 
