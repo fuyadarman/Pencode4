@@ -40,7 +40,7 @@ data class AgentSkill(
     val description: String,
     val githubUrl: String = "https://github.com/vercel-labs/agent-skills",
     val isInstalled: Boolean = false,
-    val isEnabled: Boolean = true,
+    val isEnabled: Boolean = false,
     val isCustom: Boolean = false,
     val skillPrompt: String = ""
 )
@@ -55,7 +55,7 @@ val defaultAgentSkills = listOf(
         description = "Helps users discover and install agent skills when asking questions like \"how do I do X\", \"find a skill for X\", or expressing interest in extending capabilities.",
         githubUrl = "https://github.com/vercel-labs/skills",
         isInstalled = true,
-        isEnabled = true,
+        isEnabled = false,
         skillPrompt = """
             Skill: Find Skills
             When the user asks how to accomplish a task or search for capabilities, inspect installed agent skills and recommend or utilize relevant agent skills automatically.
@@ -69,7 +69,7 @@ val defaultAgentSkills = listOf(
         description = "React composition patterns that scale. Eliminate boolean prop proliferation, build flexible component libraries, and optimize hooks & state rendering.",
         githubUrl = "https://github.com/vercel-labs/agent-skills",
         isInstalled = true,
-        isEnabled = true,
+        isEnabled = false,
         skillPrompt = """
             Skill: React & Next.js Composition Best Practices
             - Avoid boolean prop proliferation; use composition and sub-components.
@@ -85,7 +85,7 @@ val defaultAgentSkills = listOf(
         description = "Best practices for Next.js App Router, Server Components (RSC), Client Components, Server Actions, route handlers, and streaming metadata.",
         githubUrl = "https://github.com/vercel-labs/agent-skills",
         isInstalled = false,
-        isEnabled = true,
+        isEnabled = false,
         skillPrompt = """
             Skill: Next.js App Router Master
             - Default to React Server Components (RSC) unless interactivity requires 'use client'.
@@ -101,7 +101,7 @@ val defaultAgentSkills = listOf(
         description = "Patterns for streamText, generateText, tool calling, object generation, and streaming conversational UI with the Vercel AI SDK.",
         githubUrl = "https://github.com/vercel-labs/agent-skills",
         isInstalled = false,
-        isEnabled = true,
+        isEnabled = false,
         skillPrompt = """
             Skill: Vercel AI SDK Integration
             - Use streamText and useChat for real-time conversational streaming interfaces.
@@ -116,7 +116,7 @@ val defaultAgentSkills = listOf(
         description = "Review UI code for Web Interface Guidelines compliance. Visual hierarchy, contrast ratio, accessibility, and clean responsive layout styling.",
         githubUrl = "https://github.com/vercel-labs/agent-skills",
         isInstalled = false,
-        isEnabled = true,
+        isEnabled = false,
         skillPrompt = """
             Skill: Web Interface Design Guidelines
             - High contrast ratio, fluid typography, clean padding (8dp grid).
@@ -132,7 +132,7 @@ val defaultAgentSkills = listOf(
         description = "Optimize serverless function execution, reduce cold starts, utilize Vercel Edge Runtime, KV storage, and Postgres connections.",
         githubUrl = "https://github.com/vercel-labs/agent-skills",
         isInstalled = false,
-        isEnabled = true,
+        isEnabled = false,
         skillPrompt = """
             Skill: Vercel Serverless & Edge Optimization
             - Use Edge Functions for low-latency globally distributed endpoints.
@@ -147,7 +147,7 @@ val defaultAgentSkills = listOf(
         description = "Turborepo setup, workspace dependency management, build caching, and fast incremental builds with Turbopack.",
         githubUrl = "https://github.com/vercel-labs/agent-skills",
         isInstalled = false,
-        isEnabled = true,
+        isEnabled = false,
         skillPrompt = """
             Skill: Turborepo Monorepo Architecture
             - Define pipeline tasks with outputs in turbo.json.
@@ -162,7 +162,7 @@ val defaultAgentSkills = listOf(
         description = "Modern Tailwind CSS v4 patterns, CSS variables theme mapping, dark mode color palettes, and responsive utility layout design.",
         githubUrl = "https://github.com/vercel-labs/agent-skills",
         isInstalled = false,
-        isEnabled = true,
+        isEnabled = false,
         skillPrompt = """
             Skill: Tailwind CSS v4 Utility Design
             - Use CSS variables for color tokenization.
@@ -179,7 +179,7 @@ val defaultAgentSkills = listOf(
         description = "Advanced prompt design for Anthropic Claude 3.5 Sonnet & Haiku: XML tags structuring, chain-of-thought reasoning, and system prompt optimization.",
         githubUrl = "https://github.com/anthropic/agent-skills",
         isInstalled = true,
-        isEnabled = true,
+        isEnabled = false,
         skillPrompt = """
             Skill: Anthropic Claude Prompt Engineering
             - Structure context using XML tags like <context>, <instructions>, and <examples>.
@@ -195,7 +195,7 @@ val defaultAgentSkills = listOf(
         description = "Connect AI models to external tools, databases, and APIs using Anthropic Model Context Protocol (MCP) servers and clients.",
         githubUrl = "https://github.com/anthropic/mcp",
         isInstalled = false,
-        isEnabled = true,
+        isEnabled = false,
         skillPrompt = """
             Skill: Anthropic Model Context Protocol (MCP)
             - Standardize tool and resource exposing via JSON-RPC 2.0 endpoints.
@@ -210,7 +210,7 @@ val defaultAgentSkills = listOf(
         description = "Multi-modal vision analysis, image prompt inspection, tool use execution, and agentic loop control patterns for Claude.",
         githubUrl = "https://github.com/anthropic/agent-skills",
         isInstalled = false,
-        isEnabled = true,
+        isEnabled = false,
         skillPrompt = """
             Skill: Anthropic Vision & Tool Automation
             - Parse base64/URL image inputs for visual UI inspection and bug triage.
@@ -225,7 +225,7 @@ val defaultAgentSkills = listOf(
         description = "Autonomous multi-turn agent loops with tool feedback handling, state management, and self-correction error recovery.",
         githubUrl = "https://github.com/anthropic/agent-skills",
         isInstalled = false,
-        isEnabled = true,
+        isEnabled = false,
         skillPrompt = """
             Skill: Anthropic Agentic Reasoning Loop
             - Evaluate tool call results objectively before formulating the next action.
@@ -240,7 +240,7 @@ val defaultAgentSkills = listOf(
         description = "Optimize large 200k context windows, dynamic document indexing, key value memory retention, and token reduction.",
         githubUrl = "https://github.com/anthropic/agent-skills",
         isInstalled = false,
-        isEnabled = true,
+        isEnabled = false,
         skillPrompt = """
             Skill: Claude Context Management
             - Compress historical dialogue context while preserving key decision states.
@@ -255,7 +255,7 @@ val defaultAgentSkills = listOf(
         description = "Output format enforcement, strict schema validation, markdown sanitization, and safety response framing.",
         githubUrl = "https://github.com/anthropic/agent-skills",
         isInstalled = false,
-        isEnabled = true,
+        isEnabled = false,
         skillPrompt = """
             Skill: Anthropic Safety & Output Guardrails
             - Enforce structured JSON schemas without extraneous markdown text.
@@ -272,7 +272,7 @@ val defaultAgentSkills = listOf(
         description = "File-based routing for React Native with Expo Router. Layouts, stacks, tabs, dynamic routes, and typed links.",
         githubUrl = "https://github.com/expo/expo",
         isInstalled = true,
-        isEnabled = true,
+        isEnabled = false,
         skillPrompt = """
             Skill: Expo Router File Navigation
             - Use app/ folder hierarchy with _layout.tsx for Stack/Tabs configuration.
@@ -287,7 +287,7 @@ val defaultAgentSkills = listOf(
         description = "Cross-platform mobile apps with Expo SDK 51+, Reanimated v3, Skia graphics, NativeWind, and EAS Build pipelines.",
         githubUrl = "https://github.com/expo/expo",
         isInstalled = false,
-        isEnabled = true,
+        isEnabled = false,
         skillPrompt = """
             Skill: Expo React Native Cross-Platform
             - Optimize list rendering with FlashList or FlatList.
@@ -303,7 +303,7 @@ val defaultAgentSkills = listOf(
         description = "Custom Swift/Kotlin native plugins and native module bridge integration for Expo SDK 51+.",
         githubUrl = "https://github.com/expo/expo",
         isInstalled = false,
-        isEnabled = true,
+        isEnabled = false,
         skillPrompt = """
             Skill: Expo Native Module Integration
             - Write native Android Kotlin / iOS Swift module specs using Expo Modules API.
@@ -317,7 +317,7 @@ val defaultAgentSkills = listOf(
         description = "EAS build configuration profiles, over-the-air (OTA) updates publishing, and runtime version management.",
         githubUrl = "https://github.com/expo/expo",
         isInstalled = false,
-        isEnabled = true,
+        isEnabled = false,
         skillPrompt = """
             Skill: Expo EAS & OTA Workflow
             - Configure eas.json with development, preview, and production profiles.
@@ -331,7 +331,7 @@ val defaultAgentSkills = listOf(
         description = "Integrate device hardware APIs using Expo SDK: Camera, Gyroscope/Accelerometer, GPS Location, Biometrics, and Audio.",
         githubUrl = "https://github.com/expo/expo",
         isInstalled = false,
-        isEnabled = true,
+        isEnabled = false,
         skillPrompt = """
             Skill: Expo Hardware API Integration
             - Request device runtime permissions gracefully before accessing Camera/Location.
@@ -347,7 +347,7 @@ val defaultAgentSkills = listOf(
         description = "End-to-end full-stack app architecture: AI prompt analysis, incremental code generation, state persistence, and continuous app compilation.",
         githubUrl = "https://github.com/nextlevelbuilder/agent-skills",
         isInstalled = true,
-        isEnabled = true,
+        isEnabled = false,
         skillPrompt = """
             Skill: NextLevelBuilder Full-Stack Vibe Coding
             - Execute prompt intent with pristine UI layout, high contrast themes, and smooth animations.
@@ -363,7 +363,7 @@ val defaultAgentSkills = listOf(
         description = "Polished Material 3 / Tailwind mobile UI components with gesture controls, glassmorphic card containers, and fluid touch interactions.",
         githubUrl = "https://github.com/nextlevelbuilder/agent-skills",
         isInstalled = true,
-        isEnabled = true,
+        isEnabled = false,
         skillPrompt = """
             Skill: NextLevelBuilder UI Design System
             - Use dark glassmorphic cards (background #131520, border #222533).
@@ -379,7 +379,7 @@ val defaultAgentSkills = listOf(
         description = "Automated boilerplate creation, database schema generator, Retrofit API client wiring, and ViewModels setup.",
         githubUrl = "https://github.com/nextlevelbuilder/agent-skills",
         isInstalled = false,
-        isEnabled = true,
+        isEnabled = false,
         skillPrompt = """
             Skill: NextLevelBuilder Automated App Generator
             - Generate complete reactive MVVM architectures with StateFlow UI bindings.
@@ -393,7 +393,7 @@ val defaultAgentSkills = listOf(
         description = "SQLite Room database caching, background thread synchronization, and offline-first data resilience.",
         githubUrl = "https://github.com/nextlevelbuilder/agent-skills",
         isInstalled = false,
-        isEnabled = true,
+        isEnabled = false,
         skillPrompt = """
             Skill: NextLevelBuilder Local DB & Sync
             - Use Room DAOs with Flow reactive updates and Dispatchers.IO isolation.
@@ -407,7 +407,7 @@ val defaultAgentSkills = listOf(
         description = "Gradle compilation optimization, KSP symbol processing, keystore signing, and APK bundle generation.",
         githubUrl = "https://github.com/nextlevelbuilder/agent-skills",
         isInstalled = false,
-        isEnabled = true,
+        isEnabled = false,
         skillPrompt = """
             Skill: NextLevelBuilder APK Build Pipeline
             - Ensure clean gradle dependencies and zero compilation errors.
@@ -423,7 +423,7 @@ val defaultAgentSkills = listOf(
         description = "Modern Material Design 3 patterns, state management with StateFlow and collectAsStateWithLifecycle, WindowInsets edge-to-edge layout, and performance optimization.",
         githubUrl = "https://github.com/androidx/androidx",
         isInstalled = true,
-        isEnabled = true,
+        isEnabled = false,
         skillPrompt = """
             Skill: Jetpack Compose & M3 Architecture
             - Use Material Theme tokens (MaterialTheme.colorScheme).
@@ -439,7 +439,7 @@ val defaultAgentSkills = listOf(
         description = "Local data persistence with Room SQLite, DAOs, Flow reactive queries, TypeConverters, and KSP annotation processing.",
         githubUrl = "https://github.com/androidx/androidx",
         isInstalled = true,
-        isEnabled = true,
+        isEnabled = false,
         skillPrompt = """
             Skill: Room Database Persistence
             - Define clean @Entity data classes with autoGenerate PrimaryKeys.
@@ -454,7 +454,7 @@ val defaultAgentSkills = listOf(
         description = "3D Web Graphics, 3D Globe, perspective camera setup, dynamic lighting, custom shaders, mesh animation loops, and WebGL rendering with Three.js.",
         githubUrl = "https://github.com/mrdoob/three.js",
         isInstalled = true,
-        isEnabled = true,
+        isEnabled = false,
         skillPrompt = """
             Skill: Three.js 3D Web Engine
             - Use THREE.Scene, THREE.PerspectiveCamera, THREE.WebGLRenderer, and OrbitControls.
@@ -975,7 +975,7 @@ fun AddCustomSkillDialog(
                                         description = description.ifBlank { "Custom user-defined skill." },
                                         githubUrl = "https://github.com",
                                         isInstalled = true,
-                                        isEnabled = true,
+                                        isEnabled = false,
                                         isCustom = true,
                                         skillPrompt = prompt.ifBlank { "Skill $name: Follow user rules." }
                                     )

@@ -647,7 +647,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                                                 description = "Live fetched skill from $orgName/$repo GitHub repository ($path).",
                                                 githubUrl = githubUrl,
                                                 isInstalled = false,
-                                                isEnabled = true,
+                                                isEnabled = false,
                                                 skillPrompt = "Skill fetched live from $githubUrl ($path)."
                                             )
                                         )
@@ -2326,10 +2326,19 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             val activeSkills = _agentSkills.value.filter { it.isInstalled && it.isEnabled }
-            val activeSkillsPrompt = if (activeSkills.isNotEmpty()) {
-                buildString {
-                    append("\n\nINSTALLED & ENABLED AGENT SKILLS:\n")
-                    append("The user has installed and enabled the following skills to extend your capabilities. Analyze the user's prompt and strictly follow these skill rules:\n\n")
+            val allSkills = _agentSkills.value
+            val activeSkillsPrompt = buildString {
+                append("\n\nBACKGROUND AGENT SKILLS LIBRARY & PROMPT ANALYSIS MANDATE:\n")
+                append("You are a professional AI Software Engineer Agent equipped with a background library of Agent Skills.\n")
+                append("ALL SKILLS DEFAULT TO OFF. You MUST analyze the user's prompt to make a professional decision whether any specialized skill should be loaded.\n")
+                append("If a skill matches the user's request or domain (e.g., React composition, Next.js architecture, UI design, AI SDK, state management, Room database, testing, performance, animations, canvas, etc.), you MUST call the 'load_skill' tool first.\n")
+                append("Calling 'load_skill' will log the skill activation directly into the Agent Operation Timeline for the user and unlock the skill instructions.\n\n")
+                append("AVAILABLE BACKGROUND SKILLS:\n")
+                allSkills.forEach { s ->
+                    append("- ID: '${s.id}' | Name: '${s.name}' | Author: '${s.author}'\n  Description: ${s.description}\n")
+                }
+                if (activeSkills.isNotEmpty()) {
+                    append("\nCURRENTLY ACTIVATED SKILLS:\n")
                     activeSkills.forEach { skill ->
                         append("--- SKILL: ${skill.name} (${skill.author}) ---\n")
                         append("Description: ${skill.description}\n")
@@ -2339,7 +2348,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                         append("--- END SKILL ---\n\n")
                     }
                 }
-            } else ""
+            }
 
             val fileTreeStr = generateFileTree(_projectFiles.value)
             val systemInstruction = """
@@ -2491,6 +2500,8 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                     - Required args: 'path' (a specific target subdirectory path, e.g., "app", "app/src", "app/src/main/java/com/example"). NOTE: Scanning the entire workspace root "." is strictly forbidden! Always specify a specific target subdirectory path.
                 22. 'ai_response': Document and explain your formulating logic, thought process, plans, or observations after any action or task step.
                     - Required args: 'message' (the detailing string containing your formulating logic, plans, or thoughts).
+                23. 'load_skill': Dynamically load and activate a background Agent Skill after analyzing user prompt to extend engineering capabilities.
+                    - Required args: 'path' or 'query' (the ID or name of the skill to load).
                 
                 Tool arguments structure:
                    - 'path': The file path.
@@ -3941,25 +3952,38 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                             }
                             "load_skill" -> {
                                 val skillQuery = args?.path ?: args?.query ?: args?.message ?: args?.content ?: ""
-                                val skillLog = createAiLog(
-                                    title = "Load Skill",
-                                    status = "thinking",
-                                    details = "Loading skill: $skillQuery"
-                                )
-                                _aiActionLogs.value = _aiActionLogs.value + skillLog
-
                                 val matchedSkill = _agentSkills.value.find { 
-                                    it.id.equals(skillQuery, ignoreCase = true) || it.name.contains(skillQuery, ignoreCase = true) 
+                                    it.id.equals(skillQuery, ignoreCase = true) || 
+                                    it.name.contains(skillQuery, ignoreCase = true) ||
+                                    skillQuery.contains(it.id, ignoreCase = true)
                                 }
 
                                 val result = if (matchedSkill != null) {
+                                    val updatedList = _agentSkills.value.map {
+                                        if (it.id == matchedSkill.id) it.copy(isInstalled = true, isEnabled = true) else it
+                                    }
+                                    _agentSkills.value = updatedList
+                                    saveAgentSkillsInternal()
+
+                                    val skillLog = createAiLog(
+                                        title = "Loaded Skill: ${matchedSkill.name}",
+                                        status = "success",
+                                        details = "Agent analyzed prompt and loaded skill '${matchedSkill.name}' by ${matchedSkill.author}"
+                                    )
+                                    _aiActionLogs.value = _aiActionLogs.value + skillLog
+
                                     "Loaded Skill: ${matchedSkill.name} (${matchedSkill.author})\nDescription: ${matchedSkill.description}\nInstructions:\n${matchedSkill.skillPrompt}"
                                 } else {
+                                    val skillLog = createAiLog(
+                                        title = "Load Skill Failed",
+                                        status = "failed",
+                                        details = "Skill '$skillQuery' not found."
+                                    )
+                                    _aiActionLogs.value = _aiActionLogs.value + skillLog
+
                                     val availableList = _agentSkills.value.joinToString(", ") { "${it.id} (${it.name})" }
                                     "Skill '$skillQuery' not found. Available background skills: $availableList"
                                 }
-
-                                updateAiLog(skillLog.id, if (matchedSkill != null) "success" else "failed", result)
 
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'load_skill': $result"))))
