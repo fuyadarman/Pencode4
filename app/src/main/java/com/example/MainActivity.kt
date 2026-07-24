@@ -261,6 +261,9 @@ class MainActivity : ComponentActivity() {
                                 onImportFiles = { uris ->
                                     viewModel.importFilesFromDevice(uris)
                                 },
+                                onDecompileApk = { apkPath ->
+                                    viewModel.decompileApk(apkPath)
+                                },
                                 onTerminalCommand = { cmd ->
                                     viewModel.runTerminalCommand(cmd)
                                 },

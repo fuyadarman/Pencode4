@@ -686,9 +686,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             e.printStackTrace()
         }
 
-        _currentProject.value?.let { proj ->
-            syncAgentSkillsToProject(proj.name)
-        }
+        // Saved skills to system shared preferences in background
     }
 
     fun toggleAgentSkill(skillId: String, enabled: Boolean) {
@@ -718,32 +716,8 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         saveAgentSkillsInternal()
     }
 
-    private fun syncAgentSkillsToProject(projectName: String) {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            val installedAndEnabled = _agentSkills.value.filter { it.isInstalled && it.isEnabled }
-            val disabledOrUninstalled = _agentSkills.value.filter { !it.isInstalled || !it.isEnabled }
-
-            installedAndEnabled.forEach { skill ->
-                val filePath = "agent-skills/${skill.id}.md"
-                val fileContent = """
-                    # Skill: ${skill.name}
-                    Author: ${skill.author}
-                    Description: ${skill.description}
-
-                    ${skill.skillPrompt}
-                """.trimIndent()
-
-                repository.saveFile(projectName, filePath, fileContent)
-            }
-
-            disabledOrUninstalled.forEach { skill ->
-                val filePath = "agent-skills/${skill.id}.md"
-                repository.deleteFile(projectName, filePath)
-            }
-
-            _projectFiles.value = repository.getFilesForProject(projectName)
-        }
-    }
+    // Skills are kept strictly in system background memory (SharedPreferences / ViewModel)
+    // and never written as files in the user's workspace or File Explorer.
 
     private fun createAiLog(title: String, status: String = "thinking", details: String? = null, lineRange: String? = null): AiActionLog {
         val activeConfig = _customModels.value.find { it.id == _selectedModelId.value }
@@ -1868,6 +1842,21 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun decompileApk(apkPath: String) {
+        val project = _currentProject.value ?: return
+        viewModelScope.launch {
+            _isLoadingWorkspace.value = true
+            try {
+                repository.decompileApkInProject(project.name, apkPath)
+                loadProjectDetails(project.name)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                _isLoadingWorkspace.value = false
+            }
+        }
+    }
+
     fun deleteProject(projectName: String) {
         viewModelScope.launch {
             repository.deleteProject(projectName)
@@ -1892,7 +1881,6 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 // Sync files on startup to verify integrity
                 repository.syncDatabaseToStorage(project.name)
                 repository.syncStorageToDatabase(project.name)
-                syncAgentSkillsToProject(project.name)
                 loadProjectDetails(project.name)
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -2523,7 +2511,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 JSON Schema:
                 {
                   "thought": "Analysis and plan.",
-                  "tool": "read_file" | "read_file_range" | "create_file" | "write_file" | "write" | "edit_file" | "patch_file" | "append" | "delete_file" | "rename_file" | "move_file" | "run_command" | "global_search" | "complete" | "delete_code" | "move_code" | "copy_code" | "generate_image" | "resize_image" | "browser_search" | "browser_click" | "browser_read" | "create_todo_list" | "complete_todo_task" | "scan_dir" | "ai_response",
+                  "tool": "read_file" | "read_file_range" | "create_file" | "write_file" | "write" | "edit_file" | "patch_file" | "append" | "delete_file" | "rename_file" | "move_file" | "run_command" | "global_search" | "complete" | "delete_code" | "move_code" | "copy_code" | "generate_image" | "resize_image" | "browser_search" | "browser_click" | "browser_read" | "create_todo_list" | "complete_todo_task" | "scan_dir" | "load_skill" | "ai_response",
                   "arguments": {
                     "path": "file/path.kt",
                     "destinationPath": "dest/path.kt",
@@ -3950,6 +3938,31 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
 
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'global_search': $result"))))
+                            }
+                            "load_skill" -> {
+                                val skillQuery = args?.path ?: args?.query ?: args?.message ?: args?.content ?: ""
+                                val skillLog = createAiLog(
+                                    title = "Load Skill",
+                                    status = "thinking",
+                                    details = "Loading skill: $skillQuery"
+                                )
+                                _aiActionLogs.value = _aiActionLogs.value + skillLog
+
+                                val matchedSkill = _agentSkills.value.find { 
+                                    it.id.equals(skillQuery, ignoreCase = true) || it.name.contains(skillQuery, ignoreCase = true) 
+                                }
+
+                                val result = if (matchedSkill != null) {
+                                    "Loaded Skill: ${matchedSkill.name} (${matchedSkill.author})\nDescription: ${matchedSkill.description}\nInstructions:\n${matchedSkill.skillPrompt}"
+                                } else {
+                                    val availableList = _agentSkills.value.joinToString(", ") { "${it.id} (${it.name})" }
+                                    "Skill '$skillQuery' not found. Available background skills: $availableList"
+                                }
+
+                                updateAiLog(skillLog.id, if (matchedSkill != null) "success" else "failed", result)
+
+                                history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
+                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'load_skill': $result"))))
                             }
                             else -> {
                                 loopCompleted = true

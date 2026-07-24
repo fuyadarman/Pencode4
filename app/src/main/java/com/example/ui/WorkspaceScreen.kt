@@ -118,6 +118,7 @@ fun WorkspaceScreen(
     onMoveFile: (String, String) -> Unit,
     onSendPrompt: (String, List<com.example.ui.AttachedFile>) -> Unit,
     onImportFiles: (List<android.net.Uri>) -> Unit,
+    onDecompileApk: (String) -> Unit = {},
     onPushProject: () -> Unit = {},
     onSearch: () -> Unit = {},
     onTerminalCommand: (String) -> Unit,
@@ -302,6 +303,7 @@ fun WorkspaceScreen(
                             onRenameFile = onRenameFile,
                             onMoveFile = onMoveFile,
                             onImportFiles = onImportFiles,
+                            onDecompileApk = onDecompileApk,
                             onPush = { showPushDialog = true },
                             onSearch = { showSearchDialog = true },
                             modifier = Modifier
@@ -358,6 +360,7 @@ fun WorkspaceScreen(
                                 onAddAttachedFile = onAddAttachedFile,
                                 onRemoveAttachedFile = onRemoveAttachedFile,
                                 onClearAttachedFiles = onClearAttachedFiles,
+                                agentSkills = agentSkills,
                                 onOpenSettings = { showSettingsDialog = true }
                             )
                         }
@@ -769,10 +772,13 @@ fun ChatTabContent(
     onAddAttachedFile: (com.example.ui.AttachedFile) -> Unit = {},
     onRemoveAttachedFile: (com.example.ui.AttachedFile) -> Unit = {},
     onClearAttachedFiles: () -> Unit = {},
+    agentSkills: List<com.example.ui.AgentSkill> = emptyList(),
     onOpenSettings: () -> Unit = {}
 ) {
     var taggedFiles by remember { mutableStateOf<List<ProjectFileEntity>>(emptyList()) }
+    var taggedSkills by remember { mutableStateOf<List<com.example.ui.AgentSkill>>(emptyList()) }
     var showFileSuggestions by remember { mutableStateOf(false) }
+    var showSkillSuggestions by remember { mutableStateOf(false) }
     
     val listState = rememberLazyListState()
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -786,9 +792,21 @@ fun ChatTabContent(
         } else emptyList()
     }
 
+    val filteredSkills = remember(chatInputText, agentSkills) {
+        val lastSlash = chatInputText.lastIndexOf('/')
+        if (lastSlash != -1 && lastSlash >= chatInputText.lastIndexOf(' ')) {
+            val query = chatInputText.substring(lastSlash + 1)
+            agentSkills.filter { skill ->
+                skill.isEnabled && (skill.name.contains(query, ignoreCase = true) || skill.id.contains(query, ignoreCase = true))
+            }
+        } else emptyList()
+    }
+
     LaunchedEffect(chatInputText) {
         val lastAt = chatInputText.lastIndexOf('@')
         showFileSuggestions = lastAt != -1 && lastAt >= chatInputText.lastIndexOf(' ')
+        val lastSlash = chatInputText.lastIndexOf('/')
+        showSkillSuggestions = lastSlash != -1 && lastSlash >= chatInputText.lastIndexOf(' ')
     }
 
     val filePickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -1521,7 +1539,46 @@ fun ChatTabContent(
                         Spacer(modifier = Modifier.height(8.dp))
                     }
 
-                    if (attachedFiles.isNotEmpty() || taggedFiles.isNotEmpty()) {
+                    if (showSkillSuggestions && filteredSkills.isNotEmpty()) {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 200.dp)
+                                .padding(horizontal = 4.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E2130)),
+                            border = BorderStroke(1.dp, Color(0xFFA855F7).copy(alpha = 0.5f)),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                        ) {
+                            LazyColumn(modifier = Modifier.padding(8.dp)) {
+                                items(filteredSkills) { skill ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                val lastSlash = chatInputText.lastIndexOf('/')
+                                                onUpdateChatInputText(chatInputText.substring(0, lastSlash) + "/${skill.id} ")
+                                                if (!taggedSkills.any { it.id == skill.id }) {
+                                                    taggedSkills = taggedSkills + skill
+                                                }
+                                                showSkillSuggestions = false
+                                            }
+                                            .padding(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Icon(Icons.Default.Psychology, contentDescription = null, tint = Color(0xFFA855F7), modifier = Modifier.size(18.dp))
+                                        Column {
+                                            Text("/${skill.name}", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                            Text(skill.description, color = Color(0xFF94A3B8), fontSize = 11.sp, maxLines = 1)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
+                    if (attachedFiles.isNotEmpty() || taggedFiles.isNotEmpty() || taggedSkills.isNotEmpty()) {
                         Row(
                             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -1563,13 +1620,34 @@ fun ChatTabContent(
                                     border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.4f))
                                 )
                             }
+                            taggedSkills.forEach { skill ->
+                                AssistChip(
+                                    onClick = { },
+                                    label = {
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            Icon(Icons.Default.Psychology, contentDescription = null, tint = Color(0xFFA855F7), modifier = Modifier.size(14.dp))
+                                            Text("/${skill.name}", color = Color(0xFFA855F7))
+                                        }
+                                    },
+                                    trailingIcon = {
+                                        IconButton(
+                                            onClick = { taggedSkills = taggedSkills.filter { it.id != skill.id } },
+                                            modifier = Modifier.size(16.dp)
+                                        ) {
+                                            Icon(Icons.Default.Close, contentDescription = "Remove", tint = Color.White)
+                                        }
+                                    },
+                                    colors = AssistChipDefaults.assistChipColors(containerColor = Color(0xFF1E2130)),
+                                    border = BorderStroke(1.dp, Color(0xFFA855F7).copy(alpha = 0.5f))
+                                )
+                            }
                         }
                     }
 
                     OutlinedTextField(
                         value = chatInputText,
                         onValueChange = { onUpdateChatInputText(it) },
-                        placeholder = { Text("Describe your app or request changes (use @ to tag files)...", color = Color(0xFF4F5575), fontSize = 13.sp) },
+                        placeholder = { Text("Describe your request (@ files, / skills)...", color = Color(0xFF4F5575), fontSize = 13.sp) },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = Color.White,
                             unfocusedTextColor = Color.White,
@@ -1597,8 +1675,8 @@ fun ChatTabContent(
                                     onClick = {
                                         if (isThinking) {
                                             onStopAI()
-                                        } else if (chatInputText.isNotBlank() || attachedFiles.isNotEmpty() || taggedFiles.isNotEmpty()) {
-                                            val combinedAttachments = attachedFiles + taggedFiles.map { file ->
+                                        } else if (chatInputText.isNotBlank() || attachedFiles.isNotEmpty() || taggedFiles.isNotEmpty() || taggedSkills.isNotEmpty()) {
+                                            val fileAttachments = taggedFiles.map { file ->
                                                 com.example.ui.AttachedFile(
                                                     uri = android.net.Uri.EMPTY,
                                                     name = file.path,
@@ -1607,13 +1685,24 @@ fun ChatTabContent(
                                                     contentAsText = "File Context (@${file.path}):\n${file.content}"
                                                 )
                                             }
+                                            val skillAttachments = taggedSkills.map { skill ->
+                                                com.example.ui.AttachedFile(
+                                                    uri = android.net.Uri.EMPTY,
+                                                    name = "Skill: ${skill.name}",
+                                                    mimeType = "text/plain",
+                                                    isImage = false,
+                                                    contentAsText = "[ACTIVE SKILL CONTEXT: ${skill.name}]\nDescription: ${skill.description}\nInstructions:\n${skill.skillPrompt}"
+                                                )
+                                            }
+                                            val combinedAttachments = attachedFiles + fileAttachments + skillAttachments
                                             onSendPrompt(chatInputText, combinedAttachments)
                                             onUpdateChatInputText("")
                                             onClearAttachedFiles()
                                             taggedFiles = emptyList()
+                                            taggedSkills = emptyList()
                                         }
                                     },
-                                    enabled = (chatInputText.isNotBlank() || attachedFiles.isNotEmpty() || taggedFiles.isNotEmpty()) || isThinking,
+                                    enabled = (chatInputText.isNotBlank() || attachedFiles.isNotEmpty() || taggedFiles.isNotEmpty() || taggedSkills.isNotEmpty()) || isThinking,
                                     modifier = Modifier
                                         .size(36.dp)
                                         .background(
@@ -3715,6 +3804,7 @@ fun ExplorerPanel(
     onRenameFile: (String, String) -> Unit,
     onMoveFile: (String, String) -> Unit,
     onImportFiles: (List<android.net.Uri>) -> Unit,
+    onDecompileApk: (String) -> Unit = {},
     onPush: () -> Unit,
     onSearch: () -> Unit,
     modifier: Modifier = Modifier
@@ -3832,7 +3922,8 @@ fun ExplorerPanel(
                     onSelectFile = onSelectFile,
                     onRename = { fileToRename = it },
                     onMove = { fileToMove = it },
-                    onDelete = { fileToDeleteConfirm = it }
+                    onDelete = { fileToDeleteConfirm = it },
+                    onDecompileApk = onDecompileApk
                 )
             }
         }
@@ -3914,7 +4005,8 @@ fun FileNodeItem(
     onSelectFile: (ProjectFileEntity) -> Unit,
     onRename: (String) -> Unit,
     onMove: (String) -> Unit,
-    onDelete: (String) -> Unit
+    onDelete: (String) -> Unit,
+    onDecompileApk: (String) -> Unit = {}
 ) {
     Row(
         modifier = Modifier
@@ -3972,6 +4064,15 @@ fun FileNodeItem(
                 onDismissRequest = { showMenu = false },
                 modifier = Modifier.background(Color(0xFF12131A))
             ) {
+                if (node.isFile && node.name.lowercase().endsWith(".apk")) {
+                    DropdownMenuItem(
+                        text = { Text("Decompile APK", color = Color(0xFF00FFCC), fontSize = 13.sp) },
+                        onClick = {
+                            showMenu = false
+                            onDecompileApk(node.path)
+                        }
+                    )
+                }
                 DropdownMenuItem(
                     text = { Text("Rename", color = Color.White, fontSize = 13.sp) },
                     onClick = {

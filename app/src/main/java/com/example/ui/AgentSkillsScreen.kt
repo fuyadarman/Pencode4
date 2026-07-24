@@ -451,14 +451,14 @@ val defaultAgentSkills = listOf(
         name = "Three.js 3D Master",
         author = "threejs-dev/skills",
         installs = "15.8K installs",
-        description = "3D Web Graphics, perspective camera setup, dynamic lighting, custom shaders, mesh animation loops, and WebGL rendering with Three.js.",
+        description = "3D Web Graphics, 3D Globe, perspective camera setup, dynamic lighting, custom shaders, mesh animation loops, and WebGL rendering with Three.js.",
         githubUrl = "https://github.com/mrdoob/three.js",
-        isInstalled = false,
+        isInstalled = true,
         isEnabled = true,
         skillPrompt = """
             Skill: Three.js 3D Web Engine
-            - Use THREE.Scene, THREE.PerspectiveCamera, THREE.WebGLRenderer.
-            - Setup AmbientLight + Directional/PointLights with shadows.
+            - Use THREE.Scene, THREE.PerspectiveCamera, THREE.WebGLRenderer, and OrbitControls.
+            - Build interactive 3D Globe, 3D Models, 3D Games, 3D Websites, and 3D Objects.
             - Handle window resize events dynamically.
         """.trimIndent()
     )

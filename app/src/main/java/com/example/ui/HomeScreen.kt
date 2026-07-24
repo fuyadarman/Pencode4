@@ -393,9 +393,10 @@ fun CreateProjectDialog(
     val templates = listOf(
         TemplateOption("android_kotlin", "Android Kotlin", "Native Android App scaffold with Jetpack Compose & Github Action Build."),
         TemplateOption("flutter", "Flutter", "Flutter App scaffold with main.dart, pubspec.yaml & Github Action Build."),
+        TemplateOption("apk_decompile", "APK Reverse Engineer / Decompiler", "Decompile Android APK files into source code, XML resources & rebuild with GitHub Actions."),
         TemplateOption("react", "React CDN", "Babel-powered interactive React Hello World with count state."),
         TemplateOption("vanilla", "Vanilla JS", "Pure HTML, CSS & JS centered Hello World screen."),
-        TemplateOption("vanilla_three", "Vanilla Three.js", "3D Canvas scene powered by Three.js with animated 3D cube & lighting.")
+        TemplateOption("vanilla_three", "Vanilla Three.js", "Interactive 3D Globe canvas powered by Three.js for 3D models, games, websites & objects.")
     )
 
     Dialog(onDismissRequest = onDismiss) {
@@ -899,58 +900,36 @@ fun TemplateIcon(key: String, modifier: Modifier = Modifier) {
                         .fillMaxSize()
                         .background(
                             Brush.linearGradient(
-                                colors = listOf(Color(0xFF00F2FE).copy(alpha = 0.15f), Color(0xFF0D0F14))
+                                colors = listOf(Color(0xFF00F2FE).copy(alpha = 0.18f), Color(0xFF0D0F14))
                             )
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    androidx.compose.foundation.Canvas(modifier = Modifier.size(20.dp)) {
-                        val w = size.width
-                        val h = size.height
-                        val cx = w / 2f
-                        val cy = h / 2f
-                        val r = w * 0.4f
-                        
-                        val pTop = androidx.compose.ui.geometry.Offset(cx, cy - r)
-                        val pRight = androidx.compose.ui.geometry.Offset(cx + r * 0.866f, cy - r * 0.5f)
-                        val pCenter = androidx.compose.ui.geometry.Offset(cx, cy)
-                        val pLeft = androidx.compose.ui.geometry.Offset(cx - r * 0.866f, cy - r * 0.5f)
-                        val pBottomCenter = androidx.compose.ui.geometry.Offset(cx, cy + r)
-                        val pBottomRight = androidx.compose.ui.geometry.Offset(cx + r * 0.866f, cy + r * 0.5f)
-                        val pBottomLeft = androidx.compose.ui.geometry.Offset(cx - r * 0.866f, cy + r * 0.5f)
-
-                        val topFace = androidx.compose.ui.graphics.Path().apply {
-                            moveTo(pTop.x, pTop.y)
-                            lineTo(pRight.x, pRight.y)
-                            lineTo(pCenter.x, pCenter.y)
-                            lineTo(pLeft.x, pLeft.y)
-                            close()
-                        }
-                        drawPath(topFace, color = Color(0xFF00F2FE).copy(alpha = 0.4f))
-
-                        val leftFace = androidx.compose.ui.graphics.Path().apply {
-                            moveTo(pLeft.x, pLeft.y)
-                            lineTo(pCenter.x, pCenter.y)
-                            lineTo(pBottomCenter.x, pBottomCenter.y)
-                            lineTo(pBottomLeft.x, pBottomLeft.y)
-                            close()
-                        }
-                        drawPath(leftFace, color = Color(0xFF4FACFE).copy(alpha = 0.3f))
-
-                        val rightFace = androidx.compose.ui.graphics.Path().apply {
-                            moveTo(pCenter.x, pCenter.y)
-                            lineTo(pRight.x, pRight.y)
-                            lineTo(pBottomRight.x, pBottomRight.y)
-                            lineTo(pBottomCenter.x, pBottomCenter.y)
-                            close()
-                        }
-                        drawPath(rightFace, color = Color(0xFF00F2FE).copy(alpha = 0.2f))
-
-                        val strokeStyle = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.2.dp.toPx())
-                        drawPath(topFace, color = Color(0xFF00F2FE), style = strokeStyle)
-                        drawPath(leftFace, color = Color(0xFF4FACFE), style = strokeStyle)
-                        drawPath(rightFace, color = Color(0xFF00F2FE), style = strokeStyle)
-                    }
+                    Icon(
+                        imageVector = Icons.Default.Public,
+                        contentDescription = "3D Globe",
+                        tint = Color(0xFF00F2FE),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+            "apk_decompile" -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(Color(0xFF10B981).copy(alpha = 0.18f), Color(0xFF0D0F14))
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Android,
+                        contentDescription = "APK Decompiler",
+                        tint = Color(0xFF10B981),
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
             }
         }

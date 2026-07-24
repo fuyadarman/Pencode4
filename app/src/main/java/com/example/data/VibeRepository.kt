@@ -165,7 +165,9 @@ class VibeRepository(private val dao: VibeDao, private val context: Context) {
     }
 
     suspend fun getFilesForProject(projectName: String): List<ProjectFileEntity> = withContext(Dispatchers.IO) {
-        dao.getFilesForProject(projectName)
+        dao.getFilesForProject(projectName).filter { 
+            !it.path.startsWith("agent-skills/") && !it.path.startsWith("skills/") && !it.path.startsWith(".skills/") 
+        }
     }
 
     suspend fun saveFile(projectName: String, path: String, content: String) = withContext(Dispatchers.IO) {
@@ -242,22 +244,196 @@ class VibeRepository(private val dao: VibeDao, private val context: Context) {
 
     suspend fun importFilesToProject(projectName: String, uris: List<android.net.Uri>) = withContext(Dispatchers.IO) {
         uris.forEach { uri ->
-            val fileName = getFileNameFromUri(uri) ?: "imported_${System.currentTimeMillis()}"
-            if (fileName.lowercase().endsWith(".zip")) {
-                extractZipToProject(projectName, uri)
-            } else {
-                val content = try {
-                    context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                } catch (e: Exception) {
-                    null
+            try {
+                val fileName = getFileNameFromUri(uri) ?: "imported_${System.currentTimeMillis()}"
+                if (fileName.lowercase().endsWith(".zip")) {
+                    extractZipToProject(projectName, uri)
+                } else if (fileName.lowercase().endsWith(".apk")) {
+                    // Save APK file first
+                    val projectDir = getProjectDir(projectName)
+                    val apkFile = File(projectDir, fileName)
+                    apkFile.parentFile?.mkdirs()
+                    context.contentResolver.openInputStream(uri)?.use { input ->
+                        FileOutputStream(apkFile).use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    syncStorageToDatabase(projectName)
+                    // Auto decompile if imported as APK
+                    decompileApkInProject(projectName, fileName)
+                } else {
+                    val contentBytes = try {
+                        context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                    } catch (e: Exception) {
+                        null
+                    }
+                    if (contentBytes != null) {
+                        if (isBinaryExtension(fileName) || isBinaryBytes(contentBytes)) {
+                            val base64 = "data:application/octet-stream;base64," + Base64.encodeToString(contentBytes, Base64.NO_WRAP)
+                            saveFile(projectName, fileName, base64)
+                        } else {
+                            val textContent = String(contentBytes, Charsets.UTF_8)
+                            saveFile(projectName, fileName, textContent)
+                        }
+                    }
                 }
-                if (content != null) {
-                    // We assume it's text for now as the agent mostly works with text
-                    // For binary files, we might need different handling if the agent needs to "see" them
-                    val textContent = String(content, Charsets.UTF_8)
-                    saveFile(projectName, fileName, textContent)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    private fun isBinaryBytes(bytes: ByteArray): Boolean {
+        if (bytes.isEmpty()) return false
+        var nonPrintable = 0
+        val checkLen = minOf(bytes.size, 1024)
+        for (i in 0 until checkLen) {
+            val b = bytes[i].toInt() and 0xFF
+            if (b == 0) return true
+            if (b < 9 || (b in 14..31)) nonPrintable++
+        }
+        return (nonPrintable.toFloat() / checkLen) > 0.3f
+    }
+
+    suspend fun decompileApkInProject(projectName: String, apkPath: String) = withContext(Dispatchers.IO) {
+        val projectDir = getProjectDir(projectName)
+        val apkFile = File(projectDir, apkPath)
+        if (!apkFile.exists()) return@withContext
+
+        try {
+            java.util.zip.ZipFile(apkFile).use { zip ->
+                val entries = zip.entries()
+                while (entries.hasMoreElements()) {
+                    val entry = entries.nextElement()
+                    if (entry.isDirectory) continue
+                    val entryName = entry.name
+                    // Ignore signature metadata
+                    if (entryName.startsWith("META-INF/")) continue
+
+                    val outFile = File(projectDir, entryName)
+                    outFile.parentFile?.mkdirs()
+
+                    zip.getInputStream(entry).use { input ->
+                        val bytes = input.readBytes()
+                        if (entryName.equals("AndroidManifest.xml", ignoreCase = true)) {
+                            val decompiledXml = decodeAxml(bytes)
+                            outFile.writeText(decompiledXml)
+                        } else if (entryName.endsWith(".xml", ignoreCase = true) || entryName.endsWith(".json", ignoreCase = true) || entryName.endsWith(".txt", ignoreCase = true) || entryName.endsWith(".properties", ignoreCase = true)) {
+                            if (bytes.isNotEmpty() && bytes[0] == '<'.toByte()) {
+                                outFile.writeText(String(bytes, Charsets.UTF_8))
+                            } else {
+                                val decoded = decodeAxml(bytes)
+                                outFile.writeText(decoded)
+                            }
+                        } else if (isBinaryExtension(entryName) || entryName.endsWith(".dex") || entryName.endsWith(".arsc") || entryName.endsWith(".so")) {
+                            outFile.writeBytes(bytes)
+                        } else {
+                            try {
+                                val text = String(bytes, Charsets.UTF_8)
+                                if (!isBinaryBytes(bytes)) {
+                                    outFile.writeText(text)
+                                } else {
+                                    outFile.writeBytes(bytes)
+                                }
+                            } catch (e: Exception) {
+                                outFile.writeBytes(bytes)
+                            }
+                        }
+                    }
                 }
             }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        // Re-sync storage to DB so all decompiled files appear in editor tree
+        syncStorageToDatabase(projectName)
+    }
+
+    private fun decodeAxml(bytes: ByteArray): String {
+        try {
+            if (bytes.size < 8) return String(bytes, Charsets.UTF_8)
+            if (bytes[0] == '<'.toByte() && bytes[1] == '?'.toByte()) {
+                return String(bytes, Charsets.UTF_8)
+            }
+            val buffer = java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+            val magic = buffer.int
+            if (magic != 0x00080003) {
+                return String(bytes, Charsets.UTF_8).filter { it.code in 32..126 || it == '\n' || it == '\r' || it == '\t' }
+            }
+            val fileSize = buffer.int
+            val strings = mutableListOf<String>()
+
+            while (buffer.hasRemaining()) {
+                val chunkPos = buffer.position()
+                if (chunkPos + 8 > bytes.size) break
+                val chunkType = buffer.short.toInt() and 0xFFFF
+                val headerSize = buffer.short.toInt() and 0xFFFF
+                val chunkSize = buffer.int
+                if (chunkSize <= 0 || chunkPos + chunkSize > bytes.size) break
+
+                if (chunkType == 0x0001) { // String Pool
+                    val stringCount = buffer.int
+                    val styleCount = buffer.int
+                    val flags = buffer.int
+                    val stringsStart = buffer.int
+                    val isUtf8 = (flags and (1 shl 8)) != 0
+                    val stringOffsets = IntArray(stringCount)
+                    for (i in 0 until stringCount) {
+                        stringOffsets[i] = buffer.int
+                    }
+                    val poolDataStart = chunkPos + stringsStart
+                    for (i in 0 until stringCount) {
+                        val strPos = poolDataStart + stringOffsets[i]
+                        if (strPos >= bytes.size) {
+                            strings.add("")
+                            continue
+                        }
+                        if (isUtf8) {
+                            var uPos = strPos
+                            while (uPos < bytes.size && (bytes[uPos].toInt() and 0x80) != 0) uPos++
+                            uPos++
+                            if (uPos < bytes.size) {
+                                val bLen = bytes[uPos].toInt() and 0xFF
+                                uPos++
+                                if (uPos + bLen <= bytes.size) {
+                                    strings.add(String(bytes, uPos, bLen, Charsets.UTF_8))
+                                } else strings.add("")
+                            } else strings.add("")
+                        } else {
+                            val charLen = (bytes[strPos].toInt() and 0xFF) or ((bytes[strPos + 1].toInt() and 0xFF) shl 8)
+                            val strBytes = charLen * 2
+                            if (strPos + 2 + strBytes <= bytes.size) {
+                                strings.add(String(bytes, strPos + 2, strBytes, Charsets.UTF_16LE))
+                            } else strings.add("")
+                        }
+                    }
+                    buffer.position(chunkPos + chunkSize)
+                } else {
+                    buffer.position(chunkPos + chunkSize)
+                }
+            }
+
+            val xmlBuilder = StringBuilder()
+            xmlBuilder.append("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n")
+            xmlBuilder.append("<!-- Decompiled AndroidManifest.xml -->\n")
+            xmlBuilder.append("<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n")
+
+            val permissions = strings.filter { it.contains("permission", ignoreCase = true) }.distinct()
+            permissions.forEach { perm ->
+                xmlBuilder.append("    <uses-permission android:name=\"$perm\" />\n")
+            }
+
+            val activities = strings.filter { it.endsWith("Activity") || it.contains("activity", ignoreCase = true) }.distinct()
+            xmlBuilder.append("\n    <application android:allowBackup=\"true\" android:label=\"Decompiled App\">\n")
+            activities.forEach { act ->
+                xmlBuilder.append("        <activity android:name=\"$act\" android:exported=\"true\" />\n")
+            }
+            xmlBuilder.append("    </application>\n")
+            xmlBuilder.append("</manifest>\n")
+            return xmlBuilder.toString()
+        } catch (e: Exception) {
+            return "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n    <!-- Decompiled Manifest Fallback -->\n</manifest>"
         }
     }
 
@@ -1636,17 +1812,14 @@ h1 {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Three.js 3D Scene</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>3D Globe World</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 </head>
 <body>
     <canvas id="bg"></canvas>
-    <div class="overlay">
-        <h1>Three.js 3D World</h1>
-        <p>Interactive 3D Canvas Scene</p>
-    </div>
     <script src="main.js"></script>
 </body>
 </html>"""
@@ -1663,8 +1836,7 @@ body, html {
     width: 100%;
     height: 100%;
     overflow: hidden;
-    background-color: #05050a;
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #030408;
 }
 #bg {
     position: fixed;
@@ -1673,26 +1845,7 @@ body, html {
     width: 100%;
     height: 100%;
     z-index: 1;
-}
-.overlay {
-    position: absolute;
-    top: 24px;
-    left: 24px;
-    z-index: 10;
-    color: #ffffff;
-    pointer-events: none;
-}
-.overlay h1 {
-    font-size: 2rem;
-    font-weight: 800;
-    background: linear-gradient(135deg, #00f2fe, #4facfe);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    margin-bottom: 4px;
-}
-.overlay p {
-    font-size: 0.95rem;
-    color: #8a8aa3;
+    touch-action: none;
 }"""
                 ),
                 ProjectFileEntity(
@@ -1700,41 +1853,94 @@ body, html {
                     path = "main.js",
                     content = """// Initialize Three.js Scene
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0a0c16);
+scene.background = new THREE.Color(0x030408);
 
 // Camera Setup
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-camera.position.set(0, 0, 5);
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.set(0, 0, 4.2);
 
 // Renderer Setup
 const renderer = new THREE.WebGLRenderer({
     canvas: document.querySelector('#bg'),
     antialias: true
 });
-renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 
+// Orbit Controls for smooth drag, rotate & zoom
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+controls.rotateSpeed = 0.8;
+controls.zoomSpeed = 1.0;
+controls.autoRotate = true;
+controls.autoRotateSpeed = 1.2;
+
 // Lighting
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
 scene.add(ambientLight);
 
-const pointLight1 = new THREE.PointLight(0x00f2fe, 2, 100);
-pointLight1.position.set(5, 5, 5);
-scene.add(pointLight1);
+const dirLight = new THREE.DirectionalLight(0x00f2fe, 1.8);
+dirLight.position.set(5, 3, 5);
+scene.add(dirLight);
 
-const pointLight2 = new THREE.PointLight(0x7f00ff, 2, 100);
-pointLight2.position.set(-5, -5, -5);
-scene.add(pointLight2);
+const blueGlowLight = new THREE.PointLight(0x38bdf8, 2, 50);
+blueGlowLight.position.set(-5, -3, -5);
+scene.add(blueGlowLight);
 
-// 3D Geometry & Mesh
-const geometry = new THREE.BoxGeometry(2, 2, 2);
-const material = new THREE.MeshStandardMaterial({ 
-    color: 0x00f2fe, 
-    roughness: 0.2, 
-    metalness: 0.8 
+// Interactive 3D Globe Mesh
+const globeGroup = new THREE.Group();
+scene.add(globeGroup);
+
+// Core Sphere
+const sphereGeo = new THREE.SphereGeometry(1.5, 64, 64);
+const sphereMat = new THREE.MeshPhongMaterial({
+    color: 0x0a1128,
+    emissive: 0x051937,
+    specular: 0x00f2fe,
+    shininess: 25,
+    wireframe: false
 });
-const cube = new THREE.Mesh(geometry, material);
-scene.add(cube);
+const globe = new THREE.Mesh(sphereGeo, sphereMat);
+globeGroup.add(globe);
+
+// Latitude & Longitude Grid Overlay
+const gridMat = new THREE.MeshBasicMaterial({
+    color: 0x00f2fe,
+    wireframe: true,
+    transparent: true,
+    opacity: 0.18
+});
+const gridMesh = new THREE.Mesh(new THREE.SphereGeometry(1.505, 32, 16), gridMat);
+globeGroup.add(gridMesh);
+
+// Outer Atmosphere Glow Ring
+const atmosphereGeo = new THREE.SphereGeometry(1.68, 64, 64);
+const atmosphereMat = new THREE.MeshBasicMaterial({
+    color: 0x38bdf8,
+    transparent: true,
+    opacity: 0.08,
+    side: THREE.BackSide
+});
+const atmosphere = new THREE.Mesh(atmosphereGeo, atmosphereMat);
+globeGroup.add(atmosphere);
+
+// Starfield Background Particles
+const starCount = 800;
+const starGeo = new THREE.BufferGeometry();
+const starCoords = new Float32Array(starCount * 3);
+for (let i = 0; i < starCount * 3; i++) {
+    starCoords[i] = (Math.random() - 0.5) * 50;
+}
+starGeo.setAttribute('position', new THREE.BufferAttribute(starCoords, 3));
+const starMat = new THREE.PointsMaterial({
+    color: 0xffffff,
+    size: 0.08,
+    transparent: true,
+    opacity: 0.6
+});
+const starField = new THREE.Points(starGeo, starMat);
+scene.add(starField);
 
 // Handle Window Resize
 window.addEventListener('resize', () => {
@@ -1743,15 +1949,315 @@ window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// Render Animation Loop
+// Animation Loop
 function animate() {
     requestAnimationFrame(animate);
-    cube.rotation.x += 0.01;
-    cube.rotation.y += 0.01;
+    controls.update();
     renderer.render(scene, camera);
 }
 
 animate();"""
+                )
+            )
+            "apk_decompile" -> listOf(
+                ProjectFileEntity(
+                    projectName = projectName,
+                    path = "README.md",
+                    content = """# APK Reverse Engineer & Recompiler Workspace
+
+This workspace allows you to decompile Android APK files, inspect & edit source code, manifest, XML resources, and rebuild using GitHub Actions.
+
+## How to Decompile an APK:
+1. Import or drag an `.apk` file into this project.
+2. In the File Explorer, click the three dots (`...`) menu next to the `.apk` file and select **"Decompile APK"**.
+3. All resources, manifests, and source structures will be extracted into this workspace for editing!
+4. Edit files, update code, and click **Build** to recompile via GitHub Actions.
+"""
+                ),
+                ProjectFileEntity(
+                    projectName = projectName,
+                    path = ".github/workflows/build.yml",
+                    content = """name: Build APK
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+env:
+  ACTIONS_AUDIT_NODE_VERSION: 'false'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up Java
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v4
+      with:
+        gradle-version: '8.5'
+
+    - name: Make Gradle Wrapper Executable
+      run: chmod +x gradlew || true
+
+    - name: Build Debug APK
+      run: ./gradlew assembleDebug --stacktrace || gradle assembleDebug
+
+    - name: Upload APK Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-debug
+        path: app/build/outputs/apk/debug/app-debug.apk
+"""
+                ),
+                ProjectFileEntity(
+                    projectName = projectName,
+                    path = ".github/workflows/cleanup.yml",
+                    content = """name: Cleanup Old Workflows and Artifacts
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Run every day at midnight UTC
+  workflow_dispatch: # Enable manual trigger from the GitHub Actions UI
+
+jobs:
+  cleanup:
+    name: Delete Runs & Artifacts Older Than 3 Days
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Clean up Artifacts
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const daysToKeep = 3;
+            const cutoffDate = new Date();
+            cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+
+            console.log(`Searching for artifacts older than: ${"$"}{cutoffDate.toISOString()}`);
+
+            try {
+              let page = 1;
+              let hasMore = true;
+              while (hasMore) {
+                const response = await github.rest.actions.listArtifactsForRepo({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  per_page: 100,
+                  page: page,
+                });
+
+                const artifacts = response.data.artifacts;
+                if (artifacts.length === 0) {
+                  hasMore = false;
+                  break;
+                }
+
+                for (const artifact of artifacts) {
+                  const createdAt = new Date(artifact.created_at);
+                  if (createdAt < cutoffDate) {
+                    console.log(`Deleting artifact: ${"$"}{artifact.name} (ID: ${"$"}{artifact.id}) created on ${"$"}{artifact.created_at}`);
+                    await github.rest.actions.deleteArtifact({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      artifact_id: artifact.id,
+                    });
+                  }
+                }
+                page++;
+              }
+            } catch (error) {
+              console.error(`Artifact cleanup failed: ${"$"}{error.message}`);
+            }
+
+      - name: Clean up Workflow Runs
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const daysToKeep = 3;
+            const cutoffDate = new Date();
+            cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+
+            console.log(`Searching for workflow runs older than: ${"$"}{cutoffDate.toISOString()}`);
+
+            try {
+              let page = 1;
+              let hasMore = true;
+              while (hasMore) {
+                const response = await github.rest.actions.listWorkflowRunsForRepo({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  per_page: 100,
+                  page: page,
+                });
+
+                const runs = response.data.workflow_runs;
+                if (runs.length === 0) {
+                  hasMore = false;
+                  break;
+                }
+
+                for (const run of runs) {
+                  const createdAt = new Date(run.created_at);
+                  if (createdAt < cutoffDate) {
+                    console.log(`Deleting workflow run: ${"$"}{run.name} (ID: ${"$"}{run.id}) created on ${"$"}{run.created_at}`);
+                    await github.rest.actions.deleteWorkflowRun({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      run_id: run.id,
+                    });
+                  }
+                }
+                page++;
+              }
+            } catch (error) {
+              core.setFailed(`Workflow run cleanup failed: ${"$"}{error.message}`);
+            }
+"""
+                ),
+                ProjectFileEntity(
+                    projectName = projectName,
+                    path = "settings.gradle.kts",
+                    content = """pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = "DecompiledApp"
+include(":app")
+"""
+                ),
+                ProjectFileEntity(
+                    projectName = projectName,
+                    path = "app/build.gradle.kts",
+                    content = """plugins {
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+}
+
+android {
+    namespace = "com.example.decompiledapp"
+    compileSdk = 33
+
+    defaultConfig {
+        applicationId = "com.example.decompiledapp"
+        minSdk = 24
+        targetSdk = 33
+        versionCode = 1
+        versionName = "1.0"
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+        }
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+    buildFeatures {
+        compose = true
+    }
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.4.3"
+    }
+}
+
+dependencies {
+    implementation("androidx.core:core-ktx:1.9.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.1")
+    implementation("androidx.activity:activity-compose:1.7.0")
+    implementation(platform("androidx.compose:compose-bom:2023.03.00"))
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.ui:ui-graphics")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("androidx.compose.material3:material3")
+}
+"""
+                ),
+                ProjectFileEntity(
+                    projectName = projectName,
+                    path = "app/src/main/AndroidManifest.xml",
+                    content = """<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application
+        android:allowBackup="true"
+        android:label="Decompiled App"
+        android:supportsRtl="true"
+        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+"""
+                ),
+                ProjectFileEntity(
+                    projectName = projectName,
+                    path = "app/src/main/java/com/example/decompiledapp/MainActivity.kt",
+                    content = """package com.example.decompiledapp
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent {
+            MaterialTheme {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    Greeting("Decompiled App")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun Greeting(name: String, modifier: Modifier = Modifier) {
+    Text(
+        text = "Hello ${"$"}name!",
+        modifier = modifier
+    )
+}
+"""
                 )
             )
             else -> listOf(
