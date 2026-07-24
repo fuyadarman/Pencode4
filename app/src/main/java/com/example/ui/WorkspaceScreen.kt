@@ -785,28 +785,46 @@ fun ChatTabContent(
     val coroutineScope = rememberCoroutineScope()
 
     val filteredFiles = remember(chatInputText, files) {
-        val lastAt = chatInputText.lastIndexOf('@')
-        if (lastAt != -1 && lastAt >= chatInputText.lastIndexOf(' ')) {
-            val query = chatInputText.substring(lastAt + 1)
-            files.filter { it.path.contains(query, ignoreCase = true) }
-        } else emptyList()
+        if (chatInputText.length > 500) emptyList()
+        else {
+            val lastAt = chatInputText.lastIndexOf('@')
+            val lastSpace = maxOf(chatInputText.lastIndexOf(' '), chatInputText.lastIndexOf('\n'))
+            if (lastAt != -1 && lastAt >= lastSpace && (lastAt + 1) <= chatInputText.length) {
+                val query = chatInputText.substring(lastAt + 1)
+                if (query.length < 50) {
+                    files.filter { it.path.contains(query, ignoreCase = true) }.take(20)
+                } else emptyList()
+            } else emptyList()
+        }
     }
 
     val filteredSkills = remember(chatInputText, agentSkills) {
-        val lastSlash = chatInputText.lastIndexOf('/')
-        if (lastSlash != -1 && lastSlash >= chatInputText.lastIndexOf(' ')) {
-            val query = chatInputText.substring(lastSlash + 1)
-            agentSkills.filter { skill ->
-                skill.isEnabled && (skill.name.contains(query, ignoreCase = true) || skill.id.contains(query, ignoreCase = true))
-            }
-        } else emptyList()
+        if (chatInputText.length > 500) emptyList()
+        else {
+            val lastSlash = chatInputText.lastIndexOf('/')
+            val lastSpace = maxOf(chatInputText.lastIndexOf(' '), chatInputText.lastIndexOf('\n'))
+            if (lastSlash != -1 && lastSlash >= lastSpace && (lastSlash + 1) <= chatInputText.length) {
+                val query = chatInputText.substring(lastSlash + 1)
+                if (query.length < 50) {
+                    agentSkills.filter { skill ->
+                        skill.isEnabled && (skill.name.contains(query, ignoreCase = true) || skill.id.contains(query, ignoreCase = true))
+                    }.take(20)
+                } else emptyList()
+            } else emptyList()
+        }
     }
 
     LaunchedEffect(chatInputText) {
-        val lastAt = chatInputText.lastIndexOf('@')
-        showFileSuggestions = lastAt != -1 && lastAt >= chatInputText.lastIndexOf(' ')
-        val lastSlash = chatInputText.lastIndexOf('/')
-        showSkillSuggestions = lastSlash != -1 && lastSlash >= chatInputText.lastIndexOf(' ')
+        if (chatInputText.length > 500) {
+            showFileSuggestions = false
+            showSkillSuggestions = false
+        } else {
+            val lastAt = chatInputText.lastIndexOf('@')
+            val lastSlash = chatInputText.lastIndexOf('/')
+            val lastSpace = maxOf(chatInputText.lastIndexOf(' '), chatInputText.lastIndexOf('\n'))
+            showFileSuggestions = lastAt != -1 && lastAt >= lastSpace && (lastAt + 1 <= chatInputText.length) && (chatInputText.substring(lastAt + 1).length < 50) && filteredFiles.isNotEmpty()
+            showSkillSuggestions = lastSlash != -1 && lastSlash >= lastSpace && (lastSlash + 1 <= chatInputText.length) && (chatInputText.substring(lastSlash + 1).length < 50) && filteredSkills.isNotEmpty()
+        }
     }
 
     val filePickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -817,28 +835,33 @@ fun ChatTabContent(
                 val type = context.contentResolver.getType(uri) ?: ""
                 val isImage = type.startsWith("image/")
                 var name = "Unknown_File"
-                context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-                    val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-                    if (cursor.moveToFirst() && nameIndex != -1) {
-                        name = cursor.getString(nameIndex)
-                    }
-                }
                 try {
-                    val bytes = context.contentResolver.openInputStream(uri)?.readBytes()
-                    if (bytes != null) {
-                        if (isImage) {
+                    context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                        val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        if (cursor.moveToFirst() && nameIndex != -1) {
+                            name = cursor.getString(nameIndex) ?: "Unknown_File"
+                        }
+                    }
+                } catch (e: Exception) { }
+                
+                try {
+                    val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                    if (bytes != null && bytes.isNotEmpty()) {
+                        if (isImage && bytes.size <= 5_000_000) {
                             val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.DEFAULT)
                             com.example.ui.AttachedFile(uri, name, type, true, contentAsBase64 = base64)
-                        } else {
-                            val text = String(bytes)
+                        } else if (!isImage && bytes.size <= 2_000_000) {
+                            val text = String(bytes, Charsets.UTF_8)
                             com.example.ui.AttachedFile(uri, name, type, false, contentAsText = text)
-                        }
+                        } else null
                     } else null
                 } catch (e: Exception) {
                     null
                 }
             }
-            newAttachments.forEach { onAddAttachedFile(it) }
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                newAttachments.forEach { onAddAttachedFile(it) }
+            }
         }
     }
 

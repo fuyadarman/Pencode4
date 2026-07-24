@@ -53,79 +53,91 @@ class VibeRepository(private val dao: VibeDao, private val context: Context) {
 
     // Sync database files to physical storage
     suspend fun syncDatabaseToStorage(projectName: String) = withContext(Dispatchers.IO) {
-        val projectDir = getProjectDir(projectName)
-        val dbFiles = dao.getFilesForProject(projectName)
-        dbFiles.forEach { dbFile ->
-            val file = File(projectDir, dbFile.path)
-            file.parentFile?.mkdirs()
-            if (isBinaryExtension(dbFile.path) || dbFile.content.startsWith("data:")) {
-                val bytes = decodeBase64Content(dbFile.content)
-                if (bytes != null) {
-                    file.writeBytes(bytes)
+        try {
+            val projectDir = getProjectDir(projectName)
+            val dbFiles = dao.getFilesForProject(projectName)
+            dbFiles.forEach { dbFile ->
+                val normPath = dbFile.path.replace("\\", "/")
+                val file = File(projectDir, normPath)
+                file.parentFile?.mkdirs()
+                if (isBinaryExtension(normPath) || dbFile.content.startsWith("data:")) {
+                    val bytes = decodeBase64Content(dbFile.content)
+                    if (bytes != null && bytes.isNotEmpty()) {
+                        file.writeBytes(bytes)
+                    } else if (file.length() == 0L) {
+                        file.writeText(dbFile.content)
+                    }
                 } else {
                     file.writeText(dbFile.content)
                 }
-            } else {
-                file.writeText(dbFile.content)
             }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
-    // Sync physical files back to database (e.g., after shell commands or manual moves)
+    // Sync physical files back to database safely
     suspend fun syncStorageToDatabase(projectName: String) = withContext(Dispatchers.IO) {
-        val projectDir = getProjectDir(projectName)
-        val diskFiles = projectDir.walkTopDown()
-            .onEnter { dir ->
-                val name = dir.name
-                val ignoreDirs = listOf(".git", ".gradle", ".dart_tool", "build", "node_modules", "bin", "obj")
-                if (ignoreDirs.any { name.equals(it, ignoreCase = true) }) {
-                    false
-                } else if (name.startsWith(".") && !name.equals(".github", ignoreCase = true)) {
-                    false
+        try {
+            val projectDir = getProjectDir(projectName)
+            if (!projectDir.exists()) return@withContext
+            val diskFiles = try {
+                projectDir.walkTopDown()
+                    .onEnter { dir ->
+                        val name = dir.name
+                        val ignoreDirs = listOf(".git", ".gradle", ".dart_tool", "build", "node_modules", "bin", "obj")
+                        if (ignoreDirs.any { name.equals(it, ignoreCase = true) }) {
+                            false
+                        } else if (name.startsWith(".") && !name.equals(".github", ignoreCase = true)) {
+                            false
+                        } else {
+                            true
+                        }
+                    }
+                    .filter { it.isFile && !it.name.startsWith(".") }
+                    .toList()
+            } catch (e: Exception) {
+                emptyList()
+            }
+            
+            val dbFiles = dao.getFilesForProject(projectName)
+            val diskPaths = mutableSetOf<String>()
+            
+            diskFiles.forEach { file ->
+                val relativePath = file.relativeTo(projectDir).path.replace("\\", "/")
+                diskPaths.add(relativePath)
+                
+                val isBinary = isBinaryExtension(relativePath) || file.length() > 200_000L
+                val content = if (isBinary) {
+                    if (file.length() <= 100_000L) {
+                        val bytes = try { file.readBytes() } catch (e: Exception) { ByteArray(0) }
+                        val mimeType = when (file.extension.lowercase()) {
+                            "png" -> "image/png"
+                            "jpg", "jpeg" -> "image/jpeg"
+                            "webp" -> "image/webp"
+                            "gif" -> "image/gif"
+                            "ico" -> "image/x-icon"
+                            else -> "application/octet-stream"
+                        }
+                        "data:$mimeType;base64," + Base64.encodeToString(bytes, Base64.NO_WRAP)
+                    } else {
+                        "[Binary file: ${file.length()} bytes]"
+                    }
                 } else {
-                    true
+                    try { file.readText().replace("\r\n", "\n") } catch (e: Exception) { "" }
+                }
+                
+                val existing = dbFiles.find { it.path == relativePath }
+                if (existing != null) {
+                    if (existing.content != content && !content.startsWith("[Binary file:")) {
+                        dao.updateFile(existing.copy(content = content))
+                    }
+                } else {
+                    dao.insertFile(ProjectFileEntity(projectName = projectName, path = relativePath, content = content))
                 }
             }
-            .filter { it.isFile && !it.name.startsWith(".") }
-            .toList()
-        
-        val dbFiles = dao.getFilesForProject(projectName)
-        val diskPaths = mutableSetOf<String>()
-        
-        diskFiles.forEach { file ->
-            val relativePath = file.relativeTo(projectDir).path
-            diskPaths.add(relativePath)
-            
-            val content = if (isBinaryExtension(relativePath)) {
-                val bytes = try { file.readBytes() } catch (e: Exception) { ByteArray(0) }
-                val mimeType = when (file.extension.lowercase()) {
-                    "png" -> "image/png"
-                    "jpg", "jpeg" -> "image/jpeg"
-                    "webp" -> "image/webp"
-                    "gif" -> "image/gif"
-                    "ico" -> "image/x-icon"
-                    else -> "application/octet-stream"
-                }
-                "data:$mimeType;base64," + Base64.encodeToString(bytes, Base64.NO_WRAP)
-            } else {
-                try { file.readText().replace("\r\n", "\n") } catch (e: Exception) { "" }
-            }
-            
-            val existing = dbFiles.find { it.path == relativePath }
-            if (existing != null) {
-                if (existing.content != content) {
-                    dao.updateFile(existing.copy(content = content))
-                }
-            } else {
-                dao.insertFile(ProjectFileEntity(projectName = projectName, path = relativePath, content = content))
-            }
-        }
-        
-        // Remove DB records that are not on disk anymore
-        dbFiles.forEach { dbFile ->
-            if (dbFile.path !in diskPaths) {
-                dao.deleteFile(projectName, dbFile.path)
-            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
@@ -165,34 +177,56 @@ class VibeRepository(private val dao: VibeDao, private val context: Context) {
     }
 
     suspend fun getFilesForProject(projectName: String): List<ProjectFileEntity> = withContext(Dispatchers.IO) {
-        dao.getFilesForProject(projectName).filter { 
+        val projectDir = getProjectDir(projectName)
+        val dbFiles = dao.getFilesForProject(projectName).filter { 
             !it.path.startsWith("agent-skills/") && !it.path.startsWith("skills/") && !it.path.startsWith(".skills/") 
+        }
+        dbFiles.map { entity ->
+            val normPath = entity.path.replace("\\", "/")
+            if (entity.content.startsWith("[Binary file:") || (entity.content.isEmpty() && File(projectDir, normPath).exists())) {
+                val diskFile = File(projectDir, normPath)
+                if (diskFile.exists() && diskFile.length() < 200_000L && !isBinaryExtension(normPath)) {
+                    val readText = try { diskFile.readText().replace("\r\n", "\n") } catch (e: Exception) { entity.content }
+                    entity.copy(path = normPath, content = readText)
+                } else {
+                    entity.copy(path = normPath)
+                }
+            } else {
+                entity.copy(path = normPath)
+            }
         }
     }
 
     suspend fun saveFile(projectName: String, path: String, content: String) = withContext(Dispatchers.IO) {
-        val normalizedContent = if (isBinaryExtension(path) || content.startsWith("data:")) content else content.replace("\r\n", "\n")
-        // Save in DB
-        val existing = dao.getFileByPath(projectName, path)
-        if (existing != null) {
-            dao.updateFile(existing.copy(content = normalizedContent))
-        } else {
-            dao.insertFile(ProjectFileEntity(projectName = projectName, path = path, content = normalizedContent))
-        }
+        val normPath = path.replace("\\", "/")
+        val normalizedContent = if (isBinaryExtension(normPath) || content.startsWith("data:")) content else content.replace("\r\n", "\n")
         
-        // Write to physical storage
         val projectDir = getProjectDir(projectName)
-        val file = File(projectDir, path)
+        val file = File(projectDir, normPath)
         file.parentFile?.mkdirs()
-        if (isBinaryExtension(path) || normalizedContent.startsWith("data:")) {
+        if (isBinaryExtension(normPath) || normalizedContent.startsWith("data:")) {
             val bytes = decodeBase64Content(normalizedContent)
-            if (bytes != null) {
+            if (bytes != null && bytes.isNotEmpty()) {
                 file.writeBytes(bytes)
             } else {
                 file.writeText(normalizedContent)
             }
         } else {
             file.writeText(normalizedContent)
+        }
+
+        val dbContent = if (normalizedContent.length > 200_000) {
+            if (isBinaryExtension(normPath) || normalizedContent.startsWith("data:")) "[Binary file: ${file.length()} bytes]"
+            else normalizedContent
+        } else {
+            normalizedContent
+        }
+
+        val existing = dao.getFileByPath(projectName, normPath)
+        if (existing != null) {
+            dao.updateFile(existing.copy(content = dbContent))
+        } else {
+            dao.insertFile(ProjectFileEntity(projectName = projectName, path = normPath, content = dbContent))
         }
     }
 
