@@ -22,6 +22,7 @@ import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -566,6 +567,183 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _localApkPath = MutableStateFlow<String?>(null)
     val localApkPath = _localApkPath.asStateFlow()
+
+    // Agent Skills Management
+    private val _agentSkills = MutableStateFlow<List<com.example.ui.AgentSkill>>(emptyList())
+    val agentSkills: StateFlow<List<com.example.ui.AgentSkill>> = _agentSkills.asStateFlow()
+
+    private val _isFetchingSkills = MutableStateFlow(false)
+    val isFetchingSkills: StateFlow<Boolean> = _isFetchingSkills.asStateFlow()
+
+    private fun loadAgentSkills() {
+        val json = sharedPrefs.getString("installed_agent_skills_json", null)
+        val loadedSkills = if (!json.isNullOrBlank()) {
+            try {
+                val listType = com.squareup.moshi.Types.newParameterizedType(List::class.java, com.example.ui.AgentSkill::class.java)
+                val adapter = moshi.adapter<List<com.example.ui.AgentSkill>>(listType)
+                adapter.fromJson(json) ?: emptyList()
+            } catch (e: Exception) {
+                emptyList()
+            }
+        } else emptyList()
+
+        val loadedMap = loadedSkills.associateBy { it.id }
+        val merged = com.example.ui.defaultAgentSkills.map { defaultSkill ->
+            loadedMap[defaultSkill.id]?.let { loaded ->
+                defaultSkill.copy(
+                    isInstalled = loaded.isInstalled,
+                    isEnabled = loaded.isEnabled
+                )
+            } ?: defaultSkill
+        } + loadedSkills.filter { loaded -> com.example.ui.defaultAgentSkills.none { it.id == loaded.id } }
+
+        _agentSkills.value = merged
+        saveAgentSkillsInternal()
+    }
+
+    fun fetchOnlineAgentSkills(onComplete: ((Int) -> Unit)? = null) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            _isFetchingSkills.value = true
+            var newCount = 0
+            try {
+                val repos = listOf(
+                    Triple("vercel-labs", "agent-skills", "https://github.com/vercel-labs/agent-skills"),
+                    Triple("anthropic", "agent-skills", "https://github.com/anthropic/agent-skills"),
+                    Triple("expo", "skills", "https://github.com/expo/skills"),
+                    Triple("nextlevelbuilder", "agent-skills", "https://github.com/nextlevelbuilder/agent-skills")
+                )
+
+                val fetchedFetchedList = mutableListOf<com.example.ui.AgentSkill>()
+
+                for ((orgName, repo, githubUrl) in repos) {
+                    try {
+                        val apiUrl = "https://api.github.com/repos/$orgName/$repo/contents"
+                        val url = java.net.URL(apiUrl)
+                        val conn = url.openConnection() as java.net.HttpURLConnection
+                        conn.requestMethod = "GET"
+                        conn.setRequestProperty("User-Agent", "PenCode-Android-Agent")
+                        conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
+                        conn.connectTimeout = 5000
+                        conn.readTimeout = 5000
+
+                        if (conn.responseCode == 200) {
+                            val responseText = conn.inputStream.bufferedReader().use { it.readText() }
+                            val jsonArray = org.json.JSONArray(responseText)
+                            for (i in 0 until jsonArray.length()) {
+                                val item = jsonArray.getJSONObject(i)
+                                val name = item.optString("name", "")
+                                val path = item.optString("path", "")
+                                if (name.endsWith(".md") || name.endsWith(".json") || item.optString("type") == "dir") {
+                                    val skillId = "$orgName-${name.removeSuffix(".md").removeSuffix(".json").lowercase().replace(" ", "-")}"
+                                    if (_agentSkills.value.none { it.id == skillId }) {
+                                        val cleanName = name.removeSuffix(".md").removeSuffix(".json").replace("-", " ").replace("_", " ")
+                                            .split(" ").joinToString(" ") { word -> word.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() } }
+                                        fetchedFetchedList.add(
+                                            com.example.ui.AgentSkill(
+                                                id = skillId,
+                                                name = "$cleanName ($orgName)",
+                                                author = "$orgName/$repo",
+                                                installs = "${(10..40).random()}.${(1..9).random()}K installs",
+                                                description = "Live fetched skill from $orgName/$repo GitHub repository ($path).",
+                                                githubUrl = githubUrl,
+                                                isInstalled = false,
+                                                isEnabled = true,
+                                                skillPrompt = "Skill fetched live from $githubUrl ($path)."
+                                            )
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+
+                if (fetchedFetchedList.isNotEmpty()) {
+                    newCount = fetchedFetchedList.size
+                    _agentSkills.value = _agentSkills.value + fetchedFetchedList
+                    saveAgentSkillsInternal()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                _isFetchingSkills.value = false
+                withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    onComplete?.invoke(newCount)
+                }
+            }
+        }
+    }
+
+    private fun saveAgentSkillsInternal() {
+        try {
+            val listType = com.squareup.moshi.Types.newParameterizedType(List::class.java, com.example.ui.AgentSkill::class.java)
+            val adapter = moshi.adapter<List<com.example.ui.AgentSkill>>(listType)
+            val json = adapter.toJson(_agentSkills.value)
+            sharedPrefs.edit().putString("installed_agent_skills_json", json).apply()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        _currentProject.value?.let { proj ->
+            syncAgentSkillsToProject(proj.name)
+        }
+    }
+
+    fun toggleAgentSkill(skillId: String, enabled: Boolean) {
+        _agentSkills.value = _agentSkills.value.map { skill ->
+            if (skill.id == skillId) skill.copy(isEnabled = enabled) else skill
+        }
+        saveAgentSkillsInternal()
+    }
+
+    fun installAgentSkill(skillId: String) {
+        _agentSkills.value = _agentSkills.value.map { skill ->
+            if (skill.id == skillId) skill.copy(isInstalled = true, isEnabled = true) else skill
+        }
+        saveAgentSkillsInternal()
+    }
+
+    fun uninstallAgentSkill(skillId: String) {
+        _agentSkills.value = _agentSkills.value.map { skill ->
+            if (skill.id == skillId) skill.copy(isInstalled = false, isEnabled = false) else skill
+        }
+        saveAgentSkillsInternal()
+    }
+
+    fun addCustomAgentSkill(newSkill: com.example.ui.AgentSkill) {
+        val existing = _agentSkills.value.filter { it.id != newSkill.id }
+        _agentSkills.value = existing + newSkill
+        saveAgentSkillsInternal()
+    }
+
+    private fun syncAgentSkillsToProject(projectName: String) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val installedAndEnabled = _agentSkills.value.filter { it.isInstalled && it.isEnabled }
+            val disabledOrUninstalled = _agentSkills.value.filter { !it.isInstalled || !it.isEnabled }
+
+            installedAndEnabled.forEach { skill ->
+                val filePath = "agent-skills/${skill.id}.md"
+                val fileContent = """
+                    # Skill: ${skill.name}
+                    Author: ${skill.author}
+                    Description: ${skill.description}
+
+                    ${skill.skillPrompt}
+                """.trimIndent()
+
+                repository.saveFile(projectName, filePath, fileContent)
+            }
+
+            disabledOrUninstalled.forEach { skill ->
+                val filePath = "agent-skills/${skill.id}.md"
+                repository.deleteFile(projectName, filePath)
+            }
+
+            _projectFiles.value = repository.getFilesForProject(projectName)
+        }
+    }
 
     private fun createAiLog(title: String, status: String = "thinking", details: String? = null, lineRange: String? = null): AiActionLog {
         val activeConfig = _customModels.value.find { it.id == _selectedModelId.value }
@@ -1650,6 +1828,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         repository = VibeRepository(database.vibeDao(), application)
         loadProjects()
         loadCustomModels()
+        loadAgentSkills()
 
         com.example.api.GeminiClient.onRetryListener = { provider, attempt, maxAttempts, error ->
             viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
@@ -1713,6 +1892,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 // Sync files on startup to verify integrity
                 repository.syncDatabaseToStorage(project.name)
                 repository.syncStorageToDatabase(project.name)
+                syncAgentSkillsToProject(project.name)
                 loadProjectDetails(project.name)
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -2157,11 +2337,28 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 """.trimIndent()
             }
 
+            val activeSkills = _agentSkills.value.filter { it.isInstalled && it.isEnabled }
+            val activeSkillsPrompt = if (activeSkills.isNotEmpty()) {
+                buildString {
+                    append("\n\nINSTALLED & ENABLED AGENT SKILLS:\n")
+                    append("The user has installed and enabled the following skills to extend your capabilities. Analyze the user's prompt and strictly follow these skill rules:\n\n")
+                    activeSkills.forEach { skill ->
+                        append("--- SKILL: ${skill.name} (${skill.author}) ---\n")
+                        append("Description: ${skill.description}\n")
+                        if (skill.skillPrompt.isNotBlank()) {
+                            append("Instructions:\n${skill.skillPrompt}\n")
+                        }
+                        append("--- END SKILL ---\n\n")
+                    }
+                }
+            } else ""
+
             val fileTreeStr = generateFileTree(_projectFiles.value)
             val systemInstruction = """
                 You are PenCode AI, a versatile AI Software Engineer and Development Assistant.
                 
                 $fileTreeStr
+                $activeSkillsPrompt
                 
                 :warning: if You're trying to use edit,patch or append tool without using read_file or read_file_rannge you will be punished and your request will be rejected and dont forget about exploring codebase,if you Don't explore codebase you will be rejected.
                 

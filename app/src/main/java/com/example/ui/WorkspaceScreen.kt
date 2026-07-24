@@ -170,11 +170,19 @@ fun WorkspaceScreen(
     attachedFiles: List<com.example.ui.AttachedFile> = emptyList(),
     onAddAttachedFile: (com.example.ui.AttachedFile) -> Unit = {},
     onRemoveAttachedFile: (com.example.ui.AttachedFile) -> Unit = {},
-    onClearAttachedFiles: () -> Unit = {}
+    onClearAttachedFiles: () -> Unit = {},
+    agentSkills: List<com.example.ui.AgentSkill> = emptyList(),
+    onToggleAgentSkill: (String, Boolean) -> Unit = { _, _ -> },
+    onInstallAgentSkill: (String) -> Unit = {},
+    onUninstallAgentSkill: (String) -> Unit = {},
+    onAddCustomAgentSkill: (com.example.ui.AgentSkill) -> Unit = {},
+    onFetchOnlineAgentSkills: () -> Unit = {},
+    isFetchingSkills: Boolean = false
 ) {
     var showExplorer by remember { mutableStateOf(false) }
     var showCreateFileDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
+    var showAgentSkillsDialog by remember { mutableStateOf(false) }
     var showPushDialog by remember { mutableStateOf(false) }
     var showSearchDialog by remember { mutableStateOf(false) }
 
@@ -229,6 +237,13 @@ fun WorkspaceScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { showAgentSkillsDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Extension,
+                            contentDescription = "Agent Skills",
+                            tint = Color(0xFF00F2FE)
+                        )
+                    }
                     IconButton(onClick = { showSettingsDialog = true }) {
                         Icon(
                             imageVector = Icons.Default.Settings,
@@ -519,11 +534,28 @@ fun WorkspaceScreen(
             onAddCustomModel = onAddCustomModel,
             onDeleteCustomModel = onDeleteCustomModel,
             onSelectCustomModel = onSelectCustomModel,
+            onOpenAgentSkills = {
+                showSettingsDialog = false
+                showAgentSkillsDialog = true
+            },
             onDismiss = { showSettingsDialog = false },
             onSave = { p, k, b, m, uc ->
                 onSaveSettings(p, k, b, m, uc)
                 showSettingsDialog = false
             }
+        )
+    }
+
+    if (showAgentSkillsDialog) {
+        AgentSkillsDialog(
+            skills = agentSkills,
+            onToggleSkill = onToggleAgentSkill,
+            onInstallSkill = onInstallAgentSkill,
+            onUninstallSkill = onUninstallAgentSkill,
+            onAddCustomSkill = onAddCustomAgentSkill,
+            onFetchOnlineSkills = onFetchOnlineAgentSkills,
+            isFetchingSkills = isFetchingSkills,
+            onDismiss = { showAgentSkillsDialog = false }
         )
     }
 
@@ -4215,6 +4247,7 @@ fun CustomSettingsDialog(
     onAddCustomModel: (String, String, String, String, String) -> Unit = { _, _, _, _, _ -> },
     onDeleteCustomModel: (String) -> Unit = {},
     onSelectCustomModel: (String) -> Unit = {},
+    onOpenAgentSkills: () -> Unit = {},
     onDismiss: () -> Unit,
     onSave: (String, String, String, String, Boolean) -> Unit
 ) {
@@ -4260,6 +4293,63 @@ fun CustomSettingsDialog(
                     fontSize = 12.sp,
                     lineHeight = 16.sp
                 )
+
+                // Agent Skills & Extensions Banner Card
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF131520)),
+                    border = BorderStroke(1.dp, Color(0xFF00F2FE).copy(alpha = 0.5f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenAgentSkills() }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .padding(16.dp)
+                            .fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF00F2FE).copy(alpha = 0.15f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Extension,
+                                    contentDescription = null,
+                                    tint = Color(0xFF00F2FE),
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = "Agent Skills & Extensions",
+                                    color = Color.White,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Discover, install & toggle online agent skills",
+                                    color = Color(0xFF94A3B8),
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+                        Icon(
+                            imageVector = Icons.Default.ChevronRight,
+                            contentDescription = null,
+                            tint = Color(0xFF00F2FE)
+                        )
+                    }
+                }
 
                 // Max Action Steps Configuration
                 Column(

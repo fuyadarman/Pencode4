@@ -95,6 +95,8 @@ class MainActivity : ComponentActivity() {
                         val scannedModels by viewModel.scannedModels.collectAsState()
                         val isScanningModels by viewModel.isScanningModels.collectAsState()
                         val scanError by viewModel.scanError.collectAsState()
+                        val agentSkills by viewModel.agentSkills.collectAsState()
+                        val isFetchingSkills by viewModel.isFetchingSkills.collectAsState()
 
                         if (currentProject == null) {
                             HomeScreen(
@@ -188,6 +190,13 @@ class MainActivity : ComponentActivity() {
                                 onAddAttachedFile = { viewModel.addAttachedFile(it) },
                                 onRemoveAttachedFile = { viewModel.removeAttachedFile(it) },
                                 onClearAttachedFiles = { viewModel.clearAttachedFiles() },
+                                agentSkills = agentSkills,
+                                onToggleAgentSkill = { id, enabled -> viewModel.toggleAgentSkill(id, enabled) },
+                                onInstallAgentSkill = { id -> viewModel.installAgentSkill(id) },
+                                onUninstallAgentSkill = { id -> viewModel.uninstallAgentSkill(id) },
+                                onAddCustomAgentSkill = { skill -> viewModel.addCustomAgentSkill(skill) },
+                                onFetchOnlineAgentSkills = { viewModel.fetchOnlineAgentSkills() },
+                                isFetchingSkills = isFetchingSkills,
                                 onToggleError = { id -> viewModel.toggleWebErrorSelection(id) },
                                 onToggleAllErrors = { selectAll -> viewModel.toggleAllWebErrors(selectAll) },
                                 onClearErrors = { viewModel.clearWebErrors() },
