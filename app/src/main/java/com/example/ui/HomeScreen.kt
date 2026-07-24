@@ -394,7 +394,8 @@ fun CreateProjectDialog(
         TemplateOption("android_kotlin", "Android Kotlin", "Native Android App scaffold with Jetpack Compose & Github Action Build."),
         TemplateOption("flutter", "Flutter", "Flutter App scaffold with main.dart, pubspec.yaml & Github Action Build."),
         TemplateOption("react", "React CDN", "Babel-powered interactive React Hello World with count state."),
-        TemplateOption("vanilla", "Vanilla JS", "Pure HTML, CSS & JS with animated floating neon particles.")
+        TemplateOption("vanilla", "Vanilla JS", "Pure HTML, CSS & JS centered Hello World screen."),
+        TemplateOption("vanilla_three", "Vanilla Three.js", "3D Canvas scene powered by Three.js with animated 3D cube & lighting.")
     )
 
     Dialog(onDismissRequest = onDismiss) {
@@ -784,35 +785,35 @@ fun TemplateIcon(key: String, modifier: Modifier = Modifier) {
                         val w = size.width
                         val h = size.height
                         
-                        // Path 1 (Top dark blue)
-                        val path1 = androidx.compose.ui.graphics.Path().apply {
-                            moveTo(14.314f / 24f * w, 0f)
+                        // Top Cyan Blade
+                        val pathTop = androidx.compose.ui.graphics.Path().apply {
+                            moveTo(0.596f * w, 0f)
                             lineTo(1f * w, 0f)
-                            lineTo(12f / 24f * w, 12f / 28.5f * h)
-                            lineTo(2.314f / 24f * w, 12f / 28.5f * h)
+                            lineTo(0.5f * w, 0.5f * h)
+                            lineTo(0.096f * w, 0.5f * h)
                             close()
                         }
-                        drawPath(path1, color = Color(0xFF02569B))
+                        drawPath(pathTop, color = Color(0xFF54C5F8))
                         
-                        // Path 2 (Middle lighter blue)
-                        val path2 = androidx.compose.ui.graphics.Path().apply {
-                            moveTo(12f / 24f * w, 12f / 28.5f * h)
-                            lineTo(1f * w, 12f / 28.5f * h)
-                            lineTo(12f / 24f * w, 24f / 28.5f * h)
-                            lineTo(0f, 24f / 28.5f * h)
+                        // Bottom Medium Blue Blade
+                        val pathBottom = androidx.compose.ui.graphics.Path().apply {
+                            moveTo(0.5f * w, 0.5f * h)
+                            lineTo(1f * w, 1f * h)
+                            lineTo(0.596f * w, 1f * h)
+                            lineTo(0.096f * w, 0.5f * h)
                             close()
                         }
-                        drawPath(path2, color = Color(0xFF0175C2))
+                        drawPath(pathBottom, color = Color(0xFF29B6F6))
                         
-                        // Path 3 (Bottom cyan/light blue)
-                        val path3 = androidx.compose.ui.graphics.Path().apply {
-                            moveTo(16.518f / 24f * w, 16.5f / 28.5f * h)
-                            lineTo(1f * w, 16.5f / 28.5f * h)
-                            lineTo(12f / 24f * w, 1f * h)
-                            lineTo(4.518f / 24f * w, 1f * h)
+                        // Bottom Deep Blue Shadow Fold
+                        val pathShadow = androidx.compose.ui.graphics.Path().apply {
+                            moveTo(0.5f * w, 0.5f * h)
+                            lineTo(0.805f * w, 0.805f * h)
+                            lineTo(0.596f * w, 1f * h)
+                            lineTo(0.29f * w, 0.71f * h)
                             close()
                         }
-                        drawPath(path3, color = Color(0xFF39B9FC))
+                        drawPath(pathShadow, color = Color(0xFF01579B))
                     }
                 }
             }
@@ -889,6 +890,66 @@ fun TemplateIcon(key: String, modifier: Modifier = Modifier) {
                             modifier = Modifier.padding(end = 1.dp, bottom = 0.5.dp),
                             lineHeight = 9.sp
                         )
+                    }
+                }
+            }
+            "vanilla_three" -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(Color(0xFF00F2FE).copy(alpha = 0.15f), Color(0xFF0D0F14))
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    androidx.compose.foundation.Canvas(modifier = Modifier.size(20.dp)) {
+                        val w = size.width
+                        val h = size.height
+                        val cx = w / 2f
+                        val cy = h / 2f
+                        val r = w * 0.4f
+                        
+                        val pTop = androidx.compose.ui.geometry.Offset(cx, cy - r)
+                        val pRight = androidx.compose.ui.geometry.Offset(cx + r * 0.866f, cy - r * 0.5f)
+                        val pCenter = androidx.compose.ui.geometry.Offset(cx, cy)
+                        val pLeft = androidx.compose.ui.geometry.Offset(cx - r * 0.866f, cy - r * 0.5f)
+                        val pBottomCenter = androidx.compose.ui.geometry.Offset(cx, cy + r)
+                        val pBottomRight = androidx.compose.ui.geometry.Offset(cx + r * 0.866f, cy + r * 0.5f)
+                        val pBottomLeft = androidx.compose.ui.geometry.Offset(cx - r * 0.866f, cy + r * 0.5f)
+
+                        val topFace = androidx.compose.ui.graphics.Path().apply {
+                            moveTo(pTop.x, pTop.y)
+                            lineTo(pRight.x, pRight.y)
+                            lineTo(pCenter.x, pCenter.y)
+                            lineTo(pLeft.x, pLeft.y)
+                            close()
+                        }
+                        drawPath(topFace, color = Color(0xFF00F2FE).copy(alpha = 0.4f))
+
+                        val leftFace = androidx.compose.ui.graphics.Path().apply {
+                            moveTo(pLeft.x, pLeft.y)
+                            lineTo(pCenter.x, pCenter.y)
+                            lineTo(pBottomCenter.x, pBottomCenter.y)
+                            lineTo(pBottomLeft.x, pBottomLeft.y)
+                            close()
+                        }
+                        drawPath(leftFace, color = Color(0xFF4FACFE).copy(alpha = 0.3f))
+
+                        val rightFace = androidx.compose.ui.graphics.Path().apply {
+                            moveTo(pCenter.x, pCenter.y)
+                            lineTo(pRight.x, pRight.y)
+                            lineTo(pBottomRight.x, pBottomRight.y)
+                            lineTo(pBottomCenter.x, pBottomCenter.y)
+                            close()
+                        }
+                        drawPath(rightFace, color = Color(0xFF00F2FE).copy(alpha = 0.2f))
+
+                        val strokeStyle = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.2.dp.toPx())
+                        drawPath(topFace, color = Color(0xFF00F2FE), style = strokeStyle)
+                        drawPath(leftFace, color = Color(0xFF4FACFE), style = strokeStyle)
+                        drawPath(rightFace, color = Color(0xFF00F2FE), style = strokeStyle)
                     }
                 }
             }

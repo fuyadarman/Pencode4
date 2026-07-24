@@ -1486,22 +1486,26 @@ public class MainActivity extends FlutterActivity {
         body {
             font-family: 'Plus Jakarta Sans', sans-serif;
             background-color: #0d0e15;
+            margin: 0;
+            padding: 0;
         }
     </style>
 </head>
 <body class="text-white min-h-screen flex items-center justify-center">
     <div id="root"></div>
 
-    <script type="text/babel">
+    <script type="text/babel" data-presets="react,stage-3">
+        const { useState } = React;
+
         function App() {
-            const [count, setCount] = React.useState(0);
+            const [count, setCount] = useState(0);
             return (
                 <div className="bg-[#151726] border border-[#2b2f4a] p-8 rounded-2xl shadow-2xl max-w-md text-center">
                     <h1 className="text-3xl font-extrabold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent mb-4">
-                        React Hello World!
+                        React Hello World
                     </h1>
                     <p className="text-gray-400 mb-6">
-                        This template is powered by React & ReactDOM directly from unpkg CDN.
+                        Powered by React 18 & ReactDOM directly from unpkg CDN.
                     </p>
                     <div className="p-6 bg-[#0d0e15] rounded-xl border border-[#23273f] mb-6">
                         <p className="text-sm font-semibold text-cyan-400 mb-2">Interactive Counter</p>
@@ -1517,7 +1521,8 @@ public class MainActivity extends FlutterActivity {
             );
         }
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
+        const container = document.getElementById('root');
+        const root = ReactDOM.createRoot(container);
         root.render(<App />);
     </script>
 </body>
@@ -1530,12 +1535,15 @@ public class MainActivity extends FlutterActivity {
 import ReactDOM from 'react-dom/client';
 import App from './app';
 
-const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);"""
+const container = document.getElementById('root');
+if (container) {
+  const root = ReactDOM.createRoot(container);
+  root.render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  );
+}"""
                 ),
                 ProjectFileEntity(
                     projectName = projectName,
@@ -1547,10 +1555,10 @@ export default function App() {
     return (
         <div className="bg-[#151726] border border-[#2b2f4a] p-8 rounded-2xl shadow-2xl max-w-md text-center">
             <h1 className="text-3xl font-extrabold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent mb-4">
-                React Hello World!
+                React Hello World
             </h1>
             <p className="text-gray-400 mb-6">
-                This template is powered by React & ReactDOM directly from unpkg CDN.
+                Powered by React 18 & ReactDOM directly from unpkg CDN.
             </p>
             <div className="p-6 bg-[#0d0e15] rounded-xl border border-[#23273f] mb-6">
                 <p className="text-sm font-semibold text-cyan-400 mb-2">Interactive Counter</p>
@@ -1576,17 +1584,12 @@ export default function App() {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vanilla JS Hello World</title>
+    <title>Hello World</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="card">
-        <h1 class="glow-text">Vanilla JS</h1>
-        <h2>Hello, World!</h2>
-        <p>A lightweight template with standard HTML, CSS, and pure Native JavaScript.</p>
-        <div id="vibeBox" class="vibe-box">Click the future</div>
-    </div>
+    <h1>Hello World</h1>
     <script src="script.js"></script>
 </body>
 </html>"""
@@ -1601,108 +1604,154 @@ export default function App() {
     font-family: 'Plus Jakarta Sans', sans-serif;
 }
 body {
-    background: radial-gradient(circle at center, #101222 0%, #06070c 100%);
-    color: #fff;
+    background-color: #0d0e15;
+    color: #ffffff;
     height: 100vh;
+    width: 100vw;
     display: flex;
     justify-content: center;
     align-items: center;
     overflow: hidden;
 }
-.card {
-    background: rgba(21, 23, 38, 0.7);
-    border: 1px solid rgba(108, 92, 231, 0.3);
-    backdrop-filter: blur(16px);
-    padding: 40px;
-    border-radius: 24px;
-    text-align: center;
-    box-shadow: 0 15px 35px rgba(0,0,0,0.5);
-    max-width: 420px;
-    transform: translateY(0);
-    transition: all 0.3s ease;
-}
-.card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 20px 45px rgba(108, 92, 231, 0.2);
-}
-.glow-text {
-    font-size: 2.5rem;
+h1 {
+    font-size: 3.5rem;
     font-weight: 800;
     background: linear-gradient(135deg, #00ffcc, #6c5ce7);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
-    margin-bottom: 10px;
-}
-h2 {
-    font-size: 1.8rem;
-    color: #f1f2f6;
-    margin-bottom: 15px;
-}
-p {
-    color: #a4b0be;
-    font-size: 0.95rem;
-    line-height: 1.5;
-    margin-bottom: 25px;
-}
-.vibe-box {
-    background: linear-gradient(135deg, #6c5ce7, #a55eea);
-    color: white;
-    padding: 14px 28px;
-    border-radius: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    box-shadow: 0 5px 15px rgba(108, 92, 231, 0.4);
-    transition: all 0.2s ease;
     text-align: center;
-    display: inline-block;
-}
-.vibe-box:active {
-    transform: scale(0.98);
 }"""
                 ),
                 ProjectFileEntity(
                     projectName = projectName,
                     path = "script.js",
-                    content = """document.addEventListener('DOMContentLoaded', () => {
-    const box = document.getElementById('vibeBox');
-    const colors = ['#00ffcc', '#ff007f', '#6c5ce7', '#ffbe59', '#2ed573'];
-    let index = 0;
-    
-    box.addEventListener('click', () => {
-        index = (index + 1) % colors.length;
-        const color = colors[index];
-        box.style.background = color;
-        box.style.boxShadow = `0 8px 20px ` + color + `66`;
-        box.textContent = "Vibing! " + color;
-        
-        createParticles(color);
-    });
+                    content = """console.log('Hello World');"""
+                )
+            )
+            "vanilla_three" -> listOf(
+                ProjectFileEntity(
+                    projectName = projectName,
+                    path = "index.html",
+                    content = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js 3D Scene</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+    <canvas id="bg"></canvas>
+    <div class="overlay">
+        <h1>Three.js 3D World</h1>
+        <p>Interactive 3D Canvas Scene</p>
+    </div>
+    <script src="main.js"></script>
+</body>
+</html>"""
+                ),
+                ProjectFileEntity(
+                    projectName = projectName,
+                    path = "style.css",
+                    content = """* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+body, html {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background-color: #05050a;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+#bg {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+}
+.overlay {
+    position: absolute;
+    top: 24px;
+    left: 24px;
+    z-index: 10;
+    color: #ffffff;
+    pointer-events: none;
+}
+.overlay h1 {
+    font-size: 2rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, #00f2fe, #4facfe);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 4px;
+}
+.overlay p {
+    font-size: 0.95rem;
+    color: #8a8aa3;
+}"""
+                ),
+                ProjectFileEntity(
+                    projectName = projectName,
+                    path = "main.js",
+                    content = """// Initialize Three.js Scene
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0c16);
 
-    function createParticles(color) {
-        for(let i=0; i<10; i++) {
-            const p = document.createElement('div');
-            p.style.position = 'absolute';
-            p.style.width = '8px';
-            p.style.height = '8px';
-            p.style.background = color;
-            p.style.borderRadius = '50%';
-            p.style.left = (box.offsetLeft + box.offsetWidth/2 + (Math.random() - 0.5) * 100) + 'px';
-            p.style.top = (box.offsetTop + box.offsetHeight/2 + (Math.random() - 0.5) * 50) + 'px';
-            p.style.pointerEvents = 'none';
-            p.style.transition = 'all 1s ease-out';
-            document.body.appendChild(p);
-            
-            setTimeout(() => {
-                p.style.transform = `translate(` + ((Math.random() - 0.5) * 200) + `px, ` + ((Math.random() - 0.5) * 200 - 100) + `px)`;
-                p.style.opacity = '0';
-            }, 50);
-            
-            setTimeout(() => {
-                p.remove();
-            }, 1000);
-        }
-    }
-});"""
+// Camera Setup
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.set(0, 0, 5);
+
+// Renderer Setup
+const renderer = new THREE.WebGLRenderer({
+    canvas: document.querySelector('#bg'),
+    antialias: true
+});
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(window.innerWidth, window.innerHeight);
+
+// Lighting
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+scene.add(ambientLight);
+
+const pointLight1 = new THREE.PointLight(0x00f2fe, 2, 100);
+pointLight1.position.set(5, 5, 5);
+scene.add(pointLight1);
+
+const pointLight2 = new THREE.PointLight(0x7f00ff, 2, 100);
+pointLight2.position.set(-5, -5, -5);
+scene.add(pointLight2);
+
+// 3D Geometry & Mesh
+const geometry = new THREE.BoxGeometry(2, 2, 2);
+const material = new THREE.MeshStandardMaterial({ 
+    color: 0x00f2fe, 
+    roughness: 0.2, 
+    metalness: 0.8 
+});
+const cube = new THREE.Mesh(geometry, material);
+scene.add(cube);
+
+// Handle Window Resize
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// Render Animation Loop
+function animate() {
+    requestAnimationFrame(animate);
+    cube.rotation.x += 0.01;
+    cube.rotation.y += 0.01;
+    renderer.render(scene, camera);
+}
+
+animate();"""
                 )
             )
             else -> listOf(

@@ -2146,6 +2146,11 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                     - CRITICAL constraint: The project uses pure Vanilla JS (standard HTML, CSS, and pure Native JavaScript).
                     - DO NOT use React, ReactDOM, or Three.js! If you write React or JSX in a Vanilla JS project, it will fail to compile. This is a strict constraint.
                 """.trimIndent()
+                "vanilla_three" -> """
+                    ACTIVE TEMPLATE: Vanilla Three.js (3D Web Canvas).
+                    - CRITICAL constraint: The project uses Three.js via CDN window.THREE or script imports for 3D games, objects, and 3D web design.
+                    - Build clean, interactive 3D Web animations using THREE.Scene, THREE.PerspectiveCamera, THREE.WebGLRenderer, lights, geometries, materials, and animation loops.
+                """.trimIndent()
                 else -> """
                     ACTIVE TEMPLATE: ${project.templateKey ?: "Empty Workspace"}.
                     - Respect the existing framework/files in the workspace.
@@ -3403,13 +3408,6 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                             }
                             "complete_todo_task" -> {
                                 val queryVal = args?.query ?: ""
-                                val todoLog = AiActionLog(
-                                    title = "Complete TODO Task",
-                                    status = "thinking",
-                                    details = "Completing task at index $queryVal",
-                                    lineRange = "todo-list"
-                                )
-                                _aiActionLogs.value = _aiActionLogs.value + todoLog
                                 _agentStatus.value = "Completing todo task..."
 
                                 val index = queryVal.toIntOrNull()
@@ -3422,13 +3420,6 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                                     "Successfully marked task '$task' as completed."
                                 } else {
                                     "Error: Invalid task index '$queryVal'. Current todo list size is ${currentTodos.size}."
-                                }
-
-                                _aiActionLogs.value = _aiActionLogs.value.map { log ->
-                                    if (log.id == todoLog.id) {
-                                        val isSuccess = !result.startsWith("Error")
-                                        log.copy(status = if (isSuccess) "success" else "failed", details = result)
-                                    } else log
                                 }
 
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
@@ -3833,7 +3824,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                     
                     _isThinking.value = false
                     _chatMessages.value = repository.getChatsForProject(project.name)
-                    if (project.templateKey == "vanilla" || project.templateKey == "react") {
+                    if (project.templateKey == "vanilla" || project.templateKey == "react" || project.templateKey == "vanilla_three") {
                         _webPreviewRefreshTrigger.value += 1
                     }
 
