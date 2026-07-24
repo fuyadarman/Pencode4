@@ -2186,8 +2186,9 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 - You MUST strictly respect the current template/framework of the project. If Vanilla JS or React CDN is selected, do NOT use Three.js unless specifically requested.
                 
                 EXPLORE BEFORE YOU BUILD & RECURSIVE SCAN MANDATE (CRITICAL):
-                - Whenever you see, encounter, or need to explore a directory, folder, or path (including the workspace root), you MUST strictly use the 'scan_dir' tool first to recursively scan and explore all folders, subfolders, paths, and files inside it.
-                - Do NOT assume files exist or have specific contents. Always explore and read them first.
+                - Whenever you see, encounter, or need to explore a directory, folder, or package path, you MUST strictly use the 'scan_dir' tool with a specific target subdirectory (e.g., 'app', 'app/src', 'app/src/main/java').
+                - Do NOT scan root '.' directly with 'scan_dir'. Always specify a specific target subdirectory path.
+                - Do NOT assume files exist or have specific contents. Always explore subdirectories and read files first.
                 
                 READ-BEFORE-MODIFY & NO REDUNDANT RE-READING FOR VERIFICATION (CRITICAL SAVINGS):
                 - You MUST NOT modify, edit, patch, or append any file without first reading its contents using 'read_file' or 'read_file_range'.
@@ -2296,8 +2297,8 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                     - Required args: 'query' (the list of sub-tasks separated by the '|' character. E.g. "Implement browser|Setup files|Verify UI").
                 20. 'complete_todo_task': Mark a specific sub-task in the todo list as completed.
                     - Required args: 'query' (the 0-based index of the sub-task to mark complete, E.g. "0" for the first sub-task).
-             21. 'scan_dir': Recursively scan, explore, and list all folders, subfolders, paths, and files inside any target directory or path. This tool is MANDATORY whenever you encounter or need to explore any directory or folder.
-                    - Required args: 'path' (the target directory path to recursively scan, e.g., "app/src", or "." for the entire workspace root).
+                21. 'scan_dir': Recursively scan, explore, and list all folders, subfolders, paths, and files inside a specific target subdirectory. This tool is MANDATORY whenever you encounter or need to explore any directory or folder package.
+                    - Required args: 'path' (a specific target subdirectory path, e.g., "app", "app/src", "app/src/main/java/com/example"). NOTE: Scanning the entire workspace root "." is strictly forbidden! Always specify a specific target subdirectory path.
                 22. 'ai_response': Document and explain your formulating logic, thought process, plans, or observations after any action or task step.
                     - Required args: 'message' (the detailing string containing your formulating logic, plans, or thoughts).
                 
@@ -2365,7 +2366,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 - When performing an 'edit_file', 'patch_file', or 'append', always be precise and target exact lines.
                 
                 MANDATORY STRATEGY RULES (CRITICAL - YOU WILL BE PUNISHED AND REJECTED IF VIOLATED):
-                1. Use 'scan_dir' recursively to explore and list folders/subfolders/files whenever you see, encounter, or need to explore a directory, folder, or path. This is a STRICT REQUIREMENT.
+                1. Use 'scan_dir' recursively to explore and list folders/subfolders/files inside specific target subdirectories (e.g., 'app', 'app/src', 'app/src/main/java'). Scanning root '.' directly is strictly forbidden!
                 2. ALWAYS use the 'grep' command (run_command with grep -rn "keyword" .) BEFORE reading any files or reading file ranges, especially when debugging, error fixing, problem finding, or searching file patterns! You are strictly forbidden from calling 'read_file' or 'read_file_range' repeatedly without running 'grep' first.
                 3. After finding the exact file and matched lines using grep, you MUST read ONLY about 30 lines surrounding the matched code (e.g., 15 lines before and 15 lines after) using the 'read_file_range' tool.
                 4. NEVER read the full file if it is larger than 80 lines. If a file is larger than 80 lines, you are STRICTLY FORBIDDEN from reading the full file. Instead, you MUST use global_search or grep to find the exact match first, and then read only the surrounding lines of code (using 'read_file_range' with a precise window around the target).
