@@ -2366,7 +2366,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 
                 MANDATORY STRATEGY RULES (CRITICAL - YOU WILL BE PUNISHED AND REJECTED IF VIOLATED):
                 1. Use 'scan_dir' recursively to explore and list folders/subfolders/files whenever you see, encounter, or need to explore a directory, folder, or path. This is a STRICT REQUIREMENT.
-                2. ALWAYS use the 'grep' command (run_command with grep -rn "keyword" .) to find exact files and matching lines before reading any files. You can run grep up to 5 times if you do not get any grep output, because you need to locate exact file lines.
+                2. ALWAYS use the 'grep' command (run_command with grep -rn "keyword" .) BEFORE reading any files or reading file ranges, especially when debugging, error fixing, problem finding, or searching file patterns! You are strictly forbidden from calling 'read_file' or 'read_file_range' repeatedly without running 'grep' first.
                 3. After finding the exact file and matched lines using grep, you MUST read ONLY about 30 lines surrounding the matched code (e.g., 15 lines before and 15 lines after) using the 'read_file_range' tool.
                 4. NEVER read the full file if it is larger than 80 lines. If a file is larger than 80 lines, you are STRICTLY FORBIDDEN from reading the full file. Instead, you MUST use global_search or grep to find the exact match first, and then read only the surrounding lines of code (using 'read_file_range' with a precise window around the target).
                 5. Verify that all tasks are completed and then stop.
@@ -2426,6 +2426,14 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             var agentMessageSaved = false
             var lastThought: String? = null
             val recentToolCallsHistory = mutableListOf<com.example.api.ToolCallItem>()
+
+            // Initial automatic thinking log triggered ONCE when processing user prompt starts
+            val initialThoughtLog = createAiLog(
+                title = "AI formulating logic",
+                status = "success",
+                details = "Analyzing user prompt and formulating initial step-by-step task execution plan..."
+            )
+            _aiActionLogs.value = _aiActionLogs.value + initialThoughtLog
 
             try {
                 while (!loopCompleted && turn <= 500 && actionsCount < maxActionSteps) {
@@ -2595,7 +2603,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                                     }
                                 }
 
-                                // Consecutive failures detection (last 3 actions failed)
+                                 // Consecutive failures detection (last 3 actions failed)
                                 if (!loopHandled) {
                                     val recentLogs = _aiActionLogs.value.takeLast(3)
                                     if (recentLogs.size >= 3 && recentLogs.all { it.status == "failed" }) {
@@ -2614,6 +2622,34 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                                             role = "user",
                                             parts = listOf(Part(text = warningText))
                                         ))
+                                    }
+                                }
+
+                                // Consecutive file reading without grep detection (> 2 consecutive read_file_range or read_file calls)
+                                if (!loopHandled && (tool == "read_file_range" || tool == "read_file")) {
+                                    val last3Tools = recentToolCallsHistory.takeLast(3)
+                                    val readsWithoutGrep = last3Tools.count { it.tool == "read_file_range" || it.tool == "read_file" }
+                                    val grepUsedRecently = recentToolCallsHistory.takeLast(5).any { 
+                                        it.tool == "global_search" || (it.tool == "run_command" && (it.arguments?.command?.contains("grep") == true || it.arguments?.query?.contains("grep") == true)) 
+                                    }
+                                    if (readsWithoutGrep >= 3 && !grepUsedRecently) {
+                                        val warningText = """
+                                            SYSTEM WARNING (EXCESSIVE FILE READING WITHOUT GREP):
+                                            You have executed file reading tools ($tool) 3 times consecutively without running a 'grep' command!
+                                            Stop guessing or reading different lines manually. You MUST use 'grep' (`run_command` with `grep -rn "keyword" .`) to locate exact matching lines before reading file ranges or editing!
+                                        """.trimIndent()
+                                        
+                                        history.add(Content(
+                                            role = "user",
+                                            parts = listOf(Part(text = warningText))
+                                        ))
+                                        
+                                        val warningLog = createAiLog(
+                                            title = "Grep Warning Injected",
+                                            status = "failed",
+                                            details = "Injected warning: AI read file ranges 3 times consecutively without running grep search first."
+                                        )
+                                        _aiActionLogs.value = _aiActionLogs.value + warningLog
                                     }
                                 }
 
