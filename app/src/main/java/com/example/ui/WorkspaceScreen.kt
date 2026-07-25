@@ -178,7 +178,11 @@ fun WorkspaceScreen(
     onUninstallAgentSkill: (String) -> Unit = {},
     onAddCustomAgentSkill: (com.example.ui.AgentSkill) -> Unit = {},
     onFetchOnlineAgentSkills: () -> Unit = {},
-    isFetchingSkills: Boolean = false
+    isFetchingSkills: Boolean = false,
+    onUpdateSkillContent: (String, String) -> Unit = { _, _ -> },
+    onFetchSkillFileContent: (String, ((String) -> Unit)?) -> Unit = { _, _ -> },
+    webArtifactInfo: WebArtifactInfo? = null,
+    onPreviewWebArtifact: () -> Unit = {}
 ) {
     var showExplorer by remember { mutableStateOf(false) }
     var showCreateFileDialog by remember { mutableStateOf(false) }
@@ -483,7 +487,9 @@ fun WorkspaceScreen(
                                 gitProgress = gitProgress,
                                 apkDownloadProgress = apkDownloadProgress,
                                 apkDownloadPercentage = apkDownloadPercentage,
+                                webArtifactInfo = webArtifactInfo,
                                 onInstallApk = onInstallApk,
+                                onPreviewWebArtifact = onPreviewWebArtifact,
                                 onSaveRepo = onSaveGithubRepo,
                                 onSaveToken = onSaveGithubToken,
                                 onSaveBranch = onSaveGithubBranch,
@@ -558,6 +564,8 @@ fun WorkspaceScreen(
             onAddCustomSkill = onAddCustomAgentSkill,
             onFetchOnlineSkills = onFetchOnlineAgentSkills,
             isFetchingSkills = isFetchingSkills,
+            onUpdateSkillContent = onUpdateSkillContent,
+            onFetchSkillFileContent = onFetchSkillFileContent,
             onDismiss = { showAgentSkillsDialog = false }
         )
     }
@@ -3099,7 +3107,9 @@ fun AndroidBuildTabContent(
     gitProgress: String,
     apkDownloadProgress: String = "",
     apkDownloadPercentage: Float? = null,
+    webArtifactInfo: WebArtifactInfo? = null,
     onInstallApk: () -> Unit = {},
+    onPreviewWebArtifact: () -> Unit = {},
     onSaveRepo: (String) -> Unit,
     onSaveToken: (String) -> Unit,
     onSaveBranch: (String) -> Unit,
@@ -3720,55 +3730,113 @@ fun AndroidBuildTabContent(
                         Divider(color = Color(0xFF1E2230), modifier = Modifier.padding(vertical = 4.dp))
 
                         if (expandArtifacts) {
-                            if (apkDownloadProgress.isNotEmpty()) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .background(Color(0xFF1A1C29), RoundedCornerShape(8.dp))
-                                        .padding(12.dp)
-                                ) {
-                                    Text(
-                                        text = apkDownloadProgress,
-                                        color = if (apkDownloadProgress.startsWith("Success")) Color(0xFF2ED573)
-                                        else if (apkDownloadProgress.contains("fail", ignoreCase = true)) Color(0xFFEE5253)
-                                        else Color.White,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                    
-                                    if (apkDownloadPercentage != null) {
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        LinearProgressIndicator(
-                                            progress = { apkDownloadPercentage / 100f },
-                                            modifier = Modifier.fillMaxWidth().height(4.dp),
-                                            color = Color(0xFFEC4899),
-                                            trackColor = Color(0xFF1E2230)
-                                        )
-                                        Text(
-                                            text = "${apkDownloadPercentage.toInt()}%",
-                                            color = Color.Gray,
-                                            fontSize = 10.sp,
-                                            modifier = Modifier.align(Alignment.End).padding(top = 4.dp)
-                                        )
-                                    }
-                                    
-                                    if (apkDownloadProgress.startsWith("Success")) {
-                                        Spacer(modifier = Modifier.height(12.dp))
-                                        Button(
-                                            onClick = onInstallApk,
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                if (webArtifactInfo != null) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(Color(0xFF0F172A), RoundedCornerShape(8.dp))
+                                            .border(1.dp, Color(0xFF38BDF8).copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                                            .padding(12.dp)
+                                    ) {
+                                        Row(
                                             modifier = Modifier.fillMaxWidth(),
-                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2ED573)),
-                                            shape = RoundedCornerShape(8.dp),
-                                            contentPadding = PaddingValues(vertical = 8.dp)
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Icon(Icons.Default.SystemUpdate, contentDescription = "Install", modifier = Modifier.size(14.dp), tint = Color.Black)
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Public,
+                                                    contentDescription = "Web Artifacts",
+                                                    tint = Color(0xFF38BDF8),
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Text(
+                                                    text = "Web Artifacts (${webArtifactInfo.name})",
+                                                    color = Color.White,
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                            Text(
+                                                text = "${webArtifactInfo.fileCount} files (${webArtifactInfo.zipSizeBytes / 1024} KB)",
+                                                color = Color(0xFF94A3B8),
+                                                fontSize = 10.sp
+                                            )
+                                        }
+
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Text(
+                                            text = "Extracted & running live in system background preview panel.",
+                                            color = Color(0xFF38BDF8),
+                                            fontSize = 10.sp
+                                        )
+
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                        Button(
+                                            onClick = onPreviewWebArtifact,
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF38BDF8)),
+                                            shape = RoundedCornerShape(8.dp),
+                                            contentPadding = PaddingValues(vertical = 6.dp)
+                                        ) {
+                                            Icon(Icons.Default.Language, contentDescription = "Preview", modifier = Modifier.size(14.dp), tint = Color.Black)
                                             Spacer(modifier = Modifier.width(4.dp))
-                                            Text("Install APK", color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            Text("Open Web Preview", color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                         }
                                     }
                                 }
-                            } else {
-                                Text("No artifacts generated yet.", color = Color.Gray, fontSize = 11.sp)
+
+                                if (apkDownloadProgress.isNotEmpty()) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(Color(0xFF1A1C29), RoundedCornerShape(8.dp))
+                                            .padding(12.dp)
+                                    ) {
+                                        Text(
+                                            text = apkDownloadProgress,
+                                            color = if (apkDownloadProgress.startsWith("Success")) Color(0xFF2ED573)
+                                            else if (apkDownloadProgress.contains("fail", ignoreCase = true)) Color(0xFFEE5253)
+                                            else Color.White,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                        
+                                        if (apkDownloadPercentage != null) {
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            LinearProgressIndicator(
+                                                progress = { apkDownloadPercentage / 100f },
+                                                modifier = Modifier.fillMaxWidth().height(4.dp),
+                                                color = Color(0xFFEC4899),
+                                                trackColor = Color(0xFF1E2230)
+                                            )
+                                            Text(
+                                                text = "${apkDownloadPercentage.toInt()}%",
+                                                color = Color.Gray,
+                                                fontSize = 10.sp,
+                                                modifier = Modifier.align(Alignment.End).padding(top = 4.dp)
+                                            )
+                                        }
+                                        
+                                        if (apkDownloadProgress.startsWith("Success") && !apkDownloadProgress.contains("Web Artifacts")) {
+                                            Spacer(modifier = Modifier.height(12.dp))
+                                            Button(
+                                                onClick = onInstallApk,
+                                                modifier = Modifier.fillMaxWidth(),
+                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2ED573)),
+                                                shape = RoundedCornerShape(8.dp),
+                                                contentPadding = PaddingValues(vertical = 8.dp)
+                                            ) {
+                                                Icon(Icons.Default.SystemUpdate, contentDescription = "Install", modifier = Modifier.size(14.dp), tint = Color.Black)
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text("Install APK", color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+                                } else if (webArtifactInfo == null) {
+                                    Text("No artifacts generated yet.", color = Color.Gray, fontSize = 11.sp)
+                                }
                             }
                         }
                     }
@@ -4124,16 +4192,21 @@ fun FileNodeItem(
 
 fun buildFileTree(files: List<ProjectFileEntity>): FileNode {
     val root = FileNode("", "", false)
-    files.forEach { file ->
+    val childrenMap = mutableMapOf<FileNode, MutableMap<String, FileNode>>()
+    val displayFiles = if (files.size > 2000) files.take(2000) else files
+
+    displayFiles.forEach { file ->
         val parts = file.path.split("/")
         var current = root
         var currentPath = ""
         parts.forEachIndexed { index, part ->
             currentPath = if (currentPath.isEmpty()) part else "$currentPath/$part"
             val isLast = index == parts.size - 1
-            var child = current.children.find { it.name == part }
+            val currentChildren = childrenMap.getOrPut(current) { mutableMapOf() }
+            var child = currentChildren[part]
             if (child == null) {
                 child = FileNode(part, currentPath, isLast, fileEntity = if (isLast) file else null)
+                currentChildren[part] = child
                 current.children.add(child)
             }
             current = child
@@ -4341,7 +4414,7 @@ fun TextStyle(
     color = color
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun CustomSettingsDialog(
     provider: String,
@@ -4387,6 +4460,7 @@ fun CustomSettingsDialog(
     var allowBackgroundExecutionState by remember { mutableStateOf(allowBackgroundExecution) }
 
     var showAddNewForm by remember { mutableStateOf(false) }
+    var modelSearchQuery by remember { mutableStateOf("") }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -4846,38 +4920,92 @@ fun CustomSettingsDialog(
                         }
 
                         if (scannedModels.isNotEmpty()) {
-                            Text(
-                                text = "Available Models (Click to paste):",
-                                color = Color(0xFF80809B),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.fillMaxWidth()
-                            )
+                            val filteredScannedModels = remember(scannedModels, modelSearchQuery) {
+                                if (modelSearchQuery.isBlank()) scannedModels
+                                else scannedModels.filter { it.contains(modelSearchQuery.trim(), ignoreCase = true) }
+                            }
+
                             Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "Available Models (${filteredScannedModels.size}/${scannedModels.size}):",
+                                    color = Color(0xFF80809B),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Click to paste",
+                                    color = Color(0xFF38BDF8),
+                                    fontSize = 10.sp
+                                )
+                            }
+
+                            OutlinedTextField(
+                                value = modelSearchQuery,
+                                onValueChange = { modelSearchQuery = it },
+                                placeholder = { Text("Search model ID or keyword...", fontSize = 11.sp, color = Color.Gray) },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Search, contentDescription = "Search", tint = Color(0xFF38BDF8), modifier = Modifier.size(16.dp))
+                                },
+                                trailingIcon = {
+                                    if (modelSearchQuery.isNotEmpty()) {
+                                        IconButton(onClick = { modelSearchQuery = "" }, modifier = Modifier.size(20.dp)) {
+                                            Icon(Icons.Default.Close, contentDescription = "Clear", tint = Color.Gray, modifier = Modifier.size(14.dp))
+                                        }
+                                    }
+                                },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedBorderColor = Color(0xFF38BDF8),
+                                    unfocusedBorderColor = Color(0xFF222533)
+                                ),
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp),
+                                singleLine = true
+                            )
+
+                            Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .heightIn(max = 130.dp)
-                                    .horizontalScroll(rememberScrollState())
+                                    .heightIn(max = 140.dp)
                                     .background(Color(0xFF0D0E15), RoundedCornerShape(8.dp))
                                     .border(1.dp, Color(0xFF222533), RoundedCornerShape(8.dp))
-                                    .padding(8.dp),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    .padding(8.dp)
+                                    .verticalScroll(rememberScrollState())
                             ) {
-                                scannedModels.forEach { scannedModel ->
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(Color(0xFF1E293B))
-                                            .clickable {
-                                                modelInput = scannedModel
-                                            }
-                                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                                if (filteredScannedModels.isEmpty()) {
+                                    Text(
+                                        text = "No model found matching '$modelSearchQuery'",
+                                        color = Color.Gray,
+                                        fontSize = 11.sp,
+                                        modifier = Modifier.padding(6.dp)
+                                    )
+                                } else {
+                                    FlowRow(
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
-                                        Text(
-                                            text = scannedModel,
-                                            color = Color.White,
-                                            fontSize = 11.sp
-                                        )
+                                        filteredScannedModels.forEach { scannedModel ->
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .background(Color(0xFF1E293B))
+                                                    .clickable {
+                                                        modelInput = scannedModel
+                                                    }
+                                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                                            ) {
+                                                Text(
+                                                    text = scannedModel,
+                                                    color = Color.White,
+                                                    fontSize = 11.sp
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }

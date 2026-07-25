@@ -107,6 +107,14 @@ data class CustomModelConfig(
     val modelId: String
 )
 
+data class WebArtifactInfo(
+    val name: String,
+    val fileCount: Int,
+    val zipSizeBytes: Long,
+    val localDir: String,
+    val indexHtmlContent: String?
+)
+
 data class AttachedFile(
     val uri: android.net.Uri,
     val name: String,
@@ -182,6 +190,10 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     private val _detectedAndroidBuildErrors = MutableStateFlow<List<AndroidBuildError>>(emptyList())
     val detectedAndroidBuildErrors: StateFlow<List<AndroidBuildError>> = _detectedAndroidBuildErrors.asStateFlow()
 
+    // Stateful downloaded web build artifact
+    private val _webArtifactInfo = MutableStateFlow<WebArtifactInfo?>(null)
+    val webArtifactInfo: StateFlow<WebArtifactInfo?> = _webArtifactInfo.asStateFlow()
+
     fun addWebError(message: String, sourceId: String, lineNumber: Int) {
         val cleanSource = if (sourceId.startsWith("https://virtual-app/")) {
             sourceId.removePrefix("https://virtual-app/")
@@ -223,6 +235,11 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearWebErrors() {
         _detectedWebErrors.value = emptyList()
+    }
+
+    fun previewWebArtifact() {
+        _currentTab.value = WorkspaceTab.PREVIEW
+        _webPreviewRefreshTrigger.value += 1
     }
 
     private suspend fun getCodeSnippetForError(projectName: String, filePath: String, lineNumber: Int): String {
@@ -312,6 +329,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         
         // Pattern 1: Kotlin/Java Compiler errors e.g. "e: file:///app/src/main/java/com/example/ui/VibeViewModel.kt:463:24 Unresolved reference 'name'."
         val compilerErrorRegex = Regex("""(?:e:\s+)?file:///(.+?):(\d+):(\d+)\s+(.+)""")
+        val webErrorRegex = Regex("""(?:Failed to compile|SyntaxError|Error|Type error):\s*(.+?)(?:\s+in\s+(.+?):(\d+):(\d+))?""", RegexOption.IGNORE_CASE)
         
         for (line in lines) {
             val cleanLine = line.trim()
@@ -320,7 +338,6 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 val filePath = match.groupValues[1]
                 val lineNumber = match.groupValues[2].toIntOrNull() ?: 1
                 val errorMsg = match.groupValues[4]
-                // Deduplicate errors
                 val alreadyExists = errors.any { it.message == errorMsg && it.filePath == filePath && it.lineNumber == lineNumber }
                 if (!alreadyExists) {
                     errors.add(
@@ -329,6 +346,25 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                             message = errorMsg,
                             filePath = filePath,
                             lineNumber = lineNumber,
+                            logsSnippet = cleanLine
+                        )
+                    )
+                }
+            } else if (cleanLine.contains("npm ERR!") || cleanLine.contains("[vite]") || cleanLine.contains("Failed to compile") || cleanLine.contains("esbuild:")) {
+                val webMatch = webErrorRegex.find(cleanLine)
+                val msg = if (webMatch != null) webMatch.groupValues[1].ifBlank { cleanLine } else cleanLine
+                val path = if (webMatch != null && webMatch.groupValues.size > 2 && webMatch.groupValues[2].isNotBlank()) webMatch.groupValues[2] else "package.json"
+                val lineNum = if (webMatch != null && webMatch.groupValues.size > 3) webMatch.groupValues[3].toIntOrNull() ?: 1 else 1
+                
+                val cleanMsg = msg.replace(Regex("^\\[command\\]|\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d+Z\\s*"), "").take(200)
+                val alreadyExists = errors.any { it.message == cleanMsg && it.filePath == path }
+                if (!alreadyExists && cleanMsg.isNotBlank()) {
+                    errors.add(
+                        AndroidBuildError(
+                            stepName = stepName,
+                            message = cleanMsg,
+                            filePath = path,
+                            lineNumber = lineNum,
                             logsSnippet = cleanLine
                         )
                     )
@@ -607,48 +643,132 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             var newCount = 0
             try {
                 val repos = listOf(
+                    Triple("cloudai-x", "agent-skills", "https://github.com/cloudai-x/agent-skills"),
+                    Triple("cloudai-x", "skills", "https://github.com/cloudai-x/skills"),
+                    Triple("cloudai-x", "cloudai-x-skills", "https://github.com/cloudai-x/cloudai-x-skills"),
                     Triple("vercel-labs", "agent-skills", "https://github.com/vercel-labs/agent-skills"),
+                    Triple("vercel-labs", "skills", "https://github.com/vercel-labs/skills"),
                     Triple("anthropic", "agent-skills", "https://github.com/anthropic/agent-skills"),
                     Triple("expo", "skills", "https://github.com/expo/skills"),
-                    Triple("nextlevelbuilder", "agent-skills", "https://github.com/nextlevelbuilder/agent-skills")
+                    Triple("nextlevelbuilder", "agent-skills", "https://github.com/nextlevelbuilder/agent-skills"),
+                    Triple("google-gemini", "gemini-skills", "https://github.com/google-gemini/gemini-skills"),
+                    Triple("langchain-ai", "skills", "https://github.com/langchain-ai/skills")
                 )
 
                 val fetchedFetchedList = mutableListOf<com.example.ui.AgentSkill>()
 
                 for ((orgName, repo, githubUrl) in repos) {
                     try {
-                        val apiUrl = "https://api.github.com/repos/$orgName/$repo/contents"
-                        val url = java.net.URL(apiUrl)
-                        val conn = url.openConnection() as java.net.HttpURLConnection
-                        conn.requestMethod = "GET"
-                        conn.setRequestProperty("User-Agent", "PenCode-Android-Agent")
-                        conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
-                        conn.connectTimeout = 5000
-                        conn.readTimeout = 5000
+                        val branches = listOf("main", "master")
+                        var fetchedFromTree = false
 
-                        if (conn.responseCode == 200) {
-                            val responseText = conn.inputStream.bufferedReader().use { it.readText() }
-                            val jsonArray = org.json.JSONArray(responseText)
-                            for (i in 0 until jsonArray.length()) {
-                                val item = jsonArray.getJSONObject(i)
-                                val name = item.optString("name", "")
-                                val path = item.optString("path", "")
-                                if (name.endsWith(".md") || name.endsWith(".json") || item.optString("type") == "dir") {
+                        for (branch in branches) {
+                            if (fetchedFromTree) break
+                            try {
+                                val treeApiUrl = "https://api.github.com/repos/$orgName/$repo/git/trees/$branch?recursive=1"
+                                val url = java.net.URL(treeApiUrl)
+                                val conn = url.openConnection() as java.net.HttpURLConnection
+                                conn.requestMethod = "GET"
+                                conn.setRequestProperty("User-Agent", "PenCode-Android-Agent")
+                                conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
+                                conn.connectTimeout = 4000
+                                conn.readTimeout = 4000
+
+                                if (conn.responseCode == 200) {
+                                    val responseText = conn.inputStream.bufferedReader().use { it.readText() }
+                                    val jsonObj = org.json.JSONObject(responseText)
+                                    val treeArray = jsonObj.optJSONArray("tree") ?: org.json.JSONArray()
+
+                                    for (i in 0 until treeArray.length()) {
+                                        val item = treeArray.getJSONObject(i)
+                                        val path = item.optString("path", "")
+                                        val type = item.optString("type", "")
+
+                                        val isSkillFile = (path.endsWith(".md", ignoreCase = true) || path.endsWith(".json", ignoreCase = true)) &&
+                                            !path.equals("README.md", ignoreCase = true) &&
+                                            !path.equals("LICENSE", ignoreCase = true) &&
+                                            !path.equals("package.json", ignoreCase = true)
+
+                                        if (isSkillFile) {
+                                            val fileName = path.substringAfterLast("/")
+                                            val cleanName = fileName.removeSuffix(".md").removeSuffix(".json")
+                                                .replace("SKILL", "")
+                                                .replace("-", " ")
+                                                .replace("_", " ")
+                                                .trim()
+
+                                            if (cleanName.isBlank()) continue
+
+                                            val skillId = "$orgName-${path.lowercase().replace("/", "-").replace(".", "-")}"
+                                            if (_agentSkills.value.none { it.id == skillId } && fetchedFetchedList.none { it.id == skillId }) {
+                                                val formattedName = cleanName.split(" ")
+                                                    .filter { it.isNotBlank() }
+                                                    .joinToString(" ") { word -> word.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() } }
+
+                                                val rawUrl = "https://raw.githubusercontent.com/$orgName/$repo/$branch/$path"
+
+                                                fetchedFetchedList.add(
+                                                    com.example.ui.AgentSkill(
+                                                        id = skillId,
+                                                        name = "$formattedName ($orgName)",
+                                                        author = "$orgName/$repo",
+                                                        installs = "${(10..49).random()}.${(1..9).random()}K installs",
+                                                        description = "Full recursive agent skill from $orgName/$repo ($path).",
+                                                        githubUrl = githubUrl,
+                                                        isInstalled = false,
+                                                        isEnabled = false,
+                                                        skillPrompt = "Skill source file: $path ($githubUrl)\nRaw URL: $rawUrl",
+                                                        filePath = path,
+                                                        rawFileUrl = rawUrl
+                                                    )
+                                                )
+                                            }
+                                        }
+                                    }
+                                    if (treeArray.length() > 0) {
+                                        fetchedFromTree = true
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
+
+                        if (!fetchedFromTree) {
+                            val apiUrl = "https://api.github.com/repos/$orgName/$repo/contents"
+                            val url = java.net.URL(apiUrl)
+                            val conn = url.openConnection() as java.net.HttpURLConnection
+                            conn.requestMethod = "GET"
+                            conn.setRequestProperty("User-Agent", "PenCode-Android-Agent")
+                            conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
+                            conn.connectTimeout = 4000
+                            conn.readTimeout = 4000
+
+                            if (conn.responseCode == 200) {
+                                val responseText = conn.inputStream.bufferedReader().use { it.readText() }
+                                val jsonArray = org.json.JSONArray(responseText)
+                                for (i in 0 until jsonArray.length()) {
+                                    val item = jsonArray.getJSONObject(i)
+                                    val name = item.optString("name", "")
+                                    val path = item.optString("path", "")
                                     val skillId = "$orgName-${name.removeSuffix(".md").removeSuffix(".json").lowercase().replace(" ", "-")}"
-                                    if (_agentSkills.value.none { it.id == skillId }) {
+                                    if (_agentSkills.value.none { it.id == skillId } && fetchedFetchedList.none { it.id == skillId }) {
                                         val cleanName = name.removeSuffix(".md").removeSuffix(".json").replace("-", " ").replace("_", " ")
                                             .split(" ").joinToString(" ") { word -> word.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() } }
+                                        val rawUrl = "https://raw.githubusercontent.com/$orgName/$repo/main/$path"
                                         fetchedFetchedList.add(
                                             com.example.ui.AgentSkill(
                                                 id = skillId,
                                                 name = "$cleanName ($orgName)",
                                                 author = "$orgName/$repo",
                                                 installs = "${(10..40).random()}.${(1..9).random()}K installs",
-                                                description = "Live fetched skill from $orgName/$repo GitHub repository ($path).",
+                                                description = "Live fetched skill from $orgName/$repo ($path).",
                                                 githubUrl = githubUrl,
                                                 isInstalled = false,
                                                 isEnabled = false,
-                                                skillPrompt = "Skill fetched live from $githubUrl ($path)."
+                                                skillPrompt = "Skill live fetched from $githubUrl ($path).",
+                                                filePath = path,
+                                                rawFileUrl = rawUrl
                                             )
                                         )
                                     }
@@ -674,6 +794,56 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
+    }
+
+    fun fetchSkillFileContent(skillId: String, onLoaded: ((String) -> Unit)? = null) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val skill = _agentSkills.value.find { it.id == skillId } ?: return@launch
+            if (skill.skillPrompt.isNotBlank() && !skill.skillPrompt.startsWith("Skill source file") && !skill.skillPrompt.startsWith("Skill live fetched")) {
+                withContext(kotlinx.coroutines.Dispatchers.Main) { onLoaded?.invoke(skill.skillPrompt) }
+                return@launch
+            }
+
+            val rawUrl = skill.rawFileUrl.ifBlank {
+                val parts = skill.author.split("/")
+                if (parts.size == 2) {
+                    "https://raw.githubusercontent.com/${parts[0]}/${parts[1]}/main/${skill.filePath.ifBlank { "SKILL.md" }}"
+                } else ""
+            }
+
+            if (rawUrl.isNotBlank()) {
+                try {
+                    val url = java.net.URL(rawUrl)
+                    val conn = url.openConnection() as java.net.HttpURLConnection
+                    conn.connectTimeout = 4000
+                    conn.readTimeout = 4000
+                    if (conn.responseCode == 200) {
+                        val content = conn.inputStream.bufferedReader().use { it.readText() }
+                        if (content.isNotBlank()) {
+                            val updatedList = _agentSkills.value.map {
+                                if (it.id == skillId) it.copy(skillPrompt = content) else it
+                            }
+                            _agentSkills.value = updatedList
+                            saveAgentSkillsInternal()
+                            withContext(kotlinx.coroutines.Dispatchers.Main) { onLoaded?.invoke(content) }
+                            return@launch
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+
+            withContext(kotlinx.coroutines.Dispatchers.Main) { onLoaded?.invoke(skill.skillPrompt) }
+        }
+    }
+
+    fun updateSkillContent(skillId: String, newContent: String) {
+        val updatedList = _agentSkills.value.map {
+            if (it.id == skillId) it.copy(skillPrompt = newContent) else it
+        }
+        _agentSkills.value = updatedList
+        saveAgentSkillsInternal()
     }
 
     private fun saveAgentSkillsInternal() {
@@ -1289,11 +1459,21 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                     outputApkFile.delete()
                 }
                 
-                val zipIn = java.util.zip.ZipInputStream(java.io.BufferedInputStream(java.io.FileInputStream(tempZipFile)))
+                val webDistDir = java.io.File(cacheDir, "web_dist")
+                if (webDistDir.exists()) {
+                    webDistDir.deleteRecursively()
+                }
+                webDistDir.mkdirs()
+
+                var zipIn = java.util.zip.ZipInputStream(java.io.BufferedInputStream(java.io.FileInputStream(tempZipFile)))
                 var entry = zipIn.nextEntry
                 var apkFound = false
+                var webFilesExtracted = 0
+                var indexHtmlContent: String? = null
+
                 while (entry != null) {
-                    if (!entry.isDirectory && entry.name.endsWith(".apk")) {
+                    val entryName = entry.name
+                    if (!entry.isDirectory && entryName.endsWith(".apk")) {
                         val outStream = java.io.BufferedOutputStream(java.io.FileOutputStream(outputApkFile))
                         val outBuffer = ByteArray(131072) // 128KB for faster extraction
                         var len = zipIn.read(outBuffer)
@@ -1304,12 +1484,68 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                         outStream.close()
                         apkFound = true
                         break
+                    } else if (!entry.isDirectory) {
+                        val destFile = java.io.File(webDistDir, entryName)
+                        destFile.parentFile?.mkdirs()
+                        val outStream = java.io.BufferedOutputStream(java.io.FileOutputStream(destFile))
+                        val outBuffer = ByteArray(131072)
+                        var len = zipIn.read(outBuffer)
+                        while (len > 0) {
+                            outStream.write(outBuffer, 0, len)
+                            len = zipIn.read(outBuffer)
+                        }
+                        outStream.close()
+                        webFilesExtracted++
+
+                        if (destFile.name == "index.html") {
+                            try {
+                                indexHtmlContent = destFile.readText()
+                            } catch (e: Exception) {
+                                Log.e("VibeViewModel", "Error reading index.html: ${e.message}")
+                            }
+                        }
                     }
                     zipIn.closeEntry()
                     entry = zipIn.nextEntry
                 }
                 zipIn.close()
-                
+
+                val innerWebZip = java.io.File(webDistDir, "web-dist.zip")
+                if (innerWebZip.exists()) {
+                    try {
+                        val innerZipIn = java.util.zip.ZipInputStream(java.io.BufferedInputStream(java.io.FileInputStream(innerWebZip)))
+                        var innerEntry = innerZipIn.nextEntry
+                        while (innerEntry != null) {
+                            if (!innerEntry.isDirectory) {
+                                val destFile = java.io.File(webDistDir, innerEntry.name)
+                                destFile.parentFile?.mkdirs()
+                                val outStream = java.io.BufferedOutputStream(java.io.FileOutputStream(destFile))
+                                val outBuffer = ByteArray(131072)
+                                var len = innerZipIn.read(outBuffer)
+                                while (len > 0) {
+                                    outStream.write(outBuffer, 0, len)
+                                    len = innerZipIn.read(outBuffer)
+                                }
+                                outStream.close()
+                                webFilesExtracted++
+                                if (destFile.name == "index.html") {
+                                    try {
+                                        indexHtmlContent = destFile.readText()
+                                    } catch (e: Exception) {
+                                        // ignore
+                                    }
+                                }
+                            }
+                            innerZipIn.closeEntry()
+                            innerEntry = innerZipIn.nextEntry
+                        }
+                        innerZipIn.close()
+                    } catch (e: Exception) {
+                        Log.e("VibeViewModel", "Error extracting inner web-dist.zip: ${e.message}")
+                    }
+                }
+
+                val zipSizeBytes = tempZipFile.length()
                 if (tempZipFile.exists()) {
                     tempZipFile.delete()
                 }
@@ -1320,9 +1556,29 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                     showDownloadNotification(100, "Pencode AI Build", "Success: App compiled & ready to install!", true)
                     // Switch to BUILD tab automatically
                     _currentTab.value = WorkspaceTab.ANDROID_BUILD
+                } else if (webFilesExtracted > 0) {
+                    val htmlContentToUse = indexHtmlContent ?: java.io.File(webDistDir, "index.html").let { if (it.exists()) it.readText() else null }
+                    _webArtifactInfo.value = WebArtifactInfo(
+                        name = "web-dist.zip",
+                        fileCount = webFilesExtracted,
+                        zipSizeBytes = zipSizeBytes,
+                        localDir = webDistDir.absolutePath,
+                        indexHtmlContent = htmlContentToUse
+                    )
+                    
+                    if (!htmlContentToUse.isNullOrBlank()) {
+                        val currentProjectName = _currentProject.value?.name ?: ""
+                        if (currentProjectName.isNotBlank()) {
+                            repository.saveFile(currentProjectName, "index.html", htmlContentToUse)
+                        }
+                    }
+
+                    _apkDownloadProgress.value = "Success: Web Artifacts (web-dist.zip) downloaded, unzipped & running on Live Web Preview!"
+                    showDownloadNotification(100, "Pencode AI Build", "Success: Web Artifacts downloaded & unzipped!", true)
+                    _webPreviewRefreshTrigger.value += 1
                 } else {
-                    _apkDownloadProgress.value = "Unzip completed but no APK found."
-                    showDownloadNotification(0, "Pencode AI Build", "Unzip completed but no APK found.", true)
+                    _apkDownloadProgress.value = "Unzip completed but no valid build artifacts found."
+                    showDownloadNotification(0, "Pencode AI Build", "Unzip completed but no valid artifacts found.", true)
                     lastDownloadedRunId = 0
                 }
             } catch (e: Exception) {
@@ -1391,7 +1647,10 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             _scannedModels.value = emptyList()
             
             try {
-                val client = OkHttpClient()
+                val client = OkHttpClient.Builder()
+                    .connectTimeout(12, java.util.concurrent.TimeUnit.SECONDS)
+                    .readTimeout(12, java.util.concurrent.TimeUnit.SECONDS)
+                    .build()
                 val url = when (provider) {
                     "gemini" -> {
                         val key = apiKey.ifBlank { BuildConfig.GEMINI_API_KEY }
@@ -2907,6 +3166,9 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                                 val projectDir = repository.getProjectDir(project.name)
                                 val isKotlin = java.io.File(projectDir, "build.gradle.kts").exists() || java.io.File(projectDir, "build.gradle").exists()
                                 val isFlutter = java.io.File(projectDir, "pubspec.yaml").exists()
+                                val isNextJs = java.io.File(projectDir, "next.config.js").exists() || java.io.File(projectDir, "next.config.mjs").exists()
+                                val isReactVite = java.io.File(projectDir, "vite.config.js").exists() || java.io.File(projectDir, "vite.config.ts").exists()
+                                val isWebPackage = java.io.File(projectDir, "package.json").exists()
 
                                 if (filesModifiedThisPrompt) {
                                     if (isKotlin) {
@@ -2918,6 +3180,27 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                                         }
                                     } else if (isFlutter) {
                                         _detectedFramework.value = "Flutter"
+                                        if (_allowBuildPush.value) {
+                                            acceptGithubPushPrompt()
+                                        } else {
+                                            _showGithubPushPrompt.value = true
+                                        }
+                                    } else if (isNextJs) {
+                                        _detectedFramework.value = "Next.js"
+                                        if (_allowBuildPush.value) {
+                                            acceptGithubPushPrompt()
+                                        } else {
+                                            _showGithubPushPrompt.value = true
+                                        }
+                                    } else if (isReactVite) {
+                                        _detectedFramework.value = "React Vite"
+                                        if (_allowBuildPush.value) {
+                                            acceptGithubPushPrompt()
+                                        } else {
+                                            _showGithubPushPrompt.value = true
+                                        }
+                                    } else if (isWebPackage) {
+                                        _detectedFramework.value = "Web App"
                                         if (_allowBuildPush.value) {
                                             acceptGithubPushPrompt()
                                         } else {

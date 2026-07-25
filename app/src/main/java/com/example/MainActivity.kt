@@ -97,6 +97,7 @@ class MainActivity : ComponentActivity() {
                         val scanError by viewModel.scanError.collectAsState()
                         val agentSkills by viewModel.agentSkills.collectAsState()
                         val isFetchingSkills by viewModel.isFetchingSkills.collectAsState()
+                        val webArtifactInfo by viewModel.webArtifactInfo.collectAsState()
 
                         if (currentProject == null) {
                             HomeScreen(
@@ -197,6 +198,10 @@ class MainActivity : ComponentActivity() {
                                 onAddCustomAgentSkill = { skill -> viewModel.addCustomAgentSkill(skill) },
                                 onFetchOnlineAgentSkills = { viewModel.fetchOnlineAgentSkills() },
                                 isFetchingSkills = isFetchingSkills,
+                                onUpdateSkillContent = { id, content -> viewModel.updateSkillContent(id, content) },
+                                onFetchSkillFileContent = { id, cb -> viewModel.fetchSkillFileContent(id, cb) },
+                                webArtifactInfo = webArtifactInfo,
+                                onPreviewWebArtifact = { viewModel.previewWebArtifact() },
                                 onToggleError = { id -> viewModel.toggleWebErrorSelection(id) },
                                 onToggleAllErrors = { selectAll -> viewModel.toggleAllWebErrors(selectAll) },
                                 onClearErrors = { viewModel.clearWebErrors() },

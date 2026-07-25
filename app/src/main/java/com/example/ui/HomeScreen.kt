@@ -393,7 +393,8 @@ fun CreateProjectDialog(
     val templates = listOf(
         TemplateOption("android_kotlin", "Android Kotlin", "Native Android App scaffold with Jetpack Compose & Github Action Build."),
         TemplateOption("flutter", "Flutter", "Flutter App scaffold with main.dart, pubspec.yaml & Github Action Build."),
-        TemplateOption("apk_decompile", "APK Reverse Engineer / Decompiler", "Decompile Android APK files into source code, XML resources & rebuild with GitHub Actions."),
+        TemplateOption("nextjs", "Next.js", "Next.js App scaffold with React, Tailwind, package.json & GitHub Action Build."),
+        TemplateOption("react_vite", "React Vite", "React + Vite App scaffold with Tailwind, package.json & GitHub Action Build."),
         TemplateOption("react", "React CDN", "Babel-powered interactive React Hello World with count state."),
         TemplateOption("vanilla", "Vanilla JS", "Pure HTML, CSS & JS centered Hello World screen."),
         TemplateOption("vanilla_three", "Vanilla Three.js", "Interactive 3D Globe canvas powered by Three.js for 3D models, games, websites & objects.")
@@ -913,23 +914,115 @@ fun TemplateIcon(key: String, modifier: Modifier = Modifier) {
                     )
                 }
             }
-            "apk_decompile" -> {
+            "nextjs" -> {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(
                             Brush.linearGradient(
-                                colors = listOf(Color(0xFF10B981).copy(alpha = 0.18f), Color(0xFF0D0F14))
+                                colors = listOf(Color(0xFF38BDF8).copy(alpha = 0.15f), Color(0xFF0D0F14))
                             )
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Android,
-                        contentDescription = "APK Decompiler",
-                        tint = Color(0xFF10B981),
-                        modifier = Modifier.size(20.dp)
-                    )
+                    androidx.compose.foundation.Canvas(modifier = Modifier.size(22.dp)) {
+                        val w = size.width
+                        val h = size.height
+                        val center = androidx.compose.ui.geometry.Offset(w / 2f, h / 2f)
+                        val radius = w / 2f - 1f
+
+                        drawCircle(
+                            color = Color(0xFF000000),
+                            radius = radius,
+                            center = center
+                        )
+                        drawCircle(
+                            color = Color(0xFF38BDF8).copy(alpha = 0.6f),
+                            radius = radius,
+                            center = center,
+                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.2f)
+                        )
+
+                        drawLine(
+                            color = Color.White,
+                            start = androidx.compose.ui.geometry.Offset(w * 0.30f, h * 0.26f),
+                            end = androidx.compose.ui.geometry.Offset(w * 0.30f, h * 0.74f),
+                            strokeWidth = w * 0.09f,
+                            cap = androidx.compose.ui.graphics.StrokeCap.Round
+                        )
+
+                        val pathN = androidx.compose.ui.graphics.Path().apply {
+                            moveTo(w * 0.30f, h * 0.26f)
+                            lineTo(w * 0.70f, h * 0.74f)
+                        }
+                        drawPath(
+                            path = pathN,
+                            brush = Brush.linearGradient(
+                                colors = listOf(Color.White, Color.White.copy(alpha = 0.9f), Color(0xFF000000)),
+                                start = androidx.compose.ui.geometry.Offset(w * 0.30f, h * 0.26f),
+                                end = androidx.compose.ui.geometry.Offset(w * 0.72f, h * 0.76f)
+                            ),
+                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = w * 0.085f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                        )
+
+                        drawLine(
+                            color = Color.White,
+                            start = androidx.compose.ui.geometry.Offset(w * 0.70f, h * 0.26f),
+                            end = androidx.compose.ui.geometry.Offset(w * 0.70f, h * 0.52f),
+                            strokeWidth = w * 0.09f,
+                            cap = androidx.compose.ui.graphics.StrokeCap.Round
+                        )
+                    }
+                }
+            }
+            "react_vite" -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(Color(0xFFA855F7).copy(alpha = 0.2f), Color(0xFF0D0F14))
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    androidx.compose.foundation.Canvas(modifier = Modifier.size(22.dp)) {
+                        val w = size.width
+                        val h = size.height
+
+                        val shieldPath = androidx.compose.ui.graphics.Path().apply {
+                            moveTo(w * 0.06f, h * 0.12f)
+                            lineTo(w * 0.94f, h * 0.12f)
+                            lineTo(w * 0.50f, h * 0.92f)
+                            close()
+                        }
+                        drawPath(
+                            path = shieldPath,
+                            brush = Brush.linearGradient(
+                                colors = listOf(Color(0xFFBD34FE), Color(0xFF41D1FF)),
+                                start = androidx.compose.ui.geometry.Offset(0f, 0f),
+                                end = androidx.compose.ui.geometry.Offset(w, h)
+                            )
+                        )
+
+                        val boltPath = androidx.compose.ui.graphics.Path().apply {
+                            moveTo(w * 0.54f, h * 0.18f)
+                            lineTo(w * 0.32f, h * 0.52f)
+                            lineTo(w * 0.48f, h * 0.52f)
+                            lineTo(w * 0.44f, h * 0.82f)
+                            lineTo(w * 0.68f, h * 0.46f)
+                            lineTo(w * 0.52f, h * 0.46f)
+                            close()
+                        }
+                        drawPath(
+                            path = boltPath,
+                            brush = Brush.linearGradient(
+                                colors = listOf(Color(0xFFFFEA83), Color(0xFFFFDD35)),
+                                start = androidx.compose.ui.geometry.Offset(w * 0.3f, h * 0.18f),
+                                end = androidx.compose.ui.geometry.Offset(w * 0.7f, h * 0.82f)
+                            )
+                        )
+                    }
                 }
             }
         }

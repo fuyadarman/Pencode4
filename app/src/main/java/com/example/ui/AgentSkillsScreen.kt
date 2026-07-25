@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -42,7 +44,9 @@ data class AgentSkill(
     val isInstalled: Boolean = false,
     val isEnabled: Boolean = false,
     val isCustom: Boolean = false,
-    val skillPrompt: String = ""
+    val skillPrompt: String = "",
+    val filePath: String = "SKILL.md",
+    val rawFileUrl: String = ""
 )
 
 val defaultAgentSkills = listOf(
@@ -474,14 +478,17 @@ fun AgentSkillsDialog(
     onAddCustomSkill: (AgentSkill) -> Unit,
     onFetchOnlineSkills: () -> Unit = {},
     isFetchingSkills: Boolean = false,
+    onUpdateSkillContent: (String, String) -> Unit = { _, _ -> },
+    onFetchSkillFileContent: (String, ((String) -> Unit)?) -> Unit = { _, _ -> },
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("All") }
     var showAddCustomDialog by remember { mutableStateOf(false) }
+    var inspectingSkill by remember { mutableStateOf<AgentSkill?>(null) }
 
-    val categories = listOf("All", "Vercel Labs", "Anthropic", "Expo", "NextLevelBuilder", "Installed")
+    val categories = listOf("All", "Installed", "CloudAI-X", "Vercel Labs", "Anthropic", "Expo", "NextLevelBuilder")
 
     val filteredSkills = remember(skills, searchQuery, selectedCategory) {
         skills.filter { skill ->
@@ -491,6 +498,7 @@ fun AgentSkillsDialog(
                 skill.description.contains(searchQuery, ignoreCase = true)
 
             val matchesCategory = when (selectedCategory) {
+                "CloudAI-X" -> skill.author.contains("cloudai-x", ignoreCase = true)
                 "Vercel Labs" -> skill.author.contains("vercel", ignoreCase = true)
                 "Anthropic" -> skill.author.contains("anthropic", ignoreCase = true)
                 "Expo" -> skill.author.contains("expo", ignoreCase = true)
@@ -798,36 +806,60 @@ fun AgentSkillsDialog(
 
                                 Spacer(modifier = Modifier.height(12.dp))
 
-                                // Footer Row: View on GitHub & Expand details / Uninstall
+                                // Footer Row: View File, View on GitHub & Uninstall
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    OutlinedButton(
-                                        onClick = {
-                                            try {
-                                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(skill.githubUrl))
-                                                context.startActivity(intent)
-                                            } catch (_: Exception) {}
-                                        },
-                                        shape = RoundedCornerShape(8.dp),
-                                        border = BorderStroke(1.dp, Color(0xFF2E344A)),
-                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                        modifier = Modifier.height(32.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Code,
-                                            contentDescription = null,
-                                            tint = Color(0xFF94A3B8),
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = "View on GitHub",
-                                            fontSize = 12.sp,
-                                            color = Color(0xFFE2E8F0)
-                                        )
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Button(
+                                            onClick = { inspectingSkill = skill },
+                                            shape = RoundedCornerShape(8.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E2638)),
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                            modifier = Modifier.height(32.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Visibility,
+                                                contentDescription = "Inspect File",
+                                                tint = Color(0xFF00F2FE),
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = "View File",
+                                                fontSize = 12.sp,
+                                                color = Color(0xFF00F2FE),
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                        }
+
+                                        OutlinedButton(
+                                            onClick = {
+                                                try {
+                                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(skill.githubUrl))
+                                                    context.startActivity(intent)
+                                                } catch (_: Exception) {}
+                                            },
+                                            shape = RoundedCornerShape(8.dp),
+                                            border = BorderStroke(1.dp, Color(0xFF2E344A)),
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                            modifier = Modifier.height(32.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Code,
+                                                contentDescription = null,
+                                                tint = Color(0xFF94A3B8),
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "GitHub",
+                                                fontSize = 12.sp,
+                                                color = Color(0xFFE2E8F0)
+                                            )
+                                        }
                                     }
 
                                     if (skill.isInstalled) {
@@ -860,6 +892,262 @@ fun AgentSkillsDialog(
                 showAddCustomDialog = false
             }
         )
+    }
+
+    inspectingSkill?.let { skill ->
+        SkillFileInspectorDialog(
+            skill = skill,
+            onToggleSkill = onToggleSkill,
+            onInstallSkill = onInstallSkill,
+            onUpdateContent = onUpdateSkillContent,
+            onFetchContent = onFetchSkillFileContent,
+            onDismiss = { inspectingSkill = null }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SkillFileInspectorDialog(
+    skill: AgentSkill,
+    onToggleSkill: (String, Boolean) -> Unit,
+    onInstallSkill: (String) -> Unit,
+    onUpdateContent: (String, String) -> Unit,
+    onFetchContent: (String, ((String) -> Unit)?) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    var isEditing by remember { mutableStateOf(false) }
+    var contentText by remember { mutableStateOf(skill.skillPrompt) }
+    var isLoadingFile by remember { mutableStateOf(false) }
+
+    LaunchedEffect(skill.id) {
+        if (skill.skillPrompt.isBlank() || skill.skillPrompt.startsWith("Skill source file") || skill.skillPrompt.startsWith("Skill live fetched")) {
+            isLoadingFile = true
+            onFetchContent(skill.id) { loaded ->
+                contentText = loaded
+                isLoadingFile = false
+            }
+        } else {
+            contentText = skill.skillPrompt
+        }
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0xFF08090E))
+                .padding(16.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(Color(0xFF0F131C))
+                    .border(BorderStroke(1.dp, Color(0xFF1E2638)), RoundedCornerShape(20.dp))
+                    .padding(16.dp)
+            ) {
+                // Top Header Bar
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF00F2FE).copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Description,
+                                contentDescription = null,
+                                tint = Color(0xFF00F2FE),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Column {
+                            Text(
+                                text = skill.name,
+                                color = Color.White,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "File: ${skill.filePath} • ${skill.author}",
+                                color = Color(0xFF94A3B8),
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF1E2638))
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(18.dp))
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Control Bar
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF161B26))
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (skill.isEnabled) Color(0xFF10B981).copy(alpha = 0.2f) else Color(0xFF334155))
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = if (skill.isEnabled) "ACTIVE (ON)" else if (skill.isInstalled) "INSTALLED (OFF)" else "AVAILABLE",
+                            color = if (skill.isEnabled) Color(0xFF10B981) else Color(0xFFCBD5E1),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (skill.isInstalled) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = if (skill.isEnabled) "ON" else "OFF",
+                                    fontSize = 11.sp,
+                                    color = if (skill.isEnabled) Color(0xFF00F2FE) else Color(0xFF64748B),
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(end = 4.dp)
+                                )
+                                Switch(
+                                    checked = skill.isEnabled,
+                                    onCheckedChange = { onToggleSkill(skill.id, it) },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color(0xFF0D0E15),
+                                        checkedTrackColor = Color(0xFF00F2FE),
+                                        uncheckedThumbColor = Color(0xFF94A3B8),
+                                        uncheckedTrackColor = Color(0xFF222533)
+                                    ),
+                                    modifier = Modifier.scale(0.8f)
+                                )
+                            }
+                        } else {
+                            Button(
+                                onClick = { onInstallSkill(skill.id) },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00F2FE)),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                            ) {
+                                Text("Install Skill", color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        IconButton(
+                            onClick = {
+                                val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                val clip = android.content.ClipData.newPlainText("Skill Prompt", contentText)
+                                clipboard.setPrimaryClip(clip)
+                                android.widget.Toast.makeText(context, "Skill prompt copied!", android.widget.Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Default.ContentCopy, contentDescription = "Copy Prompt", tint = Color(0xFF00F2FE), modifier = Modifier.size(16.dp))
+                        }
+
+                        IconButton(
+                            onClick = {
+                                if (isEditing) {
+                                    onUpdateContent(skill.id, contentText)
+                                    android.widget.Toast.makeText(context, "Skill content saved!", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                                isEditing = !isEditing
+                            },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isEditing) Icons.Default.Check else Icons.Default.Edit,
+                                contentDescription = if (isEditing) "Save" else "Edit",
+                                tint = if (isEditing) Color(0xFF10B981) else Color(0xFF94A3B8),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Content Viewer / Editor
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF05070A))
+                        .border(BorderStroke(1.dp, Color(0xFF1E2638)), RoundedCornerShape(12.dp))
+                        .padding(12.dp)
+                ) {
+                    if (isLoadingFile) {
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.Center,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            CircularProgressIndicator(color = Color(0xFF00F2FE), modifier = Modifier.size(28.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("Loading skill file from GitHub...", color = Color(0xFF94A3B8), fontSize = 12.sp)
+                        }
+                    } else if (isEditing) {
+                        OutlinedTextField(
+                            value = contentText,
+                            onValueChange = { contentText = it },
+                            modifier = Modifier.fillMaxSize(),
+                            textStyle = androidx.compose.ui.text.TextStyle(
+                                color = Color(0xFFE2E8F0),
+                                fontSize = 12.sp,
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                            ),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color.Transparent,
+                                unfocusedBorderColor = Color.Transparent
+                            )
+                        )
+                    } else {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            Text(
+                                text = if (contentText.isBlank()) "No content in skill file." else contentText,
+                                color = Color(0xFFE2E8F0),
+                                fontSize = 12.sp,
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                lineHeight = 18.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
