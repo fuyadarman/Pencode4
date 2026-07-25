@@ -104,7 +104,7 @@ object LocalHttpServer {
                 val mime = when {
                     clean.endsWith(".html") || clean.endsWith(".htm") -> "text/html"
                     clean.endsWith(".css") -> "text/css"
-                    clean.endsWith(".js") || clean.endsWith(".mjs") || clean.endsWith(".cjs") || clean.endsWith(".jsx") || clean.endsWith(".ts") || clean.endsWith(".tsx") -> "application/javascript"
+                    clean.endsWith(".js") || clean.endsWith(".mjs") || clean.endsWith(".cjs") || clean.endsWith(".jsx") || clean.endsWith(".ts") || clean.endsWith(".tsx") -> "text/javascript"
                     clean.endsWith(".json") -> "application/json"
                     clean.endsWith(".svg") -> "image/svg+xml"
                     clean.endsWith(".png") -> "image/png"

@@ -18,12 +18,39 @@ import android.util.Base64
 
 class VibeRepository(private val dao: VibeDao, private val context: Context) {
 
+    private fun isDirWritable(dir: File): Boolean {
+        return try {
+            if (!dir.exists()) {
+                dir.mkdirs()
+            }
+            if (dir.exists() && dir.isDirectory) {
+                val tempFile = File(dir, ".write_test_${System.currentTimeMillis()}")
+                val success = tempFile.createNewFile()
+                if (success) {
+                    tempFile.delete()
+                    true
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     // Helper to get physical directory for project on device memory
     fun getProjectDir(projectName: String): File {
-        val base = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOCUMENTS)?.resolve("pencode")
-            ?: context.getExternalFilesDir(null)?.resolve("pencode") 
-            ?: context.filesDir.resolve("pencode")
-        val projectDir = File(base, projectName)
+        val publicDocBase = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOCUMENTS)?.resolve("pencode")
+        val base = if (publicDocBase != null && isDirWritable(publicDocBase)) {
+            publicDocBase
+        } else {
+            context.getExternalFilesDir(null)?.resolve("pencode") 
+                ?: context.filesDir.resolve("pencode")
+        }
+        val sanitizedName = projectName.replace(Regex("[\\\\/:*?\"<>|]"), "_")
+        val projectDir = File(base, sanitizedName)
         if (!projectDir.exists()) {
             projectDir.mkdirs()
         }

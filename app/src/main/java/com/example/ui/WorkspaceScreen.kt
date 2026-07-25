@@ -2866,7 +2866,7 @@ fun PreviewTabContent(
                                                 val mime = when {
                                                     clean.endsWith(".html") || clean.endsWith(".htm") -> "text/html"
                                                     clean.endsWith(".css") -> "text/css"
-                                                    clean.endsWith(".js") || clean.endsWith(".mjs") || clean.endsWith(".cjs") || clean.endsWith(".jsx") || clean.endsWith(".ts") || clean.endsWith(".tsx") -> "application/javascript"
+                                                    clean.endsWith(".js") || clean.endsWith(".mjs") || clean.endsWith(".cjs") || clean.endsWith(".jsx") || clean.endsWith(".ts") || clean.endsWith(".tsx") -> "text/javascript"
                                                     clean.endsWith(".json") -> "application/json"
                                                     clean.endsWith(".svg") -> "image/svg+xml"
                                                     clean.endsWith(".png") -> "image/png"
@@ -2895,6 +2895,7 @@ fun PreviewTabContent(
                                             fun createWebResponse(mime: String, enc: String?, stream: java.io.InputStream): WebResourceResponse {
                                                 val resp = WebResourceResponse(mime, enc, stream)
                                                 val headers = HashMap<String, String>()
+                                                headers["Content-Type"] = if (enc != null) "$mime; charset=$enc" else mime
                                                 headers["Access-Control-Allow-Origin"] = "*"
                                                 headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
                                                 headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
