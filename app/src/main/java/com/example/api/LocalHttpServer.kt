@@ -101,12 +101,21 @@ object LocalHttpServer {
             if (matchingFile != null) {
                 val mimeType = when {
                     cleanPath.endsWith(".css", ignoreCase = true) -> "text/css"
-                    cleanPath.endsWith(".js", ignoreCase = true) -> "application/javascript"
+                    cleanPath.endsWith(".js", ignoreCase = true) ||
+                    cleanPath.endsWith(".jsx", ignoreCase = true) ||
+                    cleanPath.endsWith(".ts", ignoreCase = true) ||
+                    cleanPath.endsWith(".tsx", ignoreCase = true) ||
+                    cleanPath.endsWith(".mjs", ignoreCase = true) ||
+                    cleanPath.endsWith(".cjs", ignoreCase = true) -> "application/javascript"
                     cleanPath.endsWith(".html", ignoreCase = true) -> "text/html"
                     cleanPath.endsWith(".png", ignoreCase = true) -> "image/png"
                     cleanPath.endsWith(".jpg", ignoreCase = true) || cleanPath.endsWith(".jpeg", ignoreCase = true) -> "image/jpeg"
+                    cleanPath.endsWith(".gif", ignoreCase = true) -> "image/gif"
+                    cleanPath.endsWith(".webp", ignoreCase = true) -> "image/webp"
                     cleanPath.endsWith(".svg", ignoreCase = true) -> "image/svg+xml"
+                    cleanPath.endsWith(".ico", ignoreCase = true) -> "image/x-icon"
                     cleanPath.endsWith(".json", ignoreCase = true) -> "application/json"
+                    cleanPath.endsWith(".wasm", ignoreCase = true) -> "application/wasm"
                     else -> "text/plain"
                 }
 

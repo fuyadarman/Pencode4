@@ -2857,7 +2857,14 @@ fun PreviewTabContent(
                                             if (matchingFile != null) {
                                                 val mimeType = when {
                                                     path.endsWith(".css", ignoreCase = true) -> "text/css"
-                                                    path.endsWith(".js", ignoreCase = true) -> "application/javascript"
+                                                    path.endsWith(".js", ignoreCase = true) ||
+                                                    path.endsWith(".jsx", ignoreCase = true) ||
+                                                    path.endsWith(".ts", ignoreCase = true) ||
+                                                    path.endsWith(".tsx", ignoreCase = true) ||
+                                                    path.endsWith(".mjs", ignoreCase = true) ||
+                                                    path.endsWith(".cjs", ignoreCase = true) -> "application/javascript"
+                                                    path.endsWith(".json", ignoreCase = true) -> "application/json"
+                                                    path.endsWith(".wasm", ignoreCase = true) -> "application/wasm"
                                                     path.endsWith(".html", ignoreCase = true) -> "text/html"
                                                     path.endsWith(".png", ignoreCase = true) -> "image/png"
                                                     path.endsWith(".jpg", ignoreCase = true) || path.endsWith(".jpeg", ignoreCase = true) -> "image/jpeg"
@@ -3120,6 +3127,7 @@ fun AndroidBuildTabContent(
     var tempToken by remember { mutableStateOf(githubToken) }
     var tempBranch by remember { mutableStateOf(githubBranch) }
     var expandArtifacts by remember { mutableStateOf(true) }
+    var isWorkflowsExpanded by remember { mutableStateOf(true) }
 
     val logsScrollState = rememberScrollState()
 
@@ -3468,7 +3476,9 @@ fun AndroidBuildTabContent(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { isWorkflowsExpanded = !isWorkflowsExpanded },
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -3477,10 +3487,10 @@ fun AndroidBuildTabContent(
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Settings,
-                                contentDescription = null,
+                                imageVector = if (isWorkflowsExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                contentDescription = "Toggle Workflows",
                                 tint = Color(0xFFEC4899),
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(18.dp)
                             )
                             Text(
                                 text = "GitHub Workflows (${gitHubWorkflows.size})",
@@ -3514,108 +3524,114 @@ fun AndroidBuildTabContent(
                         }
                     }
 
-                    if (gitHubWorkflows.isEmpty()) {
-                        Text(
-                            text = "No workflows detected. Please configure and poll your repository to load workflows.",
-                            color = Color(0xFF80809B),
-                            fontSize = 11.sp,
-                            modifier = Modifier.padding(vertical = 4.dp)
-                        )
-                    } else {
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            gitHubWorkflows.forEach { wf ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .background(Color(0xFF08090F), RoundedCornerShape(8.dp))
-                                        .border(1.dp, Color(0xFF141722), RoundedCornerShape(8.dp))
-                                        .padding(horizontal = 10.dp, vertical = 8.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = wf.name,
-                                            color = Color.White,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Text(
-                                            text = wf.path,
-                                            color = Color(0xFF80809B),
-                                            fontSize = 10.sp
-                                        )
-                                    }
-
-                                    Spacer(modifier = Modifier.width(8.dp))
-
-                                    // Real-time Status indicator
-                                    if (wf.isTriggering) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                        ) {
-                                            CircularProgressIndicator(
-                                                color = Color(0xFFEC4899),
-                                                modifier = Modifier.size(12.dp),
-                                                strokeWidth = 1.5.dp
+                    AnimatedVisibility(
+                        visible = isWorkflowsExpanded,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut()
+                    ) {
+                        if (gitHubWorkflows.isEmpty()) {
+                            Text(
+                                text = "No workflows detected. Please configure and poll your repository to load workflows.",
+                                color = Color(0xFF80809B),
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                        } else {
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                gitHubWorkflows.forEach { wf ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(Color(0xFF08090F), RoundedCornerShape(8.dp))
+                                            .border(1.dp, Color(0xFF141722), RoundedCornerShape(8.dp))
+                                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = wf.name,
+                                                color = Color.White,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold
                                             )
-                                            Text("Triggering... 🚀", color = Color(0xFFEC4899), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            Text(
+                                                text = wf.path,
+                                                color = Color(0xFF80809B),
+                                                fontSize = 10.sp
+                                            )
                                         }
-                                    } else {
-                                        val status = wf.latestRunStatus.lowercase()
-                                        val conclusion = wf.latestRunConclusion?.lowercase()
 
-                                        when {
-                                            status == "in_progress" || status == "queued" || status == "requested" -> {
-                                                Row(
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                                ) {
-                                                    CircularProgressIndicator(
-                                                        color = Color(0xFFEC4899),
-                                                        modifier = Modifier.size(12.dp),
-                                                        strokeWidth = 1.5.dp
-                                                    )
-                                                    Text("Running... ⚙️", color = Color(0xFFEC4899), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                                }
-                                            }
-                                            status == "completed" && conclusion == "success" -> {
-                                                Row(
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.CheckCircle,
-                                                        contentDescription = "Success",
-                                                        tint = Color(0xFF2ED573),
-                                                        modifier = Modifier.size(14.dp)
-                                                    )
-                                                    Text("Success ✅", color = Color(0xFF2ED573), fontSize = 11.sp)
-                                                }
-                                            }
-                                            status == "completed" && (conclusion == "failure" || conclusion == "cancelled" || conclusion == "timed_out") -> {
-                                                Row(
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Error,
-                                                        contentDescription = "Failed",
-                                                        tint = Color(0xFFEE5253),
-                                                        modifier = Modifier.size(14.dp)
-                                                    )
-                                                    Text("Failed ❌", color = Color(0xFFEE5253), fontSize = 11.sp)
-                                                }
-                                            }
-                                            else -> {
-                                                Text(
-                                                    text = "No recent run",
-                                                    color = Color(0xFF80809B),
-                                                    fontSize = 11.sp
+                                        Spacer(modifier = Modifier.width(8.dp))
+
+                                        // Real-time Status indicator
+                                        if (wf.isTriggering) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                CircularProgressIndicator(
+                                                    color = Color(0xFFEC4899),
+                                                    modifier = Modifier.size(12.dp),
+                                                    strokeWidth = 1.5.dp
                                                 )
+                                                Text("Triggering... 🚀", color = Color(0xFFEC4899), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        } else {
+                                            val status = wf.latestRunStatus.lowercase()
+                                            val conclusion = wf.latestRunConclusion?.lowercase()
+
+                                            when {
+                                                status == "in_progress" || status == "queued" || status == "requested" -> {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                    ) {
+                                                        CircularProgressIndicator(
+                                                            color = Color(0xFFEC4899),
+                                                            modifier = Modifier.size(12.dp),
+                                                            strokeWidth = 1.5.dp
+                                                        )
+                                                        Text("Running... ⚙️", color = Color(0xFFEC4899), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                    }
+                                                }
+                                                status == "completed" && conclusion == "success" -> {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.CheckCircle,
+                                                            contentDescription = "Success",
+                                                            tint = Color(0xFF2ED573),
+                                                            modifier = Modifier.size(14.dp)
+                                                        )
+                                                        Text("Success ✅", color = Color(0xFF2ED573), fontSize = 11.sp)
+                                                    }
+                                                }
+                                                status == "completed" && (conclusion == "failure" || conclusion == "cancelled" || conclusion == "timed_out") -> {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Error,
+                                                            contentDescription = "Failed",
+                                                            tint = Color(0xFFEE5253),
+                                                            modifier = Modifier.size(14.dp)
+                                                        )
+                                                        Text("Failed ❌", color = Color(0xFFEE5253), fontSize = 11.sp)
+                                                    }
+                                                }
+                                                else -> {
+                                                    Text(
+                                                        text = "No recent run",
+                                                        color = Color(0xFF80809B),
+                                                        fontSize = 11.sp
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -3999,7 +4015,7 @@ fun ExplorerPanel(
         LazyColumn(
             modifier = Modifier.weight(1f).fillMaxWidth()
         ) {
-            items(visibleNodes, key = { it.path }) { node ->
+            itemsIndexed(visibleNodes, key = { index, node -> "${node.path}_$index" }) { _, node ->
                 FileNodeItem(
                     node = node,
                     isActive = node.isFile && node.path == activeFile?.path,
