@@ -1566,12 +1566,17 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 // Recursively find index.html in webDistDir
                 var foundIndexHtmlFile: java.io.File? = null
                 fun findIndexHtml(dir: java.io.File) {
-                    dir.listFiles()?.forEach { f ->
-                        if (foundIndexHtmlFile != null) return
+                    val list = dir.listFiles() ?: return
+                    for (f in list) {
                         if (f.isFile && f.name.equals("index.html", ignoreCase = true)) {
                             foundIndexHtmlFile = f
-                        } else if (f.isDirectory) {
+                            return
+                        }
+                    }
+                    for (f in list) {
+                        if (f.isDirectory) {
                             findIndexHtml(f)
+                            if (foundIndexHtmlFile != null) return
                         }
                     }
                 }
@@ -1590,21 +1595,26 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                     showDownloadNotification(100, "Pencode AI Build", "Success: App compiled & ready to install!", true)
                     _currentTab.value = WorkspaceTab.ANDROID_BUILD
                 } else if (webFilesExtracted > 0 || foundIndexHtmlFile != null) {
-                    val htmlContentToUse = indexHtmlContent ?: java.io.File(webDistDir, "index.html").let { if (it.exists()) it.readText() else null }
+                    var effectiveWebDir = webDistDir
+                    if (foundIndexHtmlFile != null) {
+                        effectiveWebDir = foundIndexHtmlFile!!.parentFile ?: webDistDir
+                    }
+                    val htmlContentToUse = indexHtmlContent ?: java.io.File(effectiveWebDir, "index.html").let { if (it.exists()) it.readText() else null }
                     _webArtifactInfo.value = WebArtifactInfo(
                         name = "web-dist.zip",
                         fileCount = webFilesExtracted,
                         zipSizeBytes = zipSizeBytes,
-                        localDir = webDistDir.absolutePath,
+                        localDir = effectiveWebDir.absolutePath,
                         indexHtmlContent = htmlContentToUse
                     )
                     
-                    com.example.api.LocalHttpServer.setWebDistDir(webDistDir.absolutePath)
+                    com.example.api.LocalHttpServer.setWebDistDir(effectiveWebDir.absolutePath)
                     com.example.api.LocalHttpServer.updateFiles(_projectFiles.value)
 
                     _apkDownloadProgress.value = "Success: Web Artifacts (web-dist.zip) downloaded, unzipped & running on Live Web Preview!"
                     showDownloadNotification(100, "Pencode AI Build", "Success: Web Artifacts downloaded & unzipped!", true)
                     _webPreviewRefreshTrigger.value += 1
+                    _currentTab.value = WorkspaceTab.PREVIEW
                 } else {
                     _apkDownloadProgress.value = "Unzip completed but no valid build artifacts found."
                     showDownloadNotification(0, "Pencode AI Build", "Unzip completed but no valid artifacts found.", true)
@@ -2210,7 +2220,22 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun loadProjectDetails(projectName: String) {
-        val files = repository.getFilesForProject(projectName)
+        var files = repository.getFilesForProject(projectName)
+        
+        // Clean up accidental build artifacts from database
+        val unwantedPrefixes = listOf("_next/", ".next/", "node_modules/", "out/", "dist/", "build/", "web-dist/")
+        val toDelete = files.filter { file ->
+            unwantedPrefixes.any { prefix -> 
+                file.path.startsWith(prefix) || file.path.contains("/$prefix") || file.path.endsWith("web-dist.zip")
+            }
+        }
+        if (toDelete.isNotEmpty()) {
+            for (f in toDelete) {
+                repository.deleteFile(projectName, f.path)
+            }
+            files = repository.getFilesForProject(projectName)
+        }
+
         val visibleFiles = files.filter { it.path != "browser_memory.md" && it.path != "memory.md" }
         _projectFiles.value = visibleFiles
         
@@ -4371,6 +4396,66 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                     _chatMessages.value = repository.getChatsForProject(project.name)
                     if (project.templateKey == "vanilla" || project.templateKey == "react" || project.templateKey == "vanilla_three") {
                         _webPreviewRefreshTrigger.value += 1
+                    }
+
+                    // Auto-trigger framework detection and Github push prompting on task completion
+                    try {
+                        val hasFileModifications = _aiActionLogs.value.any { log ->
+                            log.title.contains("File", ignoreCase = true) || 
+                            log.title.contains("Edit", ignoreCase = true) || 
+                            log.title.contains("Write", ignoreCase = true) || 
+                            log.title.contains("Create", ignoreCase = true) ||
+                            log.title.contains("Appended", ignoreCase = true) ||
+                            log.title.contains("Deleted", ignoreCase = true)
+                        }
+                        if (hasFileModifications) {
+                            val projectDir = repository.getProjectDir(project.name)
+                            val pFiles = _projectFiles.value
+                            val isKotlin = java.io.File(projectDir, "build.gradle.kts").exists() || java.io.File(projectDir, "build.gradle").exists() || pFiles.any { it.path.endsWith("build.gradle.kts") || it.path.endsWith("build.gradle") }
+                            val isFlutter = java.io.File(projectDir, "pubspec.yaml").exists() || pFiles.any { it.path.endsWith("pubspec.yaml") }
+                            val isNextJs = java.io.File(projectDir, "next.config.js").exists() || java.io.File(projectDir, "next.config.mjs").exists() || pFiles.any { it.path.contains("next.config") }
+                            val isReactVite = java.io.File(projectDir, "vite.config.js").exists() || java.io.File(projectDir, "vite.config.ts").exists() || pFiles.any { it.path.contains("vite.config") || (it.path.endsWith("package.json") && it.content.contains("vite", ignoreCase = true)) }
+                            val isWebPackage = java.io.File(projectDir, "package.json").exists() || pFiles.any { it.path.endsWith("package.json") }
+
+                            if (isKotlin) {
+                                _detectedFramework.value = "Kotlin/Android"
+                                if (_allowBuildPush.value) {
+                                    acceptGithubPushPrompt()
+                                } else {
+                                    _showGithubPushPrompt.value = true
+                                }
+                            } else if (isFlutter) {
+                                _detectedFramework.value = "Flutter"
+                                if (_allowBuildPush.value) {
+                                    acceptGithubPushPrompt()
+                                } else {
+                                    _showGithubPushPrompt.value = true
+                                }
+                            } else if (isNextJs) {
+                                _detectedFramework.value = "Next.js"
+                                if (_allowBuildPush.value) {
+                                    acceptGithubPushPrompt()
+                                } else {
+                                    _showGithubPushPrompt.value = true
+                                }
+                            } else if (isReactVite) {
+                                _detectedFramework.value = "React Vite"
+                                if (_allowBuildPush.value) {
+                                    acceptGithubPushPrompt()
+                                } else {
+                                    _showGithubPushPrompt.value = true
+                                }
+                            } else if (isWebPackage) {
+                                _detectedFramework.value = "Web App"
+                                if (_allowBuildPush.value) {
+                                    acceptGithubPushPrompt()
+                                } else {
+                                    _showGithubPushPrompt.value = true
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e("VibeViewModel", "Error in post-thinking framework detection", e)
                     }
 
                     try {

@@ -2597,8 +2597,14 @@ fun PreviewTabContent(
     onInspectorElementSelected: (identifier: String, html: String) -> Unit = { _, _ -> },
     webPreviewRefreshTrigger: Int = 0
 ) {
-    val htmlFile = remember(files) { files.find { it.path == "index.html" } }
+    val htmlFile = remember(files) { 
+        files.find { it.path.equals("index.html", ignoreCase = true) || it.path.endsWith("/index.html", ignoreCase = true) } 
+    }
     var refreshTrigger by remember { mutableStateOf(0) }
+    val localWebDir = com.example.api.LocalHttpServer.webDistDir
+    val hasWebDist = remember(localWebDir, refreshTrigger) {
+        !localWebDir.isNullOrBlank() && java.io.File(localWebDir).exists()
+    }
 
     LaunchedEffect(files) {
         com.example.api.LocalHttpServer.updateFiles(files)
@@ -2742,7 +2748,7 @@ fun PreviewTabContent(
                 .background(Color.White)
         ) {
             key(refreshTrigger, files) {
-                if (htmlFile == null) {
+                if (htmlFile == null && !hasWebDist) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -2752,7 +2758,7 @@ fun PreviewTabContent(
                         Text("No HTML file found. Create index.html to preview.", color = Color.Gray)
                     }
                 } else {
-                    var lastLoadedHtml by remember { mutableStateOf(htmlFile.content) }
+                    var lastLoadedHtml by remember { mutableStateOf(htmlFile?.content ?: "") }
                     AndroidView(
                         factory = { context ->
                             WebView(context).apply {
@@ -2965,26 +2971,33 @@ fun PreviewTabContent(
                                     currentOnElementSelected(identifier, outerHTML)
                                 }, "AndroidInspector")
                                 
-                                loadDataWithBaseURL(
-                                    "https://virtual-app/",
-                                    htmlFile.content,
-                                    "text/html",
-                                    "UTF-8",
-                                    null
-                                )
+                                if (hasWebDist) {
+                                    loadUrl("https://virtual-app/")
+                                } else if (htmlFile != null) {
+                                    loadDataWithBaseURL(
+                                        "https://virtual-app/",
+                                        htmlFile.content,
+                                        "text/html",
+                                        "UTF-8",
+                                        null
+                                    )
+                                }
                             }
                         },
                         update = { webView ->
                             webViewRef = webView
-                            if (lastLoadedHtml != htmlFile.content) {
-                                lastLoadedHtml = htmlFile.content
-                                webView.loadDataWithBaseURL(
-                                    "https://virtual-app/",
-                                    htmlFile.content,
-                                    "text/html",
-                                    "UTF-8",
-                                    null
-                                )
+                            if (!hasWebDist && htmlFile != null) {
+                                val currentContent = htmlFile.content
+                                if (lastLoadedHtml != currentContent) {
+                                    lastLoadedHtml = currentContent
+                                    webView.loadDataWithBaseURL(
+                                        "https://virtual-app/",
+                                        currentContent,
+                                        "text/html",
+                                        "UTF-8",
+                                        null
+                                    )
+                                }
                             }
                         },
                         modifier = Modifier.fillMaxSize()
