@@ -99,6 +99,38 @@ object LocalHttpServer {
                 cleanPath = "index.html"
             }
 
+            fun getMimeTypeAndContentType(nameOrPath: String): Pair<String, String> {
+                val clean = nameOrPath.lowercase()
+                val mime = when {
+                    clean.endsWith(".html") || clean.endsWith(".htm") -> "text/html"
+                    clean.endsWith(".css") -> "text/css"
+                    clean.endsWith(".js") || clean.endsWith(".mjs") || clean.endsWith(".cjs") || clean.endsWith(".jsx") || clean.endsWith(".ts") || clean.endsWith(".tsx") -> "application/javascript"
+                    clean.endsWith(".json") -> "application/json"
+                    clean.endsWith(".svg") -> "image/svg+xml"
+                    clean.endsWith(".png") -> "image/png"
+                    clean.endsWith(".jpg") || clean.endsWith(".jpeg") -> "image/jpeg"
+                    clean.endsWith(".gif") -> "image/gif"
+                    clean.endsWith(".webp") -> "image/webp"
+                    clean.endsWith(".ico") -> "image/x-icon"
+                    clean.endsWith(".woff2") -> "font/woff2"
+                    clean.endsWith(".woff") -> "font/woff"
+                    clean.endsWith(".ttf") -> "font/ttf"
+                    clean.endsWith(".otf") -> "font/otf"
+                    clean.endsWith(".eot") -> "application/vnd.ms-fontobject"
+                    clean.endsWith(".wasm") -> "application/wasm"
+                    clean.endsWith(".xml") -> "application/xml"
+                    clean.endsWith(".txt") || clean.endsWith(".md") -> "text/plain"
+                    else -> "application/octet-stream"
+                }
+                val isText = mime.startsWith("text/") || 
+                             mime.contains("javascript") || 
+                             mime.contains("json") || 
+                             mime.contains("xml") ||
+                             mime.contains("svg")
+                val contentType = if (isText) "$mime; charset=utf-8" else mime
+                return Pair(mime, contentType)
+            }
+
             // Check disk files if webDistDir is configured
             var diskFileBytes: ByteArray? = null
             var resolvedPath = cleanPath
@@ -132,26 +164,10 @@ object LocalHttpServer {
             }
 
             if (diskFileBytes != null) {
-                val mimeType = when {
-                    cleanPath.endsWith(".css", ignoreCase = true) || resolvedPath.endsWith(".css", ignoreCase = true) -> "text/css"
-                    cleanPath.endsWith(".js", ignoreCase = true) || cleanPath.endsWith(".mjs", ignoreCase = true) -> "application/javascript"
-                    cleanPath.endsWith(".html", ignoreCase = true) || resolvedPath.endsWith(".html", ignoreCase = true) -> "text/html"
-                    cleanPath.endsWith(".png", ignoreCase = true) -> "image/png"
-                    cleanPath.endsWith(".jpg", ignoreCase = true) || cleanPath.endsWith(".jpeg", ignoreCase = true) -> "image/jpeg"
-                    cleanPath.endsWith(".gif", ignoreCase = true) -> "image/gif"
-                    cleanPath.endsWith(".webp", ignoreCase = true) -> "image/webp"
-                    cleanPath.endsWith(".svg", ignoreCase = true) -> "image/svg+xml"
-                    cleanPath.endsWith(".ico", ignoreCase = true) -> "image/x-icon"
-                    cleanPath.endsWith(".json", ignoreCase = true) -> "application/json"
-                    cleanPath.endsWith(".wasm", ignoreCase = true) -> "application/wasm"
-                    cleanPath.endsWith(".woff2", ignoreCase = true) -> "font/woff2"
-                    cleanPath.endsWith(".woff", ignoreCase = true) -> "font/woff"
-                    cleanPath.endsWith(".ttf", ignoreCase = true) -> "font/ttf"
-                    else -> "text/plain"
-                }
+                val (mimeType, contentType) = getMimeTypeAndContentType(resolvedPath)
 
                 output.write("HTTP/1.1 200 OK\r\n".toByteArray())
-                output.write("Content-Type: $mimeType; charset=utf-8\r\n".toByteArray())
+                output.write("Content-Type: $contentType\r\n".toByteArray())
                 output.write("Content-Length: ${diskFileBytes.size}\r\n".toByteArray())
                 output.write("Access-Control-Allow-Origin: *\r\n".toByteArray())
                 output.write("Connection: close\r\n\r\n".toByteArray())
@@ -171,25 +187,7 @@ object LocalHttpServer {
             }
 
             if (matchingFile != null) {
-                val mimeType = when {
-                    cleanPath.endsWith(".css", ignoreCase = true) -> "text/css"
-                    cleanPath.endsWith(".js", ignoreCase = true) ||
-                    cleanPath.endsWith(".jsx", ignoreCase = true) ||
-                    cleanPath.endsWith(".ts", ignoreCase = true) ||
-                    cleanPath.endsWith(".tsx", ignoreCase = true) ||
-                    cleanPath.endsWith(".mjs", ignoreCase = true) ||
-                    cleanPath.endsWith(".cjs", ignoreCase = true) -> "application/javascript"
-                    cleanPath.endsWith(".html", ignoreCase = true) -> "text/html"
-                    cleanPath.endsWith(".png", ignoreCase = true) -> "image/png"
-                    cleanPath.endsWith(".jpg", ignoreCase = true) || cleanPath.endsWith(".jpeg", ignoreCase = true) -> "image/jpeg"
-                    cleanPath.endsWith(".gif", ignoreCase = true) -> "image/gif"
-                    cleanPath.endsWith(".webp", ignoreCase = true) -> "image/webp"
-                    cleanPath.endsWith(".svg", ignoreCase = true) -> "image/svg+xml"
-                    cleanPath.endsWith(".ico", ignoreCase = true) -> "image/x-icon"
-                    cleanPath.endsWith(".json", ignoreCase = true) -> "application/json"
-                    cleanPath.endsWith(".wasm", ignoreCase = true) -> "application/wasm"
-                    else -> "text/plain"
-                }
+                val (mimeType, contentType) = getMimeTypeAndContentType(matchingFile.path)
 
                 val bodyBytes = if (matchingFile.content.startsWith("data:") && matchingFile.content.contains(";base64,")) {
                     try {
@@ -202,7 +200,7 @@ object LocalHttpServer {
                 }
                 
                 output.write("HTTP/1.1 200 OK\r\n".toByteArray())
-                output.write("Content-Type: $mimeType; charset=utf-8\r\n".toByteArray())
+                output.write("Content-Type: $contentType\r\n".toByteArray())
                 output.write("Content-Length: ${bodyBytes.size}\r\n".toByteArray())
                 output.write("Access-Control-Allow-Origin: *\r\n".toByteArray()) // Allow CORS
                 output.write("Connection: close\r\n\r\n".toByteArray())

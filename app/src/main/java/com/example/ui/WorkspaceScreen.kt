@@ -2861,6 +2861,50 @@ fun PreviewTabContent(
                                             }
                                             val cleanPath = path.removePrefix("/")
                                             
+                                            fun getMimeTypeAndEncoding(nameOrPath: String): Pair<String, String?> {
+                                                val clean = nameOrPath.lowercase()
+                                                val mime = when {
+                                                    clean.endsWith(".html") || clean.endsWith(".htm") -> "text/html"
+                                                    clean.endsWith(".css") -> "text/css"
+                                                    clean.endsWith(".js") || clean.endsWith(".mjs") || clean.endsWith(".cjs") || clean.endsWith(".jsx") || clean.endsWith(".ts") || clean.endsWith(".tsx") -> "application/javascript"
+                                                    clean.endsWith(".json") -> "application/json"
+                                                    clean.endsWith(".svg") -> "image/svg+xml"
+                                                    clean.endsWith(".png") -> "image/png"
+                                                    clean.endsWith(".jpg") || clean.endsWith(".jpeg") -> "image/jpeg"
+                                                    clean.endsWith(".gif") -> "image/gif"
+                                                    clean.endsWith(".webp") -> "image/webp"
+                                                    clean.endsWith(".ico") -> "image/x-icon"
+                                                    clean.endsWith(".woff2") -> "font/woff2"
+                                                    clean.endsWith(".woff") -> "font/woff"
+                                                    clean.endsWith(".ttf") -> "font/ttf"
+                                                    clean.endsWith(".otf") -> "font/otf"
+                                                    clean.endsWith(".eot") -> "application/vnd.ms-fontobject"
+                                                    clean.endsWith(".wasm") -> "application/wasm"
+                                                    clean.endsWith(".xml") -> "application/xml"
+                                                    clean.endsWith(".txt") || clean.endsWith(".md") -> "text/plain"
+                                                    else -> "application/octet-stream"
+                                                }
+                                                val isText = mime.startsWith("text/") || 
+                                                             mime.contains("javascript") || 
+                                                             mime.contains("json") || 
+                                                             mime.contains("xml") ||
+                                                             mime.contains("svg")
+                                                return Pair(mime, if (isText) "UTF-8" else null)
+                                            }
+
+                                            fun createWebResponse(mime: String, enc: String?, stream: java.io.InputStream): WebResourceResponse {
+                                                val resp = WebResourceResponse(mime, enc, stream)
+                                                val headers = HashMap<String, String>()
+                                                headers["Access-Control-Allow-Origin"] = "*"
+                                                headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+                                                headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+                                                headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+                                                headers["Pragma"] = "no-cache"
+                                                headers["Expires"] = "0"
+                                                resp.responseHeaders = headers
+                                                return resp
+                                            }
+
                                             // Check disk web artifact files first
                                             val localDir = com.example.api.LocalHttpServer.webDistDir
                                             if (!localDir.isNullOrBlank()) {
@@ -2882,25 +2926,8 @@ fun PreviewTabContent(
                                                     }
                                                     val targetFile = found
                                                     if (targetFile != null) {
-                                                        val fileName = targetFile.name
-                                                        val mimeType = when {
-                                                            cleanPath.endsWith(".css", ignoreCase = true) || fileName.endsWith(".css", ignoreCase = true) -> "text/css"
-                                                            cleanPath.endsWith(".js", ignoreCase = true) || cleanPath.endsWith(".mjs", ignoreCase = true) -> "application/javascript"
-                                                            cleanPath.endsWith(".html", ignoreCase = true) || fileName.endsWith(".html", ignoreCase = true) -> "text/html"
-                                                            cleanPath.endsWith(".png", ignoreCase = true) -> "image/png"
-                                                            cleanPath.endsWith(".jpg", ignoreCase = true) || cleanPath.endsWith(".jpeg", ignoreCase = true) -> "image/jpeg"
-                                                            cleanPath.endsWith(".gif", ignoreCase = true) -> "image/gif"
-                                                            cleanPath.endsWith(".webp", ignoreCase = true) -> "image/webp"
-                                                            cleanPath.endsWith(".svg", ignoreCase = true) -> "image/svg+xml"
-                                                            cleanPath.endsWith(".ico", ignoreCase = true) -> "image/x-icon"
-                                                            cleanPath.endsWith(".json", ignoreCase = true) -> "application/json"
-                                                            cleanPath.endsWith(".wasm", ignoreCase = true) -> "application/wasm"
-                                                            cleanPath.endsWith(".woff2", ignoreCase = true) -> "font/woff2"
-                                                            cleanPath.endsWith(".woff", ignoreCase = true) -> "font/woff"
-                                                            cleanPath.endsWith(".ttf", ignoreCase = true) -> "font/ttf"
-                                                            else -> "text/plain"
-                                                        }
-                                                        return WebResourceResponse(mimeType, "UTF-8", java.io.FileInputStream(targetFile))
+                                                        val (mimeType, encoding) = getMimeTypeAndEncoding(targetFile.name)
+                                                        return createWebResponse(mimeType, encoding, java.io.FileInputStream(targetFile))
                                                     }
                                                 }
                                             }
@@ -2914,34 +2941,8 @@ fun PreviewTabContent(
                                                 matchingFile = files.find { it.path.equals("index.html", ignoreCase = true) || it.path.endsWith("/index.html", ignoreCase = true) }
                                             }
                                             if (matchingFile != null) {
-                                                val mimeType = when {
-                                                    path.endsWith(".css", ignoreCase = true) -> "text/css"
-                                                    path.endsWith(".js", ignoreCase = true) ||
-                                                    path.endsWith(".jsx", ignoreCase = true) ||
-                                                    path.endsWith(".ts", ignoreCase = true) ||
-                                                    path.endsWith(".tsx", ignoreCase = true) ||
-                                                    path.endsWith(".mjs", ignoreCase = true) ||
-                                                    path.endsWith(".cjs", ignoreCase = true) -> "application/javascript"
-                                                    path.endsWith(".json", ignoreCase = true) -> "application/json"
-                                                    path.endsWith(".wasm", ignoreCase = true) -> "application/wasm"
-                                                    path.endsWith(".html", ignoreCase = true) -> "text/html"
-                                                    path.endsWith(".png", ignoreCase = true) -> "image/png"
-                                                    path.endsWith(".jpg", ignoreCase = true) || path.endsWith(".jpeg", ignoreCase = true) -> "image/jpeg"
-                                                    path.endsWith(".gif", ignoreCase = true) -> "image/gif"
-                                                    path.endsWith(".webp", ignoreCase = true) -> "image/webp"
-                                                    path.endsWith(".svg", ignoreCase = true) -> "image/svg+xml"
-                                                    path.endsWith(".ico", ignoreCase = true) -> "image/x-icon"
-                                                    path.endsWith(".bmp", ignoreCase = true) -> "image/bmp"
-                                                    else -> "text/plain"
-                                                }
-                                                val isBinary = path.endsWith(".png", ignoreCase = true) ||
-                                                        path.endsWith(".jpg", ignoreCase = true) ||
-                                                        path.endsWith(".jpeg", ignoreCase = true) ||
-                                                        path.endsWith(".gif", ignoreCase = true) ||
-                                                        path.endsWith(".webp", ignoreCase = true) ||
-                                                        path.endsWith(".ico", ignoreCase = true) ||
-                                                        path.endsWith(".bmp", ignoreCase = true) ||
-                                                        matchingFile.content.startsWith("data:")
+                                                val (mimeType, encoding) = getMimeTypeAndEncoding(matchingFile.path)
+                                                val isBinary = !encoding.equals("UTF-8") || matchingFile.content.startsWith("data:")
                                                 val stream = if (isBinary) {
                                                     val rawContent = matchingFile.content
                                                     val bytes = if (rawContent.startsWith("data:") && rawContent.contains(";base64,")) {
@@ -2961,7 +2962,7 @@ fun PreviewTabContent(
                                                  } else {
                                                     java.io.ByteArrayInputStream(matchingFile.content.toByteArray())
                                                  }
-                                                 return WebResourceResponse(mimeType, if (mimeType.startsWith("text/")) "UTF-8" else null, stream)
+                                                 return createWebResponse(mimeType, encoding, stream)
                                             }
                                         }
                                         return super.shouldInterceptRequest(view, request)
