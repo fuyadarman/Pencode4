@@ -1702,216 +1702,6 @@ public class MainActivity extends FlutterActivity {
 }"""
                 )
             )
-            "nextjs" -> listOf(
-                ProjectFileEntity(
-                    projectName = projectName,
-                    path = ".github/workflows/android.yml",
-                    content = """name: Next.js Web Build
-
-on:
-  push:
-    branches: [ "main", "master" ]
-
-env:
-  ACTIONS_AUDIT_NODE_VERSION: 'false'
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
-
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-
-    - name: Install Dependencies
-      run: npm install || npm install --legacy-peer-deps
-
-    - name: Build Next.js App (npm run esbuild / build)
-      run: |
-        if grep -q '"esbuild"' package.json; then
-          npm run esbuild
-        else
-          npm run build
-        fi
-
-    - name: Prepare Web Dist Artifact
-      run: |
-        mkdir -p web-dist
-        if [ -d "out" ]; then
-          cp -r out/* web-dist/
-        elif [ -d ".next" ]; then
-          cp -r .next/* web-dist/
-        elif [ -d "dist" ]; then
-          cp -r dist/* web-dist/
-        else
-          cp -r * web-dist/ 2>/dev/null || true
-        fi
-        cd web-dist && zip -r ../web-dist.zip ./* && cd ..
-
-    - name: Upload Web Dist Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: web-dist
-        path: web-dist.zip
-"""
-                ),
-                ProjectFileEntity(
-                    projectName = projectName,
-                    path = ".github/workflows/cleanup.yml",
-                    content = """name: Cleanup Old Workflows and Artifacts
-
-on:
-  schedule:
-    - cron: '0 0 * * *'
-  workflow_dispatch:
-
-jobs:
-  cleanup:
-    name: Delete Runs & Artifacts Older Than 3 Days
-    runs-on: ubuntu-latest
-    permissions:
-      actions: write
-    steps:
-      - name: Clean up Artifacts
-        uses: actions/github-script@v7
-        with:
-          script: |
-            try {
-              const response = await github.rest.actions.listWorkflowRunsForRepo({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                per_page: 30
-              });
-              const runs = response.data.workflow_runs;
-              const completedRuns = runs.filter(run => run.status === 'completed');
-              for (let i = 5; i < completedRuns.length; i++) {
-                await github.rest.actions.deleteWorkflowRun({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  run_id: completedRuns[i].id
-                });
-              }
-            } catch (error) {
-              core.setFailed(`Workflow run cleanup failed: ${"$"}{error.message}`);
-            }
-"""
-                ),
-                ProjectFileEntity(
-                    projectName = projectName,
-                    path = "package.json",
-                    content = """{
-  "name": "nextjs-app",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "esbuild": "next build",
-    "start": "next start"
-  },
-  "dependencies": {
-    "next": "^14.1.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
-  }
-}"""
-                ),
-                ProjectFileEntity(
-                    projectName = projectName,
-                    path = "next.config.js",
-                    content = """/** @type {import('next').NextConfig} */
-const nextConfig = {
-  output: 'export',
-  images: {
-    unoptimized: true
-  }
-}
-
-module.exports = nextConfig"""
-                ),
-                ProjectFileEntity(
-                    projectName = projectName,
-                    path = "index.html",
-                    content = """<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Next.js Web Preview</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-</head>
-<body class="bg-slate-950 text-white min-h-screen flex flex-col items-center justify-center p-6">
-    <div id="root"></div>
-    <script type="text/babel">
-        function App() {
-            const [count, setCount] = React.useState(0);
-            return (
-                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 max-w-md w-full text-center shadow-2xl">
-                    <div className="w-16 h-16 bg-black border border-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <span className="text-2xl font-black text-white">N</span>
-                    </div>
-                    <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-white via-slate-300 to-slate-500 bg-clip-text text-transparent">Next.js App</h1>
-                    <p className="text-slate-400 text-sm mb-6">Server & Static Export ready with React & Tailwind CSS.</p>
-                    <div className="flex items-center justify-center gap-4 mb-6">
-                        <button onClick={() => setCount(c => c - 1)} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-lg font-bold transition">-</button>
-                        <span className="text-2xl font-mono text-cyan-400 font-bold px-4">{count}</span>
-                        <button onClick={() => setCount(c => c + 1)} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-lg font-bold transition">+</button>
-                    </div>
-                    <p className="text-xs text-slate-500">GitHub Action: npm run esbuild & Zip Export Enabled</p>
-                </div>
-            );
-        }
-        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
-    </script>
-</body>
-</html>"""
-                ),
-                ProjectFileEntity(
-                    projectName = projectName,
-                    path = "src/app/layout.js",
-                    content = """export const metadata = {
-  title: 'Next.js App',
-  description: 'Next.js App with Static Export',
-}
-
-export default function RootLayout({ children }) {
-  return (
-    <html lang="en">
-      <body>{children}</body>
-    </html>
-  )
-}"""
-                ),
-                ProjectFileEntity(
-                    projectName = projectName,
-                    path = "src/app/page.js",
-                    content = """'use client';
-
-import { useState } from 'react';
-
-export default function Home() {
-  const [count, setCount] = useState(0);
-  return (
-    <main className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 max-w-md w-full text-center shadow-2xl">
-        <h1 className="text-3xl font-bold mb-2">Next.js App</h1>
-        <p className="text-slate-400 text-sm mb-6">Count: {count}</p>
-        <button onClick={() => setCount(c => c + 1)} className="px-4 py-2 bg-cyan-600 text-white rounded-lg font-bold">
-          Increment
-        </button>
-      </div>
-    </main>
-  );
-}"""
-                )
-            )
             "react_vite" -> listOf(
                 ProjectFileEntity(
                     projectName = projectName,
@@ -2030,6 +1820,9 @@ jobs:
     "@types/react": "^18.2.55",
     "@types/react-dom": "^18.2.19",
     "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.17",
+    "postcss": "^8.4.35",
+    "tailwindcss": "^3.4.1",
     "vite": "^5.1.0"
   }
 }"""
@@ -2046,6 +1839,31 @@ export default defineConfig({
                 ),
                 ProjectFileEntity(
                     projectName = projectName,
+                    path = "tailwind.config.js",
+                    content = """/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  theme: {
+    extend: {},
+  },
+  plugins: [],
+}"""
+                ),
+                ProjectFileEntity(
+                    projectName = projectName,
+                    path = "postcss.config.js",
+                    content = """export default {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}"""
+                ),
+                ProjectFileEntity(
+                    projectName = projectName,
                     path = "index.html",
                     content = """<!DOCTYPE html>
 <html lang="en">
@@ -2053,36 +1871,33 @@ export default defineConfig({
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>React Vite App</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
-<body class="bg-slate-950 text-white min-h-screen flex flex-col items-center justify-center p-6">
+<body class="bg-slate-950 text-white min-h-screen">
     <div id="root"></div>
-    <script type="text/babel">
-        function App() {
-            const [count, setCount] = React.useState(0);
-            return (
-                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 max-w-md w-full text-center shadow-2xl">
-                    <div className="w-16 h-16 bg-purple-600/20 border border-purple-500/40 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <span className="text-2xl font-black text-purple-400">⚡</span>
-                    </div>
-                    <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent">React + Vite</h1>
-                    <p className="text-slate-400 text-sm mb-6">Fast, Modern Web Application with Tailwind & Vite.</p>
-                    <div className="flex items-center justify-center gap-4 mb-6">
-                        <button onClick={() => setCount(c => c - 1)} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-lg font-bold transition">-</button>
-                        <span className="text-2xl font-mono text-purple-400 font-bold px-4">{count}</span>
-                        <button onClick={() => setCount(c => c + 1)} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-lg font-bold transition">+</button>
-                    </div>
-                    <p className="text-xs text-slate-500">GitHub Action: npm run esbuild & Web Dist Artifact Enabled</p>
-                </div>
-            );
-        }
-        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
-    </script>
+    <script type="module" src="/src/main.jsx"></script>
 </body>
 </html>"""
+                ),
+                ProjectFileEntity(
+                    projectName = projectName,
+                    path = "src/main.jsx",
+                    content = """import React from 'react'
+import ReactDOM from 'react-dom/client'
+import App from './App.jsx'
+import './index.css'
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+)"""
+                ),
+                ProjectFileEntity(
+                    projectName = projectName,
+                    path = "src/index.css",
+                    content = """@tailwind base;
+@tailwind components;
+@tailwind utilities;"""
                 ),
                 ProjectFileEntity(
                     projectName = projectName,
@@ -2093,10 +1908,19 @@ export default function App() {
   const [count, setCount] = useState(0)
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6">
-      <h1 className="text-3xl font-bold mb-4">React + Vite</h1>
-      <button onClick={() => setCount(count + 1)} className="px-4 py-2 bg-purple-600 text-white rounded-lg">
-        Count: {count}
-      </button>
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 max-w-md w-full text-center shadow-2xl">
+        <div className="w-16 h-16 bg-purple-600/20 border border-purple-500/40 rounded-full flex items-center justify-center mx-auto mb-4">
+          <span className="text-2xl font-black text-purple-400">⚡</span>
+        </div>
+        <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent">React + Vite</h1>
+        <p className="text-slate-400 text-sm mb-6">Fast, Modern Web Application with Tailwind & Vite.</p>
+        <div className="flex items-center justify-center gap-4 mb-6">
+          <button onClick={() => setCount(c => c - 1)} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-lg font-bold transition">-</button>
+          <span className="text-2xl font-mono text-purple-400 font-bold px-4">{count}</span>
+          <button onClick={() => setCount(c => c + 1)} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-lg font-bold transition">+</button>
+        </div>
+        <p className="text-xs text-slate-500">GitHub Action: npm run esbuild & Web Dist Artifact Enabled</p>
+      </div>
     </div>
   )
 }"""

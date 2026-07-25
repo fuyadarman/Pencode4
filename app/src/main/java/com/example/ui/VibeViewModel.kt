@@ -2237,6 +2237,138 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             files = repository.getFilesForProject(projectName)
         }
 
+        // Auto-migrate old/broken react_vite projects to a modern Vite+React+Tailwind structure
+        val hasPackageJson = files.any { it.path == "package.json" }
+        val hasIndexHtml = files.any { it.path == "index.html" }
+        val hasMainJsx = files.any { it.path == "src/main.jsx" }
+        if (hasPackageJson && hasIndexHtml && !hasMainJsx) {
+            val packageJsonFile = files.find { it.path == "package.json" }
+            val indexHtmlFile = files.find { it.path == "index.html" }
+            if (packageJsonFile != null && indexHtmlFile != null &&
+                packageJsonFile.content.contains("react-vite-app") &&
+                indexHtmlFile.content.contains("text/babel")
+            ) {
+                android.util.Log.d("VibeViewModel", "Migrating old react_vite project to standard Vite+React+Tailwind")
+                
+                // 1. Update package.json
+                val updatedPackageJson = """{
+  "name": "react-vite-app",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "esbuild": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.55",
+    "@types/react-dom": "^18.2.19",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.17",
+    "postcss": "^8.4.35",
+    "tailwindcss": "^3.4.1",
+    "vite": "^5.1.0"
+  }
+}"""
+                repository.saveFile(projectName, "package.json", updatedPackageJson)
+
+                // 2. Update index.html
+                val updatedIndexHtml = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>React Vite App</title>
+</head>
+<body class="bg-slate-950 text-white min-h-screen">
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+</body>
+</html>"""
+                repository.saveFile(projectName, "index.html", updatedIndexHtml)
+
+                // 3. Create tailwind.config.js
+                val tailwindConfig = """/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  theme: {
+    extend: {},
+  },
+  plugins: [],
+}"""
+                repository.saveFile(projectName, "tailwind.config.js", tailwindConfig)
+
+                // 4. Create postcss.config.js
+                val postcssConfig = """export default {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}"""
+                repository.saveFile(projectName, "postcss.config.js", postcssConfig)
+
+                // 5. Create src/main.jsx
+                val mainJsx = """import React from 'react'
+import ReactDOM from 'react-dom/client'
+import App from './App.jsx'
+import './index.css'
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+)"""
+                repository.saveFile(projectName, "src/main.jsx", mainJsx)
+
+                // 6. Create src/index.css
+                val indexCss = """@tailwind base;
+@tailwind components;
+@tailwind utilities;"""
+                repository.saveFile(projectName, "src/index.css", indexCss)
+
+                // 7. Create/Verify src/App.jsx if missing or having default content
+                val appJsxFile = files.find { it.path == "src/App.jsx" }
+                if (appJsxFile == null || appJsxFile.content.trim().isEmpty()) {
+                    val defaultAppJsx = """import { useState } from 'react'
+
+export default function App() {
+  const [count, setCount] = useState(0)
+  return (
+    <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 max-w-md w-full text-center shadow-2xl">
+        <div className="w-16 h-16 bg-purple-600/20 border border-purple-500/40 rounded-full flex items-center justify-center mx-auto mb-4">
+          <span className="text-2xl font-black text-purple-400">⚡</span>
+        </div>
+        <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent">React + Vite</h1>
+        <p className="text-slate-400 text-sm mb-6">Fast, Modern Web Application with Tailwind & Vite.</p>
+        <div className="flex items-center justify-center gap-4 mb-6">
+          <button onClick={() => setCount(c => c - 1)} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-lg font-bold transition">-</button>
+          <span className="text-2xl font-mono text-purple-400 font-bold px-4">{count}</span>
+          <button onClick={() => setCount(c => c + 1)} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-lg font-bold transition">+</button>
+        </div>
+        <p className="text-xs text-slate-500">GitHub Action: npm run esbuild & Web Dist Artifact Enabled</p>
+      </div>
+    </div>
+  )
+}"""
+                    repository.saveFile(projectName, "src/App.jsx", defaultAppJsx)
+                }
+
+                // Sync and reload project files
+                repository.syncDatabaseToStorage(projectName)
+                files = repository.getFilesForProject(projectName)
+            }
+        }
+
         val visibleFiles = files.filter { it.path != "browser_memory.md" && it.path != "memory.md" }
         _projectFiles.value = visibleFiles
         
