@@ -1557,6 +1557,56 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                     // Switch to BUILD tab automatically
                     _currentTab.value = WorkspaceTab.ANDROID_BUILD
                 } else if (webFilesExtracted > 0) {
+                    val currentProjectName = _currentProject.value?.name ?: ""
+                    
+                    if (currentProjectName.isNotBlank()) {
+                        try {
+                            var effectiveRootDir = webDistDir
+                            val subFolders = webDistDir.listFiles()?.filter { it.isDirectory } ?: emptyList()
+                            if (!java.io.File(webDistDir, "index.html").exists() && subFolders.isNotEmpty()) {
+                                val foundFolder = subFolders.find { java.io.File(it, "index.html").exists() } ?: subFolders[0]
+                                effectiveRootDir = foundFolder
+                            }
+                            
+                            val allFilesToSave = mutableListOf<java.io.File>()
+                            fun collectFiles(dir: java.io.File) {
+                                dir.listFiles()?.forEach { f ->
+                                    if (f.isDirectory) {
+                                        collectFiles(f)
+                                    } else if (f.isFile && !f.name.endsWith(".zip")) {
+                                        allFilesToSave.add(f)
+                                    }
+                                }
+                            }
+                            collectFiles(effectiveRootDir)
+
+                            for (f in allFilesToSave) {
+                                val relPath = f.relativeTo(effectiveRootDir).path.replace('\\', '/')
+                                val isBinary = f.name.endsWith(".png", true) ||
+                                        f.name.endsWith(".jpg", true) ||
+                                        f.name.endsWith(".jpeg", true) ||
+                                        f.name.endsWith(".gif", true) ||
+                                        f.name.endsWith(".webp", true) ||
+                                        f.name.endsWith(".ico", true) ||
+                                        f.name.endsWith(".wasm", true) ||
+                                        f.name.endsWith(".ttf", true) ||
+                                        f.name.endsWith(".woff", true) ||
+                                        f.name.endsWith(".woff2", true)
+                                val content = if (isBinary) {
+                                    val bytes = f.readBytes()
+                                    "data:application/octet-stream;base64," + android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                                } else {
+                                    f.readText(Charsets.UTF_8)
+                                }
+                                repository.saveFile(currentProjectName, relPath, content)
+                            }
+
+                            loadProjectDetails(currentProjectName)
+                        } catch (e: Exception) {
+                            Log.e("VibeViewModel", "Error importing web artifact files: ${e.message}")
+                        }
+                    }
+
                     val htmlContentToUse = indexHtmlContent ?: java.io.File(webDistDir, "index.html").let { if (it.exists()) it.readText() else null }
                     _webArtifactInfo.value = WebArtifactInfo(
                         name = "web-dist.zip",
@@ -1566,12 +1616,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                         indexHtmlContent = htmlContentToUse
                     )
                     
-                    if (!htmlContentToUse.isNullOrBlank()) {
-                        val currentProjectName = _currentProject.value?.name ?: ""
-                        if (currentProjectName.isNotBlank()) {
-                            repository.saveFile(currentProjectName, "index.html", htmlContentToUse)
-                        }
-                    }
+                    com.example.api.LocalHttpServer.updateFiles(_projectFiles.value)
 
                     _apkDownloadProgress.value = "Success: Web Artifacts (web-dist.zip) downloaded, unzipped & running on Live Web Preview!"
                     showDownloadNotification(100, "Pencode AI Build", "Success: Web Artifacts downloaded & unzipped!", true)

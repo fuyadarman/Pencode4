@@ -1848,8 +1848,26 @@ module.exports = nextConfig"""
                 ),
                 ProjectFileEntity(
                     projectName = projectName,
+                    path = "src/app/layout.js",
+                    content = """export const metadata = {
+  title: 'Next.js App',
+  description: 'Next.js App with Static Export',
+}
+
+export default function RootLayout({ children }) {
+  return (
+    <html lang="en">
+      <body>{children}</body>
+    </html>
+  )
+}"""
+                ),
+                ProjectFileEntity(
+                    projectName = projectName,
                     path = "src/app/page.js",
-                    content = """import { useState } from 'react';
+                    content = """'use client';
+
+import { useState } from 'react';
 
 export default function Home() {
   const [count, setCount] = useState(0);

@@ -2853,7 +2853,15 @@ fun PreviewTabContent(
                                             } catch (e: Exception) {
                                                 // ignore
                                             }
-                                            val matchingFile = files.find { it.path.equals(path, ignoreCase = true) }
+                                            val cleanPath = path.removePrefix("/")
+                                            var matchingFile = files.find { 
+                                                it.path.equals(path, ignoreCase = true) || 
+                                                it.path.removePrefix("/").equals(cleanPath, ignoreCase = true) ||
+                                                it.path.endsWith("/$cleanPath", ignoreCase = true)
+                                            }
+                                            if (matchingFile == null && (cleanPath.isEmpty() || !cleanPath.contains("."))) {
+                                                matchingFile = files.find { it.path.equals("index.html", ignoreCase = true) || it.path.endsWith("/index.html", ignoreCase = true) }
+                                            }
                                             if (matchingFile != null) {
                                                 val mimeType = when {
                                                     path.endsWith(".css", ignoreCase = true) -> "text/css"

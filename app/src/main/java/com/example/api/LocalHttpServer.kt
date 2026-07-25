@@ -93,9 +93,13 @@ object LocalHttpServer {
             }
 
             // Find matching file
-            val matchingFile = activeFiles.find { 
+            var matchingFile = activeFiles.find { 
                 it.path.equals(cleanPath, ignoreCase = true) || 
-                it.path.removePrefix("/").equals(cleanPath, ignoreCase = true)
+                it.path.removePrefix("/").equals(cleanPath, ignoreCase = true) ||
+                it.path.endsWith("/$cleanPath", ignoreCase = true)
+            }
+            if (matchingFile == null && !cleanPath.contains(".")) {
+                matchingFile = activeFiles.find { it.path.equals("index.html", ignoreCase = true) || it.path.endsWith("/index.html", ignoreCase = true) }
             }
 
             if (matchingFile != null) {
@@ -119,7 +123,15 @@ object LocalHttpServer {
                     else -> "text/plain"
                 }
 
-                val bodyBytes = matchingFile.content.toByteArray(Charsets.UTF_8)
+                val bodyBytes = if (matchingFile.content.startsWith("data:") && matchingFile.content.contains(";base64,")) {
+                    try {
+                        android.util.Base64.decode(matchingFile.content.substringAfter(";base64,"), android.util.Base64.DEFAULT)
+                    } catch (e: Exception) {
+                        matchingFile.content.toByteArray(Charsets.UTF_8)
+                    }
+                } else {
+                    matchingFile.content.toByteArray(Charsets.UTF_8)
+                }
                 
                 output.write("HTTP/1.1 200 OK\r\n".toByteArray())
                 output.write("Content-Type: $mimeType; charset=utf-8\r\n".toByteArray())
