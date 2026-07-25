@@ -1510,103 +1510,86 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 zipIn.close()
 
-                val innerWebZip = java.io.File(webDistDir, "web-dist.zip")
-                if (innerWebZip.exists()) {
-                    try {
-                        val innerZipIn = java.util.zip.ZipInputStream(java.io.BufferedInputStream(java.io.FileInputStream(innerWebZip)))
-                        var innerEntry = innerZipIn.nextEntry
-                        while (innerEntry != null) {
-                            if (!innerEntry.isDirectory) {
-                                val destFile = java.io.File(webDistDir, innerEntry.name)
-                                destFile.parentFile?.mkdirs()
-                                val outStream = java.io.BufferedOutputStream(java.io.FileOutputStream(destFile))
-                                val outBuffer = ByteArray(131072)
-                                var len = innerZipIn.read(outBuffer)
-                                while (len > 0) {
-                                    outStream.write(outBuffer, 0, len)
-                                    len = innerZipIn.read(outBuffer)
-                                }
-                                outStream.close()
-                                webFilesExtracted++
-                                if (destFile.name == "index.html") {
-                                    try {
-                                        indexHtmlContent = destFile.readText()
-                                    } catch (e: Exception) {
-                                        // ignore
-                                    }
-                                }
-                            }
-                            innerZipIn.closeEntry()
-                            innerEntry = innerZipIn.nextEntry
+                zipIn.close()
+
+                // Recursive zip extraction to unpack any nested zip files (e.g. inner web-dist.zip)
+                fun extractZipsInDir(targetDir: java.io.File, depth: Int = 0) {
+                    if (depth > 5) return
+                    val zips = mutableListOf<java.io.File>()
+                    fun findZips(d: java.io.File) {
+                        d.listFiles()?.forEach { f ->
+                            if (f.isDirectory) findZips(f)
+                            else if (f.isFile && f.name.endsWith(".zip", ignoreCase = true)) zips.add(f)
                         }
-                        innerZipIn.close()
-                    } catch (e: Exception) {
-                        Log.e("VibeViewModel", "Error extracting inner web-dist.zip: ${e.message}")
                     }
+                    findZips(targetDir)
+                    if (zips.isEmpty()) return
+                    for (zipFile in zips) {
+                        try {
+                            val destDir = zipFile.parentFile ?: targetDir
+                            val zIn = java.util.zip.ZipInputStream(java.io.BufferedInputStream(java.io.FileInputStream(zipFile)))
+                            var zEntry = zIn.nextEntry
+                            while (zEntry != null) {
+                                if (!zEntry.isDirectory) {
+                                    val destFile = java.io.File(destDir, zEntry.name)
+                                    destFile.parentFile?.mkdirs()
+                                    val outStream = java.io.BufferedOutputStream(java.io.FileOutputStream(destFile))
+                                    val buffer = ByteArray(131072)
+                                    var len = zIn.read(buffer)
+                                    while (len > 0) {
+                                        outStream.write(buffer, 0, len)
+                                        len = zIn.read(buffer)
+                                    }
+                                    outStream.close()
+                                    webFilesExtracted++
+                                }
+                                zIn.closeEntry()
+                                zEntry = zIn.nextEntry
+                            }
+                            zIn.close()
+                            zipFile.delete()
+                        } catch (e: Exception) {
+                            Log.e("VibeViewModel", "Error extracting zip ${zipFile.name}: ${e.message}")
+                            zipFile.delete()
+                        }
+                    }
+                    extractZipsInDir(targetDir, depth + 1)
                 }
+
+                extractZipsInDir(webDistDir)
 
                 val zipSizeBytes = tempZipFile.length()
                 if (tempZipFile.exists()) {
                     tempZipFile.delete()
+                }
+
+                // Recursively find index.html in webDistDir
+                var foundIndexHtmlFile: java.io.File? = null
+                fun findIndexHtml(dir: java.io.File) {
+                    dir.listFiles()?.forEach { f ->
+                        if (foundIndexHtmlFile != null) return
+                        if (f.isFile && f.name.equals("index.html", ignoreCase = true)) {
+                            foundIndexHtmlFile = f
+                        } else if (f.isDirectory) {
+                            findIndexHtml(f)
+                        }
+                    }
+                }
+                findIndexHtml(webDistDir)
+                if (foundIndexHtmlFile != null) {
+                    try {
+                        indexHtmlContent = foundIndexHtmlFile!!.readText()
+                    } catch (e: Exception) {
+                        // ignore
+                    }
                 }
                 
                 if (apkFound && outputApkFile.exists() && outputApkFile.length() > 0) {
                     _localApkPath.value = outputApkFile.absolutePath
                     _apkDownloadProgress.value = "Success: App compiled & ready to install!"
                     showDownloadNotification(100, "Pencode AI Build", "Success: App compiled & ready to install!", true)
-                    // Switch to BUILD tab automatically
                     _currentTab.value = WorkspaceTab.ANDROID_BUILD
-                } else if (webFilesExtracted > 0) {
-                    val currentProjectName = _currentProject.value?.name ?: ""
-                    
-                    if (currentProjectName.isNotBlank()) {
-                        try {
-                            var effectiveRootDir = webDistDir
-                            val subFolders = webDistDir.listFiles()?.filter { it.isDirectory } ?: emptyList()
-                            if (!java.io.File(webDistDir, "index.html").exists() && subFolders.isNotEmpty()) {
-                                val foundFolder = subFolders.find { java.io.File(it, "index.html").exists() } ?: subFolders[0]
-                                effectiveRootDir = foundFolder
-                            }
-                            
-                            val allFilesToSave = mutableListOf<java.io.File>()
-                            fun collectFiles(dir: java.io.File) {
-                                dir.listFiles()?.forEach { f ->
-                                    if (f.isDirectory) {
-                                        collectFiles(f)
-                                    } else if (f.isFile && !f.name.endsWith(".zip")) {
-                                        allFilesToSave.add(f)
-                                    }
-                                }
-                            }
-                            collectFiles(effectiveRootDir)
-
-                            for (f in allFilesToSave) {
-                                val relPath = f.relativeTo(effectiveRootDir).path.replace('\\', '/')
-                                val isBinary = f.name.endsWith(".png", true) ||
-                                        f.name.endsWith(".jpg", true) ||
-                                        f.name.endsWith(".jpeg", true) ||
-                                        f.name.endsWith(".gif", true) ||
-                                        f.name.endsWith(".webp", true) ||
-                                        f.name.endsWith(".ico", true) ||
-                                        f.name.endsWith(".wasm", true) ||
-                                        f.name.endsWith(".ttf", true) ||
-                                        f.name.endsWith(".woff", true) ||
-                                        f.name.endsWith(".woff2", true)
-                                val content = if (isBinary) {
-                                    val bytes = f.readBytes()
-                                    "data:application/octet-stream;base64," + android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
-                                } else {
-                                    f.readText(Charsets.UTF_8)
-                                }
-                                repository.saveFile(currentProjectName, relPath, content)
-                            }
-
-                            loadProjectDetails(currentProjectName)
-                        } catch (e: Exception) {
-                            Log.e("VibeViewModel", "Error importing web artifact files: ${e.message}")
-                        }
-                    }
-
+                } else if (webFilesExtracted > 0 || foundIndexHtmlFile != null) {
                     val htmlContentToUse = indexHtmlContent ?: java.io.File(webDistDir, "index.html").let { if (it.exists()) it.readText() else null }
                     _webArtifactInfo.value = WebArtifactInfo(
                         name = "web-dist.zip",
@@ -1616,6 +1599,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                         indexHtmlContent = htmlContentToUse
                     )
                     
+                    com.example.api.LocalHttpServer.setWebDistDir(webDistDir.absolutePath)
                     com.example.api.LocalHttpServer.updateFiles(_projectFiles.value)
 
                     _apkDownloadProgress.value = "Success: Web Artifacts (web-dist.zip) downloaded, unzipped & running on Live Web Preview!"
@@ -3209,48 +3193,47 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
 
                                 // Detect framework and ask to build on Github
                                 val projectDir = repository.getProjectDir(project.name)
-                                val isKotlin = java.io.File(projectDir, "build.gradle.kts").exists() || java.io.File(projectDir, "build.gradle").exists()
-                                val isFlutter = java.io.File(projectDir, "pubspec.yaml").exists()
-                                val isNextJs = java.io.File(projectDir, "next.config.js").exists() || java.io.File(projectDir, "next.config.mjs").exists()
-                                val isReactVite = java.io.File(projectDir, "vite.config.js").exists() || java.io.File(projectDir, "vite.config.ts").exists()
-                                val isWebPackage = java.io.File(projectDir, "package.json").exists()
+                                val pFiles = _projectFiles.value
+                                val isKotlin = java.io.File(projectDir, "build.gradle.kts").exists() || java.io.File(projectDir, "build.gradle").exists() || pFiles.any { it.path.endsWith("build.gradle.kts") || it.path.endsWith("build.gradle") }
+                                val isFlutter = java.io.File(projectDir, "pubspec.yaml").exists() || pFiles.any { it.path.endsWith("pubspec.yaml") }
+                                val isNextJs = java.io.File(projectDir, "next.config.js").exists() || java.io.File(projectDir, "next.config.mjs").exists() || pFiles.any { it.path.contains("next.config") }
+                                val isReactVite = java.io.File(projectDir, "vite.config.js").exists() || java.io.File(projectDir, "vite.config.ts").exists() || pFiles.any { it.path.contains("vite.config") || (it.path.endsWith("package.json") && it.content.contains("vite", ignoreCase = true)) }
+                                val isWebPackage = java.io.File(projectDir, "package.json").exists() || pFiles.any { it.path.endsWith("package.json") }
 
-                                if (filesModifiedThisPrompt) {
-                                    if (isKotlin) {
-                                        _detectedFramework.value = "Kotlin/Android"
-                                        if (_allowBuildPush.value) {
-                                            acceptGithubPushPrompt()
-                                        } else {
-                                            _showGithubPushPrompt.value = true
-                                        }
-                                    } else if (isFlutter) {
-                                        _detectedFramework.value = "Flutter"
-                                        if (_allowBuildPush.value) {
-                                            acceptGithubPushPrompt()
-                                        } else {
-                                            _showGithubPushPrompt.value = true
-                                        }
-                                    } else if (isNextJs) {
-                                        _detectedFramework.value = "Next.js"
-                                        if (_allowBuildPush.value) {
-                                            acceptGithubPushPrompt()
-                                        } else {
-                                            _showGithubPushPrompt.value = true
-                                        }
-                                    } else if (isReactVite) {
-                                        _detectedFramework.value = "React Vite"
-                                        if (_allowBuildPush.value) {
-                                            acceptGithubPushPrompt()
-                                        } else {
-                                            _showGithubPushPrompt.value = true
-                                        }
-                                    } else if (isWebPackage) {
-                                        _detectedFramework.value = "Web App"
-                                        if (_allowBuildPush.value) {
-                                            acceptGithubPushPrompt()
-                                        } else {
-                                            _showGithubPushPrompt.value = true
-                                        }
+                                if (isKotlin) {
+                                    _detectedFramework.value = "Kotlin/Android"
+                                    if (_allowBuildPush.value) {
+                                        acceptGithubPushPrompt()
+                                    } else {
+                                        _showGithubPushPrompt.value = true
+                                    }
+                                } else if (isFlutter) {
+                                    _detectedFramework.value = "Flutter"
+                                    if (_allowBuildPush.value) {
+                                        acceptGithubPushPrompt()
+                                    } else {
+                                        _showGithubPushPrompt.value = true
+                                    }
+                                } else if (isNextJs) {
+                                    _detectedFramework.value = "Next.js"
+                                    if (_allowBuildPush.value) {
+                                        acceptGithubPushPrompt()
+                                    } else {
+                                        _showGithubPushPrompt.value = true
+                                    }
+                                } else if (isReactVite) {
+                                    _detectedFramework.value = "React Vite"
+                                    if (_allowBuildPush.value) {
+                                        acceptGithubPushPrompt()
+                                    } else {
+                                        _showGithubPushPrompt.value = true
+                                    }
+                                } else if (isWebPackage) {
+                                    _detectedFramework.value = "Web App"
+                                    if (_allowBuildPush.value) {
+                                        acceptGithubPushPrompt()
+                                    } else {
+                                        _showGithubPushPrompt.value = true
                                     }
                                 }
                             }

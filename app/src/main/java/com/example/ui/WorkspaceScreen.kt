@@ -2854,6 +2854,51 @@ fun PreviewTabContent(
                                                 // ignore
                                             }
                                             val cleanPath = path.removePrefix("/")
+                                            
+                                            // Check disk web artifact files first
+                                            val localDir = com.example.api.LocalHttpServer.webDistDir
+                                            if (!localDir.isNullOrBlank()) {
+                                                val dir = java.io.File(localDir)
+                                                if (dir.exists()) {
+                                                    val candidateFiles = listOf(
+                                                        java.io.File(dir, cleanPath),
+                                                        java.io.File(dir, "out/$cleanPath"),
+                                                        java.io.File(dir, "dist/$cleanPath"),
+                                                        java.io.File(dir, "build/$cleanPath")
+                                                    )
+                                                    var found: java.io.File? = candidateFiles.find { it.exists() && it.isFile }
+                                                    if (found == null && (cleanPath.isEmpty() || !cleanPath.contains("."))) {
+                                                        found = listOf(
+                                                            java.io.File(dir, "index.html"),
+                                                            java.io.File(dir, "out/index.html"),
+                                                            java.io.File(dir, "dist/index.html")
+                                                        ).find { it.exists() && it.isFile }
+                                                    }
+                                                    val targetFile = found
+                                                    if (targetFile != null) {
+                                                        val fileName = targetFile.name
+                                                        val mimeType = when {
+                                                            cleanPath.endsWith(".css", ignoreCase = true) || fileName.endsWith(".css", ignoreCase = true) -> "text/css"
+                                                            cleanPath.endsWith(".js", ignoreCase = true) || cleanPath.endsWith(".mjs", ignoreCase = true) -> "application/javascript"
+                                                            cleanPath.endsWith(".html", ignoreCase = true) || fileName.endsWith(".html", ignoreCase = true) -> "text/html"
+                                                            cleanPath.endsWith(".png", ignoreCase = true) -> "image/png"
+                                                            cleanPath.endsWith(".jpg", ignoreCase = true) || cleanPath.endsWith(".jpeg", ignoreCase = true) -> "image/jpeg"
+                                                            cleanPath.endsWith(".gif", ignoreCase = true) -> "image/gif"
+                                                            cleanPath.endsWith(".webp", ignoreCase = true) -> "image/webp"
+                                                            cleanPath.endsWith(".svg", ignoreCase = true) -> "image/svg+xml"
+                                                            cleanPath.endsWith(".ico", ignoreCase = true) -> "image/x-icon"
+                                                            cleanPath.endsWith(".json", ignoreCase = true) -> "application/json"
+                                                            cleanPath.endsWith(".wasm", ignoreCase = true) -> "application/wasm"
+                                                            cleanPath.endsWith(".woff2", ignoreCase = true) -> "font/woff2"
+                                                            cleanPath.endsWith(".woff", ignoreCase = true) -> "font/woff"
+                                                            cleanPath.endsWith(".ttf", ignoreCase = true) -> "font/ttf"
+                                                            else -> "text/plain"
+                                                        }
+                                                        return WebResourceResponse(mimeType, "UTF-8", java.io.FileInputStream(targetFile))
+                                                    }
+                                                }
+                                            }
+
                                             var matchingFile = files.find { 
                                                 it.path.equals(path, ignoreCase = true) || 
                                                 it.path.removePrefix("/").equals(cleanPath, ignoreCase = true) ||
@@ -4217,10 +4262,18 @@ fun FileNodeItem(
 fun buildFileTree(files: List<ProjectFileEntity>): FileNode {
     val root = FileNode("", "", false)
     val childrenMap = mutableMapOf<FileNode, MutableMap<String, FileNode>>()
-    val displayFiles = if (files.size > 2000) files.take(2000) else files
+    
+    // Normalize paths and filter out build artifacts and empty leading slash components
+    val filteredFiles = files.filter { f ->
+        val clean = f.path.replace('\\', '/').trimStart('/')
+        !clean.startsWith("_next/") && !clean.startsWith(".next/") && !clean.startsWith("web-dist/")
+    }
+    val displayFiles = if (filteredFiles.size > 2000) filteredFiles.take(2000) else filteredFiles
 
     displayFiles.forEach { file ->
-        val parts = file.path.split("/")
+        val normPath = file.path.replace('\\', '/').trimStart('/')
+        if (normPath.isBlank()) return@forEach
+        val parts = normPath.split("/").filter { it.isNotBlank() }
         var current = root
         var currentPath = ""
         parts.forEachIndexed { index, part ->

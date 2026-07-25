@@ -13,8 +13,15 @@ object LocalHttpServer {
     private var serverSocket: ServerSocket? = null
     private var isRunning = false
     private var activeFiles: List<ProjectFileEntity> = emptyList()
+    var webDistDir: String? = null
+        private set
     private const val TAG = "LocalHttpServer"
     const val PORT = 8080
+
+    fun setWebDistDir(dir: String?) {
+        webDistDir = dir
+        Log.d(TAG, "Updated web dist dir: $dir")
+    }
 
     fun updateFiles(files: List<ProjectFileEntity>) {
         activeFiles = files
@@ -92,7 +99,68 @@ object LocalHttpServer {
                 cleanPath = "index.html"
             }
 
-            // Find matching file
+            // Check disk files if webDistDir is configured
+            var diskFileBytes: ByteArray? = null
+            var resolvedPath = cleanPath
+            val localDir = webDistDir
+            if (!localDir.isNullOrBlank()) {
+                val dir = java.io.File(localDir)
+                if (dir.exists()) {
+                    val candidateFiles = listOf(
+                        java.io.File(dir, cleanPath),
+                        java.io.File(dir, "out/$cleanPath"),
+                        java.io.File(dir, "dist/$cleanPath"),
+                        java.io.File(dir, "build/$cleanPath")
+                    )
+                    var found = candidateFiles.find { it.exists() && it.isFile }
+                    if (found == null && !cleanPath.contains(".")) {
+                        found = listOf(
+                            java.io.File(dir, "index.html"),
+                            java.io.File(dir, "out/index.html"),
+                            java.io.File(dir, "dist/index.html")
+                        ).find { it.exists() && it.isFile }
+                    }
+                    if (found != null) {
+                        try {
+                            diskFileBytes = found.readBytes()
+                            resolvedPath = found.name
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error reading disk file: ${e.message}")
+                        }
+                    }
+                }
+            }
+
+            if (diskFileBytes != null) {
+                val mimeType = when {
+                    cleanPath.endsWith(".css", ignoreCase = true) || resolvedPath.endsWith(".css", ignoreCase = true) -> "text/css"
+                    cleanPath.endsWith(".js", ignoreCase = true) || cleanPath.endsWith(".mjs", ignoreCase = true) -> "application/javascript"
+                    cleanPath.endsWith(".html", ignoreCase = true) || resolvedPath.endsWith(".html", ignoreCase = true) -> "text/html"
+                    cleanPath.endsWith(".png", ignoreCase = true) -> "image/png"
+                    cleanPath.endsWith(".jpg", ignoreCase = true) || cleanPath.endsWith(".jpeg", ignoreCase = true) -> "image/jpeg"
+                    cleanPath.endsWith(".gif", ignoreCase = true) -> "image/gif"
+                    cleanPath.endsWith(".webp", ignoreCase = true) -> "image/webp"
+                    cleanPath.endsWith(".svg", ignoreCase = true) -> "image/svg+xml"
+                    cleanPath.endsWith(".ico", ignoreCase = true) -> "image/x-icon"
+                    cleanPath.endsWith(".json", ignoreCase = true) -> "application/json"
+                    cleanPath.endsWith(".wasm", ignoreCase = true) -> "application/wasm"
+                    cleanPath.endsWith(".woff2", ignoreCase = true) -> "font/woff2"
+                    cleanPath.endsWith(".woff", ignoreCase = true) -> "font/woff"
+                    cleanPath.endsWith(".ttf", ignoreCase = true) -> "font/ttf"
+                    else -> "text/plain"
+                }
+
+                output.write("HTTP/1.1 200 OK\r\n".toByteArray())
+                output.write("Content-Type: $mimeType; charset=utf-8\r\n".toByteArray())
+                output.write("Content-Length: ${diskFileBytes.size}\r\n".toByteArray())
+                output.write("Access-Control-Allow-Origin: *\r\n".toByteArray())
+                output.write("Connection: close\r\n\r\n".toByteArray())
+                output.write(diskFileBytes)
+                output.flush()
+                return
+            }
+
+            // Find matching file in activeFiles
             var matchingFile = activeFiles.find { 
                 it.path.equals(cleanPath, ignoreCase = true) || 
                 it.path.removePrefix("/").equals(cleanPath, ignoreCase = true) ||
