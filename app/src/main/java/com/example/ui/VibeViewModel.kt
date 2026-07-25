@@ -1472,7 +1472,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 var indexHtmlContent: String? = null
 
                 while (entry != null) {
-                    val entryName = entry.name
+                    val entryName = entry.name.replace('\\', '/')
                     if (!entry.isDirectory && entryName.endsWith(".apk")) {
                         val outStream = java.io.BufferedOutputStream(java.io.FileOutputStream(outputApkFile))
                         val outBuffer = ByteArray(131072) // 128KB for faster extraction
@@ -1531,7 +1531,8 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                             var zEntry = zIn.nextEntry
                             while (zEntry != null) {
                                 if (!zEntry.isDirectory) {
-                                    val destFile = java.io.File(destDir, zEntry.name)
+                                    val entryName = zEntry.name.replace('\\', '/')
+                                    val destFile = java.io.File(destDir, entryName)
                                     destFile.parentFile?.mkdirs()
                                     val outStream = java.io.BufferedOutputStream(java.io.FileOutputStream(destFile))
                                     val buffer = ByteArray(131072)
