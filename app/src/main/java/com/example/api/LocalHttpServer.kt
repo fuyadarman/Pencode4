@@ -25,6 +25,45 @@ object LocalHttpServer {
     private const val TAG = "LocalHttpServer"
     const val PORT = 8080
 
+    fun isReactViteProject(files: List<ProjectFileEntity>): Boolean {
+        if (files.isEmpty()) return false
+
+        val hasViteConfig = files.any { 
+            val p = it.path.lowercase()
+            p == "vite.config.js" || p == "vite.config.ts" || p == "vite.config.mjs" || p == "vite.config.cjs" ||
+            p.endsWith("/vite.config.js") || p.endsWith("/vite.config.ts")
+        }
+        if (hasViteConfig) return true
+
+        val packageJson = files.find { it.path.equals("package.json", ignoreCase = true) }?.content ?: ""
+        if (packageJson.isNotBlank()) {
+            val lowerPkg = packageJson.lowercase()
+            if (lowerPkg.contains("\"vite\"") || lowerPkg.contains("\"@vitejs/plugin-react\"")) {
+                return true
+            }
+        }
+
+        val hasJsxOrTsx = files.any { 
+            val p = it.path.lowercase()
+            p.endsWith(".jsx") || p.endsWith(".tsx")
+        }
+        if (hasJsxOrTsx) return true
+
+        val indexHtml = files.find { 
+            val p = it.path.lowercase()
+            p == "index.html" || p.endsWith("/index.html") 
+        }?.content ?: ""
+
+        if (indexHtml.isNotBlank()) {
+            val lowerHtml = indexHtml.lowercase()
+            if (lowerHtml.contains("/src/") || lowerHtml.contains(".jsx") || lowerHtml.contains(".tsx") || lowerHtml.contains("@vite")) {
+                return true
+            }
+        }
+
+        return false
+    }
+
     fun setWebDistDir(dir: String?) {
         _webDistDir.value = dir
         Log.d(TAG, "Updated web dist dir: $dir")
@@ -142,7 +181,8 @@ object LocalHttpServer {
             var diskFileBytes: ByteArray? = null
             var resolvedPath = cleanPath
             val localDir = webDistDir
-            if (!localDir.isNullOrBlank()) {
+            val isReactVite = isReactViteProject(activeFiles)
+            if (!localDir.isNullOrBlank() && isReactVite) {
                 val dir = java.io.File(localDir)
                 if (dir.exists()) {
                     val candidateFiles = listOf(

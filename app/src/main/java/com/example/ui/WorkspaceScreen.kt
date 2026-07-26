@@ -2606,28 +2606,7 @@ fun PreviewTabContent(
     filesHolder.filesList = files
 
     val isReactViteFramework = remember(files) {
-        val packageJson = files.find { it.path.equals("package.json", ignoreCase = true) }?.content ?: ""
-        val hasPackageVite = packageJson.contains("\"vite\"") || packageJson.contains("\"@vitejs/plugin-react\"") || packageJson.contains("\"react\"")
-        
-        val hasViteConfig = files.any { 
-            it.path.equals("vite.config.js", ignoreCase = true) || 
-            it.path.equals("vite.config.ts", ignoreCase = true) ||
-            it.path.equals("vite.config.mjs", ignoreCase = true)
-        }
-        
-        val hasJsxMain = files.any { 
-            it.path.equals("src/main.jsx", ignoreCase = true) || 
-            it.path.equals("src/main.tsx", ignoreCase = true) || 
-            it.path.equals("src/App.jsx", ignoreCase = true) || 
-            it.path.equals("src/App.tsx", ignoreCase = true) ||
-            it.path.endsWith(".jsx", ignoreCase = true) ||
-            it.path.endsWith(".tsx", ignoreCase = true)
-        }
-        
-        val indexHtml = files.find { it.path.equals("index.html", ignoreCase = true) || it.path.endsWith("/index.html", ignoreCase = true) }?.content ?: ""
-        val referencesJsx = indexHtml.contains("/src/") || indexHtml.contains(".jsx") || indexHtml.contains(".tsx") || indexHtml.contains("@vite")
-
-        hasViteConfig || (hasPackageVite && (hasJsxMain || referencesJsx)) || (hasJsxMain && referencesJsx)
+        com.example.api.LocalHttpServer.isReactViteProject(files)
     }
 
     val instructionHtml = remember {
@@ -2711,9 +2690,9 @@ fun PreviewTabContent(
 
     var refreshTrigger by remember { mutableStateOf(0) }
     val localWebDir by com.example.api.LocalHttpServer.webDistDirFlow.collectAsState()
-    val hasWebDist = remember(localWebDir, refreshTrigger) {
+    val hasWebDist = remember(localWebDir, refreshTrigger, isReactViteFramework) {
         val dir = localWebDir
-        if (!dir.isNullOrBlank()) {
+        if (isReactViteFramework && !dir.isNullOrBlank()) {
             java.io.File(dir).exists()
         } else {
             false
