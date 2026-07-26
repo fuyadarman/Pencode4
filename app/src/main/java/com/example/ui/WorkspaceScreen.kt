@@ -2605,10 +2605,29 @@ fun PreviewTabContent(
     val filesHolder = remember { FilesHolder(files) }
     filesHolder.filesList = files
 
-    val isCompiled = remember(files) {
-        val hasPackageJson = files.any { it.path.equals("package.json", ignoreCase = true) }
-        val hasViteConfig = files.any { it.path.equals("vite.config.js", ignoreCase = true) || it.path.equals("vite.config.ts", ignoreCase = true) }
-        hasPackageJson && hasViteConfig
+    val isReactViteFramework = remember(files) {
+        val packageJson = files.find { it.path.equals("package.json", ignoreCase = true) }?.content ?: ""
+        val hasPackageVite = packageJson.contains("\"vite\"") || packageJson.contains("\"@vitejs/plugin-react\"") || packageJson.contains("\"react\"")
+        
+        val hasViteConfig = files.any { 
+            it.path.equals("vite.config.js", ignoreCase = true) || 
+            it.path.equals("vite.config.ts", ignoreCase = true) ||
+            it.path.equals("vite.config.mjs", ignoreCase = true)
+        }
+        
+        val hasJsxMain = files.any { 
+            it.path.equals("src/main.jsx", ignoreCase = true) || 
+            it.path.equals("src/main.tsx", ignoreCase = true) || 
+            it.path.equals("src/App.jsx", ignoreCase = true) || 
+            it.path.equals("src/App.tsx", ignoreCase = true) ||
+            it.path.endsWith(".jsx", ignoreCase = true) ||
+            it.path.endsWith(".tsx", ignoreCase = true)
+        }
+        
+        val indexHtml = files.find { it.path.equals("index.html", ignoreCase = true) || it.path.endsWith("/index.html", ignoreCase = true) }?.content ?: ""
+        val referencesJsx = indexHtml.contains("/src/") || indexHtml.contains(".jsx") || indexHtml.contains(".tsx") || indexHtml.contains("@vite")
+
+        hasViteConfig || (hasPackageVite && (hasJsxMain || referencesJsx)) || (hasJsxMain && referencesJsx)
     }
 
     val instructionHtml = remember {
@@ -2843,7 +2862,7 @@ fun PreviewTabContent(
                 .background(Color.White)
         ) {
             key(refreshTrigger) {
-                if (!hasWebDist && isCompiled) {
+                if (!hasWebDist && isReactViteFramework) {
                     // Show a beautiful, native-looking compilation required card
                     AndroidView(
                         factory = { context ->
