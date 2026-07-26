@@ -28,7 +28,7 @@ data class Part(
 @JsonClass(generateAdapter = true)
 data class Content(
     val role: String? = null,
-    val parts: List<Part>
+    val parts: List<Part> = emptyList()
 )
 
 @JsonClass(generateAdapter = true)
@@ -46,7 +46,7 @@ data class GenerateContentRequest(
 
 @JsonClass(generateAdapter = true)
 data class Candidate(
-    val content: Content,
+    val content: Content? = null,
     val finishReason: String? = null
 )
 

@@ -2587,6 +2587,8 @@ fun uploadToPasteEe(htmlContent: String, onSuccess: (String) -> Unit, onError: (
     })
 }
 
+private class FilesHolder(var filesList: List<ProjectFileEntity> = emptyList())
+
 @Composable
 fun PreviewTabContent(
     files: List<ProjectFileEntity>,
@@ -2600,10 +2602,103 @@ fun PreviewTabContent(
     val htmlFile = remember(files) { 
         files.find { it.path.equals("index.html", ignoreCase = true) || it.path.endsWith("/index.html", ignoreCase = true) } 
     }
+    val filesHolder = remember { FilesHolder(files) }
+    filesHolder.filesList = files
+
+    val isCompiled = remember(files) {
+        val hasPackageJson = files.any { it.path.equals("package.json", ignoreCase = true) }
+        val hasViteConfig = files.any { it.path.equals("vite.config.js", ignoreCase = true) || it.path.equals("vite.config.ts", ignoreCase = true) }
+        hasPackageJson && hasViteConfig
+    }
+
+    val instructionHtml = remember {
+        """
+        <!DOCTYPE html>
+        <html lang="bn">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Compilation Required</title>
+            <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+            <style>
+                body {
+                    font-family: 'Plus Jakarta Sans', sans-serif;
+                    background-color: #0d0e15;
+                    color: #ffffff;
+                    margin: 0;
+                    padding: 24px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    min-height: 100vh;
+                    box-sizing: border-box;
+                    text-align: center;
+                }
+                .card {
+                    background-color: #151726;
+                    border: 1px solid #2b2f4a;
+                    border-radius: 16px;
+                    padding: 32px 24px;
+                    max-width: 420px;
+                    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+                }
+                .icon {
+                    font-size: 48px;
+                    margin-bottom: 16px;
+                }
+                h1 {
+                    font-size: 22px;
+                    font-weight: 700;
+                    margin: 0 0 12px 0;
+                    background: linear-gradient(135deg, #a855f7, #ec4899);
+                    -webkit-background-clip: text;
+                    -webkit-text-fill-color: transparent;
+                }
+                p {
+                    font-size: 14px;
+                    color: #94a3b8;
+                    line-height: 1.6;
+                    margin: 0 0 20px 0;
+                }
+                .bn-text {
+                    border-top: 1px solid #23273f;
+                    padding-top: 16px;
+                    margin-top: 16px;
+                    color: #cbd5e1;
+                    font-size: 13.5px;
+                }
+                .highlight {
+                    color: #38bdf8;
+                    font-weight: 600;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="card">
+                <div class="icon">🚀</div>
+                <h1>Compilation Required</h1>
+                <p>This is a <span class="highlight">React + Vite</span> project. It needs to be built before it can run in the live preview.</p>
+                <p>Go to the <span class="highlight">Build Tab</span> (Android Build Pipeline), configure your GitHub repository, and click <span class="highlight">Force Push & Build</span> to compile and load the preview.</p>
+                
+                <div class="bn-text">
+                    <p>👋 এটি একটি <span class="highlight">React + Vite</span> প্রজেক্ট। লাইভ প্রিভিউ দেখতে প্রথমে প্রজেক্টটি কম্পাইল করা প্রয়োজন।</p>
+                    <p>দয়া করে <span class="highlight">Build Tab</span> এ গিয়ে আপনার GitHub Repository সেটআপ করুন এবং <span class="highlight">Force Push & Build</span> বাটনে ক্লিক করুন।</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """.trimIndent()
+    }
+
     var refreshTrigger by remember { mutableStateOf(0) }
-    val localWebDir = com.example.api.LocalHttpServer.webDistDir
+    val localWebDir by com.example.api.LocalHttpServer.webDistDirFlow.collectAsState()
     val hasWebDist = remember(localWebDir, refreshTrigger) {
-        !localWebDir.isNullOrBlank() && java.io.File(localWebDir).exists()
+        val dir = localWebDir
+        if (!dir.isNullOrBlank()) {
+            java.io.File(dir).exists()
+        } else {
+            false
+        }
     }
 
     LaunchedEffect(files) {
@@ -2747,8 +2842,34 @@ fun PreviewTabContent(
                 .fillMaxWidth()
                 .background(Color.White)
         ) {
-            key(refreshTrigger, files) {
-                if (htmlFile == null && !hasWebDist) {
+            key(refreshTrigger) {
+                if (!hasWebDist && isCompiled) {
+                    // Show a beautiful, native-looking compilation required card
+                    AndroidView(
+                        factory = { context ->
+                            WebView(context).apply {
+                                settings.apply {
+                                    javaScriptEnabled = true
+                                    domStorageEnabled = true
+                                    databaseEnabled = true
+                                    allowFileAccess = true
+                                    allowContentAccess = true
+                                    useWideViewPort = true
+                                    loadWithOverviewMode = true
+                                }
+                                loadDataWithBaseURL(
+                                    "https://virtual-app/",
+                                    instructionHtml,
+                                    "text/html",
+                                    "UTF-8",
+                                    null
+                                )
+                            }
+                        },
+                        update = { /* no-op */ },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else if (htmlFile == null && !hasWebDist) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -2933,13 +3054,13 @@ fun PreviewTabContent(
                                                 }
                                             }
 
-                                            var matchingFile = files.find { 
+                                            var matchingFile = filesHolder.filesList.find { 
                                                 it.path.equals(path, ignoreCase = true) || 
                                                 it.path.removePrefix("/").equals(cleanPath, ignoreCase = true) ||
                                                 it.path.endsWith("/$cleanPath", ignoreCase = true)
                                             }
                                             if (matchingFile == null && (cleanPath.isEmpty() || !cleanPath.contains("."))) {
-                                                matchingFile = files.find { it.path.equals("index.html", ignoreCase = true) || it.path.endsWith("/index.html", ignoreCase = true) }
+                                                matchingFile = filesHolder.filesList.find { it.path.equals("index.html", ignoreCase = true) || it.path.endsWith("/index.html", ignoreCase = true) }
                                             }
                                             if (matchingFile != null) {
                                                 val (mimeType, encoding) = getMimeTypeAndEncoding(matchingFile.path)
@@ -4320,7 +4441,7 @@ fun FileIcon(name: String, isFile: Boolean, isExpanded: Boolean) {
         Icon(
             imageVector = if (isExpanded) Icons.Default.FolderOpen else Icons.Default.Folder,
             contentDescription = null,
-            tint = Color(0xFF8B949E),
+            tint = Color(0xFFFFCA28), // Golden Yellow folder tint for high-visibility and distinctiveness
             modifier = Modifier.size(16.dp)
         )
     } else {
@@ -4332,6 +4453,9 @@ fun FileIcon(name: String, isFile: Boolean, isExpanded: Boolean) {
             "css" -> Icons.Default.Brush to Color(0xFF3498DB)
             "json" -> Icons.Default.DataObject to Color(0xFFF1C40F)
             "sql" -> Icons.Default.Storage to Color(0xFF95A5A6)
+            "png", "jpg", "jpeg", "webp", "gif", "svg", "ico" -> Icons.Default.Image to Color(0xFF2ECC71) // Distinct green for image assets
+            "apk" -> Icons.Default.Build to Color(0xFF3DDC84) // Green for build outputs like APKs
+            "md", "txt" -> Icons.Default.Info to Color(0xFF9B59B6) // Purple for info/text/markdown files
             else -> Icons.Default.Description to Color(0xFF8B949E)
         }
         Icon(

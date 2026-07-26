@@ -8,18 +8,25 @@ import java.io.OutputStream
 import java.net.ServerSocket
 import java.net.Socket
 import kotlin.concurrent.thread
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 object LocalHttpServer {
     private var serverSocket: ServerSocket? = null
     private var isRunning = false
     private var activeFiles: List<ProjectFileEntity> = emptyList()
-    var webDistDir: String? = null
-        private set
+    
+    private val _webDistDir = MutableStateFlow<String?>(null)
+    val webDistDirFlow = _webDistDir.asStateFlow()
+
+    val webDistDir: String?
+        get() = _webDistDir.value
+        
     private const val TAG = "LocalHttpServer"
     const val PORT = 8080
 
     fun setWebDistDir(dir: String?) {
-        webDistDir = dir
+        _webDistDir.value = dir
         Log.d(TAG, "Updated web dist dir: $dir")
     }
 

@@ -1459,7 +1459,8 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                     outputApkFile.delete()
                 }
                 
-                val webDistDir = java.io.File(cacheDir, "web_dist")
+                val safeProjectName = (_currentProject.value?.name ?: "default").replace(Regex("[\\\\/:*?\"<>|]"), "_")
+                val webDistDir = java.io.File(cacheDir, "web_dist_$safeProjectName")
                 if (webDistDir.exists()) {
                     webDistDir.deleteRecursively()
                 }
@@ -2338,24 +2339,15 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 // 7. Create/Verify src/App.jsx if missing or having default content
                 val appJsxFile = files.find { it.path == "src/App.jsx" }
                 if (appJsxFile == null || appJsxFile.content.trim().isEmpty()) {
-                    val defaultAppJsx = """import { useState } from 'react'
-
-export default function App() {
-  const [count, setCount] = useState(0)
+                    val defaultAppJsx = """export default function App() {
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6">
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 max-w-md w-full text-center shadow-2xl">
         <div className="w-16 h-16 bg-purple-600/20 border border-purple-500/40 rounded-full flex items-center justify-center mx-auto mb-4">
-          <span className="text-2xl font-black text-purple-400">⚡</span>
+          <span className="text-2xl font-black text-purple-400">👋</span>
         </div>
-        <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent">React + Vite</h1>
-        <p className="text-slate-400 text-sm mb-6">Fast, Modern Web Application with Tailwind & Vite.</p>
-        <div className="flex items-center justify-center gap-4 mb-6">
-          <button onClick={() => setCount(c => c - 1)} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-lg font-bold transition">-</button>
-          <span className="text-2xl font-mono text-purple-400 font-bold px-4">{count}</span>
-          <button onClick={() => setCount(c => c + 1)} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-lg font-bold transition">+</button>
-        </div>
-        <p className="text-xs text-slate-500">GitHub Action: npm run esbuild & Web Dist Artifact Enabled</p>
+        <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent">Hello World</h1>
+        <p className="text-slate-400 text-sm">Welcome to your clean React + Vite + Tailwind application.</p>
       </div>
     </div>
   )
@@ -2372,6 +2364,16 @@ export default function App() {
         val visibleFiles = files.filter { it.path != "browser_memory.md" && it.path != "memory.md" }
         _projectFiles.value = visibleFiles
         
+        // Dynamic configuration of local web preview path based on selected project
+        val context = getApplication<Application>()
+        val safeProjName = projectName.replace(Regex("[\\\\/:*?\"<>|]"), "_")
+        val webDistDir = java.io.File(context.cacheDir, "web_dist_$safeProjName")
+        if (webDistDir.exists() && webDistDir.isDirectory) {
+            com.example.api.LocalHttpServer.setWebDistDir(webDistDir.absolutePath)
+        } else {
+            com.example.api.LocalHttpServer.setWebDistDir(null)
+        }
+
         // Auto-select index.html or first file to view in editor
         val defaultFile = visibleFiles.find { it.path == "index.html" } ?: visibleFiles.firstOrNull()
         selectActiveFile(defaultFile)
