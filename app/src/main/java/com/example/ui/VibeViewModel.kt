@@ -209,13 +209,31 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 sourceId = cleanSource,
                 lineNumber = lineNumber
             )
-            if (_allowAutoFix.value && !isAutoFixingWebErrors) {
+            if (_allowAutoFix.value && !_isThinking.value && !isAutoFixingWebErrors) {
                 isAutoFixingWebErrors = true
                 viewModelScope.launch(Dispatchers.Main) {
                     kotlinx.coroutines.delay(500)
                     _detectedWebErrors.value = _detectedWebErrors.value.map { it.copy(isSelected = true) }
                     fixSelectedWebErrors()
                     isAutoFixingWebErrors = false
+                }
+            }
+        }
+    }
+
+    private fun checkAndTriggerAutoFixOnAgentFinish() {
+        if (_allowAutoFix.value && !_isThinking.value) {
+            viewModelScope.launch(Dispatchers.Main) {
+                if (_detectedWebErrors.value.isNotEmpty() && !isAutoFixingWebErrors) {
+                    isAutoFixingWebErrors = true
+                    kotlinx.coroutines.delay(500)
+                    _detectedWebErrors.value = _detectedWebErrors.value.map { it.copy(isSelected = true) }
+                    fixSelectedWebErrors()
+                    isAutoFixingWebErrors = false
+                }
+                if (_detectedAndroidBuildErrors.value.isNotEmpty()) {
+                    _detectedAndroidBuildErrors.value = _detectedAndroidBuildErrors.value.map { it.copy(isSelected = true) }
+                    fixSelectedAndroidBuildErrors()
                 }
             }
         }
@@ -1005,12 +1023,13 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    private fun updateAiLog(logId: String, status: String, details: String? = null) {
+    private fun updateAiLog(logId: String, status: String, details: String? = null, lineRange: String? = null) {
         _aiActionLogs.value = _aiActionLogs.value.map { log ->
             if (log.id == logId) {
                 log.copy(
                     status = status,
                     details = details ?: log.details,
+                    lineRange = lineRange ?: log.lineRange,
                     durationMillis = System.currentTimeMillis() - log.startTime
                 )
             } else log
@@ -1298,8 +1317,10 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                                                     if (_allowAutoFix.value && parsedErrors.isNotEmpty() && lastAutoFixedRunId != runId) {
                                                         lastAutoFixedRunId = runId
                                                         _detectedAndroidBuildErrors.value = parsedErrors.map { it.copy(isSelected = true) }
-                                                        viewModelScope.launch(Dispatchers.Main) {
-                                                            fixSelectedAndroidBuildErrors()
+                                                        if (!_isThinking.value) {
+                                                            viewModelScope.launch(Dispatchers.Main) {
+                                                                fixSelectedAndroidBuildErrors()
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -2158,6 +2179,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         currentAiJob?.cancel()
         _isThinking.value = false
         _agentStatus.value = "AI task stopped by user."
+        checkAndTriggerAutoFixOnAgentFinish()
         
         // Optionally add a log for cancellation
         val cancelLog = AiActionLog(
@@ -3115,13 +3137,12 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 - You can and SHOULD perform MULTIPLE tool calls in a single turn if the task requires it. For example, you can edit three different files or perform multiple patches in one go.
                 - When performing an 'edit_file', 'patch_file', or 'append', always be precise and target exact lines.
                 
-                MANDATORY STRATEGY RULES (CRITICAL - YOU WILL BE PUNISHED AND REJECTED IF VIOLATED):
-                1. Use 'scan_dir' recursively to explore and list folders/subfolders/files inside specific target subdirectories (e.g., 'app', 'app/src', 'app/src/main/java'). Scanning root '.' directly is strictly forbidden!
-                2. ALWAYS use the 'grep' command (run_command with grep -rn "keyword" .) BEFORE reading any files or reading file ranges, especially when debugging, error fixing, problem finding, or searching file patterns! You are strictly forbidden from calling 'read_file' or 'read_file_range' repeatedly without running 'grep' first.
-                3. After finding the exact file and matched lines using grep, you MUST read ONLY about 30 lines surrounding the matched code (e.g., 15 lines before and 15 lines after) using the 'read_file_range' tool.
-                4. NEVER read the full file if it is larger than 80 lines. If a file is larger than 80 lines, you are STRICTLY FORBIDDEN from reading the full file. Instead, you MUST use global_search or grep to find the exact match first, and then read only the surrounding lines of code (using 'read_file_range' with a precise window around the target).
-                5. Verify that all tasks are completed and then stop.
-                Warning: If a file has more than 80 lines of code and you read the entire file instead of using grep and read_file_range, you will be punished and your request will be rejected!
+                MANDATORY STRATEGY RULES:
+                1. Use 'scan_dir' recursively to explore and list folders/subfolders/files inside specific target subdirectories (e.g., 'app', 'app/src', 'app/src/main/java').
+                2. Use 'global_search' or 'run_command' with `grep -rn "keyword" .` when searching across multiple files or locating code patterns.
+                3. Use 'read_file_range' to read relevant line ranges, or 'read_file' to inspect file content.
+                4. Always perform surgical updates using 'edit_file', 'patch_file', or 'append'.
+                5. Verify that all tasks are completed and then finish.
                 
                 ANDROID / FLUTTER BUILD RULES & AUTOMATIC PUSH PERMISSION (CRITICAL):
                 - NEVER run `gradle assembleDebug`, `gradle build`, `flutter build apk`, or any APK building commands using `run_command`. 
@@ -3376,33 +3397,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     }
                                 }
 
-                                // Consecutive file reading without grep detection (> 2 consecutive read_file_range or read_file calls)
-                                if (!loopHandled && (tool == "read_file_range" || tool == "read_file")) {
-                                    val last3Tools = recentToolCallsHistory.takeLast(3)
-                                    val readsWithoutGrep = last3Tools.count { it.tool == "read_file_range" || it.tool == "read_file" }
-                                    val grepUsedRecently = recentToolCallsHistory.takeLast(5).any { 
-                                        it.tool == "global_search" || (it.tool == "run_command" && (it.arguments?.command?.contains("grep") == true || it.arguments?.query?.contains("grep") == true)) 
-                                    }
-                                    if (readsWithoutGrep >= 3 && !grepUsedRecently) {
-                                        val warningText = """
-                                            SYSTEM WARNING (EXCESSIVE FILE READING WITHOUT GREP):
-                                            You have executed file reading tools ($tool) 3 times consecutively without running a 'grep' command!
-                                            Stop guessing or reading different lines manually. You MUST use 'grep' (`run_command` with `grep -rn "keyword" .`) to locate exact matching lines before reading file ranges or editing!
-                                        """.trimIndent()
-                                        
-                                        history.add(Content(
-                                            role = "user",
-                                            parts = listOf(Part(text = warningText))
-                                        ))
-                                        
-                                        val warningLog = createAiLog(
-                                            title = "Grep Warning Injected",
-                                            status = "failed",
-                                            details = "Injected warning: AI read file ranges 3 times consecutively without running grep search first."
-                                        )
-                                        _aiActionLogs.value = _aiActionLogs.value + warningLog
-                                    }
-                                }
+
 
                                 if (actionsCount >= maxActionSteps) {
                                     _isInterrupted.value = true
@@ -4629,6 +4624,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                     }
                     
                     _isThinking.value = false
+                    checkAndTriggerAutoFixOnAgentFinish()
                     _chatMessages.value = repository.getChatsForProject(project.name)
                     if (project.templateKey == "vanilla" || project.templateKey == "react" || project.templateKey == "vanilla_three") {
                         _webPreviewRefreshTrigger.value += 1
