@@ -623,18 +623,78 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             }
         } else emptyList()
 
-        val loadedMap = loadedSkills.associateBy { it.id }
-        val merged = com.example.ui.defaultAgentSkills.map { defaultSkill ->
-            loadedMap[defaultSkill.id]?.let { loaded ->
-                defaultSkill.copy(
-                    isInstalled = loaded.isInstalled,
-                    isEnabled = loaded.isEnabled
-                )
-            } ?: defaultSkill
-        } + loadedSkills.filter { loaded -> com.example.ui.defaultAgentSkills.none { it.id == loaded.id } }
+        // Sync with local disk storage (context.filesDir/agent-skills/)
+        val skillsDir = java.io.File(getApplication<android.app.Application>().filesDir, "agent-skills")
+        val localFilesMap = mutableMapOf<String, String>()
+        if (skillsDir.exists() && skillsDir.isDirectory) {
+            skillsDir.listFiles()?.forEach { file ->
+                if (file.isFile && file.name.endsWith(".md", ignoreCase = true)) {
+                    val skillId = file.name.removeSuffix(".md").removeSuffix(".MD")
+                    try {
+                        localFilesMap[skillId] = file.readText()
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            }
+        }
 
-        _agentSkills.value = merged
+        val loadedMap = loadedSkills.associateBy { it.id }
+
+        val customUpdated = loadedSkills.map { skill ->
+            val localContent = localFilesMap[skill.id]
+            if (localContent != null) {
+                skill.copy(
+                    isInstalled = true,
+                    skillPrompt = if (localContent.isNotBlank()) localContent else skill.skillPrompt
+                )
+            } else skill
+        }
+
+        val existingIds = customUpdated.map { it.id }.toSet()
+        val extraDiskSkills = localFilesMap.filterKeys { it !in existingIds }.map { (id, content) ->
+            var skillName = id.replace("-", " ").split(" ").joinToString(" ") { word -> word.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() } }
+            var skillDesc = "Locally stored agent skill file ($id.md)."
+            var skillAuthor = "Local Storage"
+            
+            if (content.startsWith("---")) {
+                val parts = content.split("---", limit = 3)
+                if (parts.size >= 3) {
+                    parts[1].lines().forEach { line ->
+                        val trimmed = line.trim()
+                        if (trimmed.startsWith("name:")) {
+                            val n = trimmed.substringAfter("name:").trim().removeSurrounding("\"").removeSurrounding("'")
+                            if (n.isNotBlank()) skillName = n
+                        } else if (trimmed.startsWith("description:")) {
+                            val d = trimmed.substringAfter("description:").trim().removeSurrounding("\"").removeSurrounding("'")
+                            if (d.isNotBlank()) skillDesc = d
+                        } else if (trimmed.startsWith("author:")) {
+                            val a = trimmed.substringAfter("author:").trim().removeSurrounding("\"").removeSurrounding("'")
+                            if (a.isNotBlank()) skillAuthor = a
+                        }
+                    }
+                }
+            }
+
+            com.example.ui.AgentSkill(
+                id = id,
+                name = skillName,
+                author = skillAuthor,
+                installs = "Installed",
+                description = skillDesc,
+                isInstalled = true,
+                isEnabled = true,
+                skillPrompt = content
+            )
+        }
+
+        val finalSkills = customUpdated + extraDiskSkills
+        _agentSkills.value = finalSkills
         saveAgentSkillsInternal()
+
+        if (finalSkills.isEmpty()) {
+            fetchOnlineAgentSkills()
+        }
     }
 
     fun fetchOnlineAgentSkills(onComplete: ((Int) -> Unit)? = null) {
@@ -643,16 +703,13 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             var newCount = 0
             try {
                 val repos = listOf(
-                    Triple("cloudai-x", "agent-skills", "https://github.com/cloudai-x/agent-skills"),
-                    Triple("cloudai-x", "skills", "https://github.com/cloudai-x/skills"),
-                    Triple("cloudai-x", "cloudai-x-skills", "https://github.com/cloudai-x/cloudai-x-skills"),
                     Triple("vercel-labs", "agent-skills", "https://github.com/vercel-labs/agent-skills"),
-                    Triple("vercel-labs", "skills", "https://github.com/vercel-labs/skills"),
-                    Triple("anthropic", "agent-skills", "https://github.com/anthropic/agent-skills"),
-                    Triple("expo", "skills", "https://github.com/expo/skills"),
-                    Triple("nextlevelbuilder", "agent-skills", "https://github.com/nextlevelbuilder/agent-skills"),
-                    Triple("google-gemini", "gemini-skills", "https://github.com/google-gemini/gemini-skills"),
-                    Triple("langchain-ai", "skills", "https://github.com/langchain-ai/skills")
+                    Triple("anthropics", "courses", "https://github.com/anthropics/courses"),
+                    Triple("google-gemini", "cookbook", "https://github.com/google-gemini/cookbook"),
+                    Triple("browser-use", "browser-use", "https://github.com/browser-use/browser-use"),
+                    Triple("composiohq", "composio", "https://github.com/composiohq/composio"),
+                    Triple("humanlayer", "humanlayer", "https://github.com/humanlayer/humanlayer"),
+                    Triple("langchain-ai", "langchain", "https://github.com/langchain-ai/langchain")
                 )
 
                 val fetchedFetchedList = mutableListOf<com.example.ui.AgentSkill>()
@@ -712,7 +769,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                                                         id = skillId,
                                                         name = "$formattedName ($orgName)",
                                                         author = "$orgName/$repo",
-                                                        installs = "${(10..49).random()}.${(1..9).random()}K installs",
+                                                        installs = "GitHub Skill",
                                                         description = "Full recursive agent skill from $orgName/$repo ($path).",
                                                         githubUrl = githubUrl,
                                                         isInstalled = false,
@@ -761,7 +818,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                                                 id = skillId,
                                                 name = "$cleanName ($orgName)",
                                                 author = "$orgName/$repo",
-                                                installs = "${(10..40).random()}.${(1..9).random()}K installs",
+                                                installs = "GitHub Skill",
                                                 description = "Live fetched skill from $orgName/$repo ($path).",
                                                 githubUrl = githubUrl,
                                                 isInstalled = false,
@@ -867,23 +924,93 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun installAgentSkill(skillId: String) {
-        _agentSkills.value = _agentSkills.value.map { skill ->
-            if (skill.id == skillId) skill.copy(isInstalled = true, isEnabled = true) else skill
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val skill = _agentSkills.value.find { it.id == skillId } ?: return@launch
+
+            var content = skill.skillPrompt
+            if (content.isBlank() || content.startsWith("Skill source file") || content.startsWith("Skill live fetched")) {
+                val rawUrl = skill.rawFileUrl.ifBlank {
+                    val parts = skill.author.split("/")
+                    if (parts.size == 2) {
+                        "https://raw.githubusercontent.com/${parts[0]}/${parts[1]}/main/${skill.filePath.ifBlank { "SKILL.md" }}"
+                    } else ""
+                }
+                if (rawUrl.isNotBlank()) {
+                    try {
+                        val url = java.net.URL(rawUrl)
+                        val conn = url.openConnection() as java.net.HttpURLConnection
+                        conn.connectTimeout = 5000
+                        conn.readTimeout = 5000
+                        if (conn.responseCode == 200) {
+                            val fetched = conn.inputStream.bufferedReader().use { it.readText() }
+                            if (fetched.isNotBlank()) {
+                                content = fetched
+                            }
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            }
+
+            try {
+                val skillsDir = java.io.File(getApplication<android.app.Application>().filesDir, "agent-skills")
+                if (!skillsDir.exists()) skillsDir.mkdirs()
+                val localFile = java.io.File(skillsDir, "${skill.id}.md")
+                localFile.writeText(content)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
+            val finalContent = content
+            withContext(kotlinx.coroutines.Dispatchers.Main) {
+                _agentSkills.value = _agentSkills.value.map { s ->
+                    if (s.id == skillId) s.copy(isInstalled = true, isEnabled = true, skillPrompt = finalContent) else s
+                }
+                saveAgentSkillsInternal()
+            }
         }
-        saveAgentSkillsInternal()
     }
 
     fun uninstallAgentSkill(skillId: String) {
-        _agentSkills.value = _agentSkills.value.map { skill ->
-            if (skill.id == skillId) skill.copy(isInstalled = false, isEnabled = false) else skill
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val skillsDir = java.io.File(getApplication<android.app.Application>().filesDir, "agent-skills")
+                val localFile = java.io.File(skillsDir, "$skillId.md")
+                if (localFile.exists()) {
+                    localFile.delete()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
+            withContext(kotlinx.coroutines.Dispatchers.Main) {
+                _agentSkills.value = _agentSkills.value.map { skill ->
+                    if (skill.id == skillId) skill.copy(isInstalled = false, isEnabled = false) else skill
+                }
+                saveAgentSkillsInternal()
+            }
         }
-        saveAgentSkillsInternal()
     }
 
     fun addCustomAgentSkill(newSkill: com.example.ui.AgentSkill) {
-        val existing = _agentSkills.value.filter { it.id != newSkill.id }
-        _agentSkills.value = existing + newSkill
-        saveAgentSkillsInternal()
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val skillsDir = java.io.File(getApplication<android.app.Application>().filesDir, "agent-skills")
+                if (!skillsDir.exists()) skillsDir.mkdirs()
+                val localFile = java.io.File(skillsDir, "${newSkill.id}.md")
+                localFile.writeText(newSkill.skillPrompt)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
+            withContext(kotlinx.coroutines.Dispatchers.Main) {
+                val installedCustom = newSkill.copy(isInstalled = true, isEnabled = true)
+                val existing = _agentSkills.value.filter { it.id != newSkill.id }
+                _agentSkills.value = existing + installedCustom
+                saveAgentSkillsInternal()
+            }
+        }
     }
 
     // Skills are kept strictly in system background memory (SharedPreferences / ViewModel)
@@ -943,7 +1070,11 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         _writeFileConfirmInfo.value = null
     }
 
-    private var lastDownloadedRunId: Long = 0
+    private var lastDownloadedRunId: Long
+        get() = sharedPrefs.getLong("last_downloaded_run_id", 0L)
+        set(value) {
+            sharedPrefs.edit().putLong("last_downloaded_run_id", value).apply()
+        }
 
     private var pollJob: kotlinx.coroutines.Job? = null
 
@@ -1350,7 +1481,6 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 val response = OkHttpClient().newCall(request).execute()
                 if (!response.isSuccessful) {
                     _apkDownloadProgress.value = "Artifact fetch failed (Status: ${response.code})"
-                    lastDownloadedRunId = 0 // retry on next loop
                     return@launch
                 }
                 
@@ -1359,8 +1489,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 val map = moshi.adapter(Map::class.java).fromJson(bodyStr) as? Map<*, *>
                 val artifacts = map?.get("artifacts") as? List<*>
                 if (artifacts.isNullOrEmpty()) {
-                    _apkDownloadProgress.value = "Waiting for APK package release to complete..."
-                    lastDownloadedRunId = 0 // retry on next loop
+                    _apkDownloadProgress.value = "No build artifacts found for run #$runId."
                     return@launch
                 }
                 
@@ -1372,7 +1501,6 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 if (artifactId == null || downloadUrl == null) {
                     _apkDownloadProgress.value = "Invalid artifact data."
                     _apkDownloadPercentage.value = null
-                    lastDownloadedRunId = 0
                     return@launch
                 }
                 
@@ -1400,7 +1528,6 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 if (!downloadResponse.isSuccessful) {
                     _apkDownloadProgress.value = "Download failed (Status: ${downloadResponse.code})"
                     _apkDownloadPercentage.value = null
-                    lastDownloadedRunId = 0
                     return@launch
                 }
                 
@@ -1408,7 +1535,6 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 if (body == null) {
                     _apkDownloadProgress.value = "Empty response body."
                     _apkDownloadPercentage.value = null
-                    lastDownloadedRunId = 0
                     return@launch
                 }
                 
@@ -1620,13 +1746,11 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 } else {
                     _apkDownloadProgress.value = "Unzip completed but no valid build artifacts found."
                     showDownloadNotification(0, "Pencode AI Build", "Unzip completed but no valid artifacts found.", true)
-                    lastDownloadedRunId = 0
                 }
             } catch (e: Exception) {
                 _apkDownloadProgress.value = "Extraction failed: ${e.localizedMessage}"
                 _apkDownloadPercentage.value = null
                 showDownloadNotification(0, "Pencode AI Build", "Extraction failed: ${e.localizedMessage}", true)
-                lastDownloadedRunId = 0
             }
         }
     }
