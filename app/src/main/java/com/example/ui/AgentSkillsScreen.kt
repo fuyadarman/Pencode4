@@ -49,7 +49,64 @@ data class AgentSkill(
     val rawFileUrl: String = ""
 )
 
-val defaultAgentSkills = emptyList<AgentSkill>()
+val defaultAgentSkills = listOf(
+    AgentSkill(
+        id = "vercel-react-best-practices",
+        name = "React & Next.js Composition",
+        author = "vercel-labs/agent-skills",
+        installs = "GitHub Skill",
+        description = "React composition patterns that scale. Eliminate boolean prop proliferation, build flexible component libraries, and optimize state rendering.",
+        githubUrl = "https://github.com/vercel-labs/agent-skills",
+        rawFileUrl = "https://raw.githubusercontent.com/vercel-labs/agent-skills/main/skills/react-best-practices/SKILL.md",
+        skillPrompt = """
+            Skill: React & Next.js Composition Best Practices
+            - Avoid boolean prop proliferation; use composition and sub-components.
+            - Ensure state stays local where possible and lift state cleanly.
+        """.trimIndent()
+    ),
+    AgentSkill(
+        id = "anthropic-claude-prompt-engineering",
+        name = "Claude Prompt Engineering",
+        author = "anthropics/courses",
+        installs = "GitHub Skill",
+        description = "Advanced prompt design for AI models: XML tags structuring, chain-of-thought reasoning, and system prompt optimization.",
+        githubUrl = "https://github.com/anthropics/courses",
+        rawFileUrl = "https://raw.githubusercontent.com/anthropics/courses/main/README.md",
+        skillPrompt = """
+            Skill: Anthropic Claude Prompt Engineering
+            - Structure context using XML tags like <context>, <instructions>, and <examples>.
+            - Request step-by-step thinking inside <thinking> tags before producing final output.
+        """.trimIndent()
+    ),
+    AgentSkill(
+        id = "google-gemini-cookbook",
+        name = "Gemini API Optimization",
+        author = "google-gemini/cookbook",
+        installs = "GitHub Skill",
+        description = "Production patterns for Gemini 1.5/2.0 Pro and Flash models, structured JSON outputs, multimodal reasoning, and function calling.",
+        githubUrl = "https://github.com/google-gemini/cookbook",
+        rawFileUrl = "https://raw.githubusercontent.com/google-gemini/cookbook/main/README.md",
+        skillPrompt = """
+            Skill: Gemini API Cookbook
+            - Use responseSchema for deterministic JSON generation.
+            - Leverage system instructions and safety settings properly.
+        """.trimIndent()
+    ),
+    AgentSkill(
+        id = "android-compose-architecture",
+        name = "Jetpack Compose MVVM",
+        author = "android/architecture-samples",
+        installs = "Android Skill",
+        description = "Clean Architecture with Jetpack Compose, ViewModels, StateFlow, Coroutines, and Material 3 design system.",
+        githubUrl = "https://github.com/android/architecture-samples",
+        rawFileUrl = "https://raw.githubusercontent.com/android/architecture-samples/main/README.md",
+        skillPrompt = """
+            Skill: Jetpack Compose MVVM & Clean Architecture
+            - Unidirectional data flow with StateFlow and collectAsStateWithLifecycle.
+            - Material 3 design system compliance with 48dp minimum touch targets.
+        """.trimIndent()
+    )
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -170,7 +227,7 @@ fun AgentSkillsDialog(
                         IconButton(
                             onClick = {
                                 onFetchOnlineSkills()
-                                android.widget.Toast.makeText(context, "Fetching live skills from Vercel-labs, Anthropic, Expo & NextLevelBuilder...", android.widget.Toast.LENGTH_SHORT).show()
+                                android.widget.Toast.makeText(context, "Fetching real skills from GitHub repositories...", android.widget.Toast.LENGTH_SHORT).show()
                             },
                             modifier = Modifier
                                 .size(40.dp)
@@ -338,7 +395,10 @@ fun AgentSkillsDialog(
                                     )
                                     Spacer(modifier = Modifier.height(16.dp))
                                     Button(
-                                        onClick = { onFetchOnlineSkills() },
+                                        onClick = {
+                                            onFetchOnlineSkills()
+                                            android.widget.Toast.makeText(context, "Fetching real skills from GitHub...", android.widget.Toast.LENGTH_SHORT).show()
+                                        },
                                         enabled = !isFetchingSkills,
                                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00F2FE)),
                                         shape = RoundedCornerShape(10.dp)

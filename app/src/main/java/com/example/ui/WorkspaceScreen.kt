@@ -4128,30 +4128,34 @@ fun ExplorerPanel(
         fun flatten(node: FileNode, level: Int) {
             if (node.path.isNotEmpty()) {
                 val isExpanded = expandedFolders.contains(node.path)
+                val isActualFile = node.isFile && node.children.isEmpty()
                 list.add(
                     FlatFileNode(
                         path = node.path,
                         name = node.name,
-                        isFile = node.isFile,
+                        isFile = isActualFile,
                         level = level,
                         isExpanded = isExpanded,
                         fileEntity = node.fileEntity
                     )
                 )
-                if (node.isFile || !isExpanded) return
+                if (isActualFile || !isExpanded) return
             }
             
-            // Sort children: folders first, then alphabetically
-            val sortedChildren = node.children.sortedWith(
-                compareBy<FileNode> { it.isFile }.thenBy { it.name.lowercase() }
-            )
+            // Sort children: folders first, then alphabetically, deduplicated by path
+            val sortedChildren = node.children
+                .distinctBy { it.path }
+                .sortedWith(
+                    compareBy<FileNode> { if (!it.isFile || it.children.isNotEmpty()) 0 else 1 }
+                        .thenBy { it.name.lowercase() }
+                )
             
             sortedChildren.forEach { child ->
                 flatten(child, if (node.path.isEmpty()) 0 else level + 1)
             }
         }
         flatten(rootNode, 0)
-        list
+        list.distinctBy { it.path }
     }
 
     Column(
@@ -4395,8 +4399,9 @@ fun FileNodeItem(
 
 fun buildFileTree(files: List<ProjectFileEntity>): FileNode {
     val root = FileNode("", "", false)
-    val childrenMap = mutableMapOf<FileNode, MutableMap<String, FileNode>>()
-    
+    val pathNodeMap = mutableMapOf<String, FileNode>()
+    pathNodeMap[""] = root
+
     // Normalize paths and filter out build artifacts and empty leading slash components
     val filteredFiles = files.filter { f ->
         val clean = f.path.replace('\\', '/').trimStart('/')
@@ -4405,32 +4410,57 @@ fun buildFileTree(files: List<ProjectFileEntity>): FileNode {
     val displayFiles = if (filteredFiles.size > 2000) filteredFiles.take(2000) else filteredFiles
 
     displayFiles.forEach { file ->
-        val normPath = file.path.replace('\\', '/').trimStart('/')
+        val normPath = file.path.replace('\\', '/').trimStart('/').trimEnd('/')
         if (normPath.isBlank()) return@forEach
         val parts = normPath.split("/").filter { it.isNotBlank() }
-        var current = root
         var currentPath = ""
+        
         parts.forEachIndexed { index, part ->
-            currentPath = if (currentPath.isEmpty()) part else "$currentPath/$part"
+            val parentPath = currentPath
+            currentPath = if (parentPath.isEmpty()) part else "$parentPath/$part"
             val isLast = index == parts.size - 1
-            val currentChildren = childrenMap.getOrPut(current) { mutableMapOf() }
-            var child = currentChildren[part]
-            if (child == null) {
-                child = FileNode(part, currentPath, isLast, fileEntity = if (isLast) file else null)
-                currentChildren[part] = child
-                current.children.add(child)
+            val isFileNode = isLast
+            val parentNode = pathNodeMap[parentPath] ?: root
+            
+            var existingNode = pathNodeMap[currentPath]
+            if (existingNode == null) {
+                existingNode = FileNode(
+                    name = part,
+                    path = currentPath,
+                    isFile = isFileNode,
+                    fileEntity = if (isLast) file else null
+                )
+                pathNodeMap[currentPath] = existingNode
+                if (parentNode.children.none { it.path == currentPath }) {
+                    parentNode.children.add(existingNode)
+                }
+            } else {
+                if (isLast && existingNode.children.isEmpty()) {
+                    val updated = existingNode.copy(isFile = true, fileEntity = file)
+                    pathNodeMap[currentPath] = updated
+                    val idx = parentNode.children.indexOfFirst { it.path == currentPath }
+                    if (idx >= 0) {
+                        parentNode.children[idx] = updated
+                    }
+                }
             }
-            current = child
         }
     }
-    // Sort: Folders first, then alphabetically
+
     sortFileNodes(root)
     return root
 }
 
 fun sortFileNodes(node: FileNode) {
-    node.children.sortWith(compareBy<FileNode> { it.isFile }.thenBy { it.name })
-    node.children.forEach { sortFileNodes(it) }
+    val uniqueChildren = node.children.distinctBy { it.path }.toMutableList()
+    uniqueChildren.forEach { sortFileNodes(it) }
+    uniqueChildren.sortWith(
+        compareBy<FileNode> { child ->
+            if (!child.isFile || child.children.isNotEmpty()) 0 else 1
+        }.thenBy { it.name.lowercase() }
+    )
+    node.children.clear()
+    node.children.addAll(uniqueChildren)
 }
 
 @Composable

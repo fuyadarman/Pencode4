@@ -641,7 +641,27 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
 
         val loadedMap = loadedSkills.associateBy { it.id }
 
-        val customUpdated = loadedSkills.map { skill ->
+        // Start with pre-bundled default skills merged with saved user states
+        val mergedDefaults = com.example.ui.defaultAgentSkills.map { defaultSkill ->
+            val saved = loadedMap[defaultSkill.id]
+            val localContent = localFilesMap[defaultSkill.id]
+            if (saved != null) {
+                defaultSkill.copy(
+                    isInstalled = saved.isInstalled || localContent != null,
+                    isEnabled = saved.isEnabled,
+                    skillPrompt = if (localContent != null && localContent.isNotBlank()) localContent else if (saved.skillPrompt.isNotBlank()) saved.skillPrompt else defaultSkill.skillPrompt
+                )
+            } else if (localContent != null) {
+                defaultSkill.copy(
+                    isInstalled = true,
+                    isEnabled = true,
+                    skillPrompt = localContent
+                )
+            } else defaultSkill
+        }
+
+        val defaultIds = com.example.ui.defaultAgentSkills.map { it.id }.toSet()
+        val customLoaded = loadedSkills.filter { it.id !in defaultIds }.map { skill ->
             val localContent = localFilesMap[skill.id]
             if (localContent != null) {
                 skill.copy(
@@ -651,7 +671,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             } else skill
         }
 
-        val existingIds = customUpdated.map { it.id }.toSet()
+        val existingIds = (defaultIds + customLoaded.map { it.id }).toSet()
         val extraDiskSkills = localFilesMap.filterKeys { it !in existingIds }.map { (id, content) ->
             var skillName = id.replace("-", " ").split(" ").joinToString(" ") { word -> word.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() } }
             var skillDesc = "Locally stored agent skill file ($id.md)."
@@ -688,13 +708,11 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
 
-        val finalSkills = customUpdated + extraDiskSkills
+        val finalSkills = mergedDefaults + customLoaded + extraDiskSkills
         _agentSkills.value = finalSkills
         saveAgentSkillsInternal()
 
-        if (finalSkills.isEmpty()) {
-            fetchOnlineAgentSkills()
-        }
+        fetchOnlineAgentSkills()
     }
 
     fun fetchOnlineAgentSkills(onComplete: ((Int) -> Unit)? = null) {
@@ -712,7 +730,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                     Triple("langchain-ai", "langchain", "https://github.com/langchain-ai/langchain")
                 )
 
-                val fetchedFetchedList = mutableListOf<com.example.ui.AgentSkill>()
+                val fetchedList = mutableListOf<com.example.ui.AgentSkill>()
 
                 for ((orgName, repo, githubUrl) in repos) {
                     try {
@@ -728,8 +746,8 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                                 conn.requestMethod = "GET"
                                 conn.setRequestProperty("User-Agent", "PenCode-Android-Agent")
                                 conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
-                                conn.connectTimeout = 4000
-                                conn.readTimeout = 4000
+                                conn.connectTimeout = 5000
+                                conn.readTimeout = 5000
 
                                 if (conn.responseCode == 200) {
                                     val responseText = conn.inputStream.bufferedReader().use { it.readText() }
@@ -739,38 +757,39 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                                     for (i in 0 until treeArray.length()) {
                                         val item = treeArray.getJSONObject(i)
                                         val path = item.optString("path", "")
-                                        val type = item.optString("type", "")
 
                                         val isSkillFile = (path.endsWith(".md", ignoreCase = true) || path.endsWith(".json", ignoreCase = true)) &&
-                                            !path.equals("README.md", ignoreCase = true) &&
                                             !path.equals("LICENSE", ignoreCase = true) &&
-                                            !path.equals("package.json", ignoreCase = true)
+                                            !path.equals("package.json", ignoreCase = true) &&
+                                            !path.contains(".github/")
 
                                         if (isSkillFile) {
                                             val fileName = path.substringAfterLast("/")
-                                            val cleanName = fileName.removeSuffix(".md").removeSuffix(".json")
-                                                .replace("SKILL", "")
-                                                .replace("-", " ")
-                                                .replace("_", " ")
-                                                .trim()
+                                            val rawName = if (fileName.equals("SKILL.md", ignoreCase = true) || fileName.equals("SKILL.json", ignoreCase = true) || fileName.equals("README.md", ignoreCase = true)) {
+                                                val segs = path.split("/")
+                                                if (segs.size >= 2) segs[segs.size - 2] else fileName.removeSuffix(".md").removeSuffix(".json")
+                                            } else {
+                                                fileName.removeSuffix(".md").removeSuffix(".json")
+                                            }
 
+                                            val cleanName = rawName.replace("-", " ").replace("_", " ").trim()
                                             if (cleanName.isBlank()) continue
 
                                             val skillId = "$orgName-${path.lowercase().replace("/", "-").replace(".", "-")}"
-                                            if (_agentSkills.value.none { it.id == skillId } && fetchedFetchedList.none { it.id == skillId }) {
+                                            if (_agentSkills.value.none { it.id == skillId } && fetchedList.none { it.id == skillId }) {
                                                 val formattedName = cleanName.split(" ")
                                                     .filter { it.isNotBlank() }
                                                     .joinToString(" ") { word -> word.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() } }
 
                                                 val rawUrl = "https://raw.githubusercontent.com/$orgName/$repo/$branch/$path"
 
-                                                fetchedFetchedList.add(
+                                                fetchedList.add(
                                                     com.example.ui.AgentSkill(
                                                         id = skillId,
                                                         name = "$formattedName ($orgName)",
                                                         author = "$orgName/$repo",
                                                         installs = "GitHub Skill",
-                                                        description = "Full recursive agent skill from $orgName/$repo ($path).",
+                                                        description = "Real agent skill from $orgName/$repo ($path).",
                                                         githubUrl = githubUrl,
                                                         isInstalled = false,
                                                         isEnabled = false,
@@ -790,56 +809,14 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                                 e.printStackTrace()
                             }
                         }
-
-                        if (!fetchedFromTree) {
-                            val apiUrl = "https://api.github.com/repos/$orgName/$repo/contents"
-                            val url = java.net.URL(apiUrl)
-                            val conn = url.openConnection() as java.net.HttpURLConnection
-                            conn.requestMethod = "GET"
-                            conn.setRequestProperty("User-Agent", "PenCode-Android-Agent")
-                            conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
-                            conn.connectTimeout = 4000
-                            conn.readTimeout = 4000
-
-                            if (conn.responseCode == 200) {
-                                val responseText = conn.inputStream.bufferedReader().use { it.readText() }
-                                val jsonArray = org.json.JSONArray(responseText)
-                                for (i in 0 until jsonArray.length()) {
-                                    val item = jsonArray.getJSONObject(i)
-                                    val name = item.optString("name", "")
-                                    val path = item.optString("path", "")
-                                    val skillId = "$orgName-${name.removeSuffix(".md").removeSuffix(".json").lowercase().replace(" ", "-")}"
-                                    if (_agentSkills.value.none { it.id == skillId } && fetchedFetchedList.none { it.id == skillId }) {
-                                        val cleanName = name.removeSuffix(".md").removeSuffix(".json").replace("-", " ").replace("_", " ")
-                                            .split(" ").joinToString(" ") { word -> word.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() } }
-                                        val rawUrl = "https://raw.githubusercontent.com/$orgName/$repo/main/$path"
-                                        fetchedFetchedList.add(
-                                            com.example.ui.AgentSkill(
-                                                id = skillId,
-                                                name = "$cleanName ($orgName)",
-                                                author = "$orgName/$repo",
-                                                installs = "GitHub Skill",
-                                                description = "Live fetched skill from $orgName/$repo ($path).",
-                                                githubUrl = githubUrl,
-                                                isInstalled = false,
-                                                isEnabled = false,
-                                                skillPrompt = "Skill live fetched from $githubUrl ($path).",
-                                                filePath = path,
-                                                rawFileUrl = rawUrl
-                                            )
-                                        )
-                                    }
-                                }
-                            }
-                        }
                     } catch (e: Exception) {
                         e.printStackTrace()
                     }
                 }
 
-                if (fetchedFetchedList.isNotEmpty()) {
-                    newCount = fetchedFetchedList.size
-                    _agentSkills.value = _agentSkills.value + fetchedFetchedList
+                if (fetchedList.isNotEmpty()) {
+                    newCount = fetchedList.size
+                    _agentSkills.value = _agentSkills.value + fetchedList
                     saveAgentSkillsInternal()
                 }
             } catch (e: Exception) {
