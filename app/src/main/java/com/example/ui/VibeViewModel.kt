@@ -2190,6 +2190,28 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         _aiActionLogs.value = _aiActionLogs.value + cancelLog
     }
 
+    private fun checkHasCodeChangesThisTurn(editsAtPromptStart: Int): Boolean {
+        val editHistoryChanged = _editHistory.value.size > editsAtPromptStart
+        val logsHaveEdits = _aiActionLogs.value.any { log ->
+            val t = log.title.lowercase()
+            (t.startsWith("edit") || 
+             t.startsWith("patch") || 
+             t.startsWith("append") || 
+             t.startsWith("create file") || 
+             t.startsWith("write file") || 
+             t.startsWith("delete file") || 
+             t.startsWith("modified file") || 
+             t.startsWith("rename file") || 
+             t.startsWith("move file") ||
+             t.contains("code modified") ||
+             t.contains("file edited") ||
+             t.contains("file written") ||
+             t.contains("file created")) && 
+            !t.contains("read") && !t.contains("scan") && !t.contains("list")
+        }
+        return editHistoryChanged || logsHaveEdits
+    }
+
     private val _webConsoleLogs = MutableStateFlow<List<WebConsoleLog>>(emptyList())
     val webConsoleLogs = _webConsoleLogs.asStateFlow()
 
@@ -2753,8 +2775,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             // 2. Clear previous logs and initialize thinking state
             _aiActionLogs.value = emptyList()
             _todoList.value = emptyList()
+            _showGithubPushPrompt.value = false
             _isThinking.value = true
             _agentStatus.value = "AI is thinking..."
+            val editsAtPromptStart = _editHistory.value.size
 
             // Re-enable conversation history with highly optimized, token-saving action summaries
             val historyEntities = repository.getChatsForProject(project.name)
@@ -3433,10 +3457,13 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 }
 
                                 // Insert Assistant Final Message to DB
+                                val cleanMessage = message.replace(Regex("(?i)</?tool_call>"), "")
+                                    .replace(Regex("(?i)</?function_call>"), "")
+                                    .trim()
                                 val agentMsg = ChatMessageEntity(
                                     projectName = project.name,
                                     role = "assistant",
-                                    content = message,
+                                    content = if (cleanMessage.isNotBlank()) cleanMessage else "Task completed successfully!",
                                     timestamp = System.currentTimeMillis(),
                                     aiActionLogsJson = logsJson
                                 )
@@ -3447,50 +3474,55 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 loopCompleted = true
                                 agentMessageSaved = true
 
-                                // Detect framework and ask to build on Github
-                                val projectDir = repository.getProjectDir(project.name)
-                                val pFiles = _projectFiles.value
-                                val isKotlin = java.io.File(projectDir, "build.gradle.kts").exists() || java.io.File(projectDir, "build.gradle").exists() || pFiles.any { it.path.endsWith("build.gradle.kts") || it.path.endsWith("build.gradle") }
-                                val isFlutter = java.io.File(projectDir, "pubspec.yaml").exists() || pFiles.any { it.path.endsWith("pubspec.yaml") }
-                                val isNextJs = java.io.File(projectDir, "next.config.js").exists() || java.io.File(projectDir, "next.config.mjs").exists() || pFiles.any { it.path.contains("next.config") }
-                                val isReactVite = java.io.File(projectDir, "vite.config.js").exists() || java.io.File(projectDir, "vite.config.ts").exists() || pFiles.any { it.path.contains("vite.config") || (it.path.endsWith("package.json") && it.content.contains("vite", ignoreCase = true)) }
-                                val isWebPackage = java.io.File(projectDir, "package.json").exists() || pFiles.any { it.path.endsWith("package.json") }
+                                // Smart Code Change Tracker: Detect framework and ask to build on Github ONLY if code changed this turn
+                                val hasFileModifications = checkHasCodeChangesThisTurn(editsAtPromptStart)
+                                if (hasFileModifications) {
+                                    val projectDir = repository.getProjectDir(project.name)
+                                    val pFiles = _projectFiles.value
+                                    val isKotlin = java.io.File(projectDir, "build.gradle.kts").exists() || java.io.File(projectDir, "build.gradle").exists() || pFiles.any { it.path.endsWith("build.gradle.kts") || it.path.endsWith("build.gradle") }
+                                    val isFlutter = java.io.File(projectDir, "pubspec.yaml").exists() || pFiles.any { it.path.endsWith("pubspec.yaml") }
+                                    val isNextJs = java.io.File(projectDir, "next.config.js").exists() || java.io.File(projectDir, "next.config.mjs").exists() || pFiles.any { it.path.contains("next.config") }
+                                    val isReactVite = java.io.File(projectDir, "vite.config.js").exists() || java.io.File(projectDir, "vite.config.ts").exists() || pFiles.any { it.path.contains("vite.config") || (it.path.endsWith("package.json") && it.content.contains("vite", ignoreCase = true)) }
+                                    val isWebPackage = java.io.File(projectDir, "package.json").exists() || pFiles.any { it.path.endsWith("package.json") }
 
-                                if (isKotlin) {
-                                    _detectedFramework.value = "Kotlin/Android"
-                                    if (_allowBuildPush.value) {
-                                        acceptGithubPushPrompt()
-                                    } else {
-                                        _showGithubPushPrompt.value = true
+                                    if (isKotlin) {
+                                        _detectedFramework.value = "Kotlin/Android"
+                                        if (_allowBuildPush.value) {
+                                            acceptGithubPushPrompt()
+                                        } else {
+                                            _showGithubPushPrompt.value = true
+                                        }
+                                    } else if (isFlutter) {
+                                        _detectedFramework.value = "Flutter"
+                                        if (_allowBuildPush.value) {
+                                            acceptGithubPushPrompt()
+                                        } else {
+                                            _showGithubPushPrompt.value = true
+                                        }
+                                    } else if (isNextJs) {
+                                        _detectedFramework.value = "Next.js"
+                                        if (_allowBuildPush.value) {
+                                            acceptGithubPushPrompt()
+                                        } else {
+                                            _showGithubPushPrompt.value = true
+                                        }
+                                    } else if (isReactVite) {
+                                        _detectedFramework.value = "React Vite"
+                                        if (_allowBuildPush.value) {
+                                            acceptGithubPushPrompt()
+                                        } else {
+                                            _showGithubPushPrompt.value = true
+                                        }
+                                    } else if (isWebPackage) {
+                                        _detectedFramework.value = "Web App"
+                                        if (_allowBuildPush.value) {
+                                            acceptGithubPushPrompt()
+                                        } else {
+                                            _showGithubPushPrompt.value = true
+                                        }
                                     }
-                                } else if (isFlutter) {
-                                    _detectedFramework.value = "Flutter"
-                                    if (_allowBuildPush.value) {
-                                        acceptGithubPushPrompt()
-                                    } else {
-                                        _showGithubPushPrompt.value = true
-                                    }
-                                } else if (isNextJs) {
-                                    _detectedFramework.value = "Next.js"
-                                    if (_allowBuildPush.value) {
-                                        acceptGithubPushPrompt()
-                                    } else {
-                                        _showGithubPushPrompt.value = true
-                                    }
-                                } else if (isReactVite) {
-                                    _detectedFramework.value = "React Vite"
-                                    if (_allowBuildPush.value) {
-                                        acceptGithubPushPrompt()
-                                    } else {
-                                        _showGithubPushPrompt.value = true
-                                    }
-                                } else if (isWebPackage) {
-                                    _detectedFramework.value = "Web App"
-                                    if (_allowBuildPush.value) {
-                                        acceptGithubPushPrompt()
-                                    } else {
-                                        _showGithubPushPrompt.value = true
-                                    }
+                                } else {
+                                    _showGithubPushPrompt.value = false
                                 }
                             }
                             "ai_response" -> {
@@ -4605,18 +4637,21 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                         }
                         
                         val isSuccessful = loopCompleted && _aiActionLogs.value.none { it.status == "failed" }
-                        val content = if (isSuccessful) {
+                        val rawContent = if (isSuccessful) {
                             lastThought?.ifBlank { null } ?: "Task completed successfully!"
                         } else {
                             val finalMessage = _aiActionLogs.value.lastOrNull { it.status == "failed" }?.details 
                                 ?: "AI task stopped unexpectedly or hit a limit."
                             "Task interrupted: $finalMessage"
                         }
+                        val content = rawContent.replace(Regex("(?i)</?tool_call>"), "")
+                            .replace(Regex("(?i)</?function_call>"), "")
+                            .trim()
                         
                         val agentMsg = ChatMessageEntity(
                             projectName = project.name,
                             role = "assistant",
-                            content = content,
+                            content = if (content.isNotBlank()) content else "Task completed successfully!",
                             timestamp = System.currentTimeMillis(),
                             aiActionLogsJson = logsJson
                         )
@@ -4632,14 +4667,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 
                     // Auto-trigger framework detection and Github push prompting on task completion
                     try {
-                        val hasFileModifications = _aiActionLogs.value.any { log ->
-                            log.title.contains("File", ignoreCase = true) || 
-                            log.title.contains("Edit", ignoreCase = true) || 
-                            log.title.contains("Write", ignoreCase = true) || 
-                            log.title.contains("Create", ignoreCase = true) ||
-                            log.title.contains("Appended", ignoreCase = true) ||
-                            log.title.contains("Deleted", ignoreCase = true)
-                        }
+                        val hasFileModifications = checkHasCodeChangesThisTurn(editsAtPromptStart)
                         if (hasFileModifications) {
                             val projectDir = repository.getProjectDir(project.name)
                             val pFiles = _projectFiles.value
@@ -4685,6 +4713,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     _showGithubPushPrompt.value = true
                                 }
                             }
+                        } else {
+                            _showGithubPushPrompt.value = false
                         }
                     } catch (e: Exception) {
                         Log.e("VibeViewModel", "Error in post-thinking framework detection", e)

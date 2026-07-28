@@ -126,6 +126,17 @@ object GeminiClient {
     private fun cleanJsonString(raw: String): String {
         var text = raw.trim()
         
+        // Strip or extract inner content from <tool_call> ... </tool_call> tags if present
+        if (text.contains("<tool_call>", ignoreCase = true)) {
+            val startIdx = text.indexOf("<tool_call>", ignoreCase = true)
+            val endIdx = text.indexOf("</tool_call>", startIdx, ignoreCase = true)
+            text = if (endIdx != -1) {
+                text.substring(startIdx + 11, endIdx).trim()
+            } else {
+                text.replace(Regex("(?i)</?tool_call>"), "").trim()
+            }
+        }
+        
         // Try to find a markdown JSON code block first
         val jsonBlockStart = text.indexOf("```json")
         if (jsonBlockStart != -1) {
@@ -165,17 +176,38 @@ object GeminiClient {
         return null
     }
 
+    private fun extractXmlField(text: String, tag: String): String? {
+        val pattern = java.util.regex.Pattern.compile("<$tag>(.*?)</$tag>", java.util.regex.Pattern.DOTALL or java.util.regex.Pattern.CASE_INSENSITIVE)
+        val matcher = pattern.matcher(text)
+        if (matcher.find()) {
+            return matcher.group(1)?.trim()
+        }
+        return null
+    }
+
+    private fun stripToolCallXml(text: String): String {
+        return text.replace(Regex("(?i)</?tool_call>"), "")
+            .replace(Regex("(?i)</?tool_input>"), "")
+            .replace(Regex("(?i)</?function_call>"), "")
+            .replace(Regex("(?i)</?tool_name>"), "")
+            .trim()
+    }
+
     private fun parseFallbackToolCall(rawText: String, finishReason: String? = null): ToolCallResponse {
-        val tool = extractField(rawText, "tool")
-        val thought = extractField(rawText, "thought")
-        val message = extractField(rawText, "message")
-        val path = extractField(rawText, "path")
-        val content = extractField(rawText, "content")
-        val command = extractField(rawText, "command")
+        val tool = extractField(rawText, "tool") 
+            ?: extractXmlField(rawText, "tool")
+            ?: extractXmlField(rawText, "tool_name")
+            ?: extractXmlField(rawText, "name")
+            
+        val thought = extractField(rawText, "thought") ?: extractXmlField(rawText, "thought")
+        val message = extractField(rawText, "message") ?: extractXmlField(rawText, "message")
+        val path = extractField(rawText, "path") ?: extractXmlField(rawText, "path")
+        val content = extractField(rawText, "content") ?: extractXmlField(rawText, "content")
+        val command = extractField(rawText, "command") ?: extractXmlField(rawText, "command")
         
         if (tool != null) {
             return ToolCallResponse(
-                thought = thought ?: "Parsed via regex fallback.",
+                thought = thought ?: "Parsed via fallback parser.",
                 tool = tool,
                 arguments = ToolArguments(
                     message = message,
@@ -188,9 +220,9 @@ object GeminiClient {
         }
         
         val cleanedText = if (rawText.trim().startsWith("{") && rawText.trim().contains("\"message\"")) {
-            message ?: rawText
+            message ?: stripToolCallXml(rawText)
         } else {
-            rawText
+            stripToolCallXml(rawText)
         }
 
         return ToolCallResponse(
