@@ -1906,6 +1906,119 @@ fun parseInlineMarkdown(text: String): androidx.compose.ui.text.AnnotatedString 
     }
 }
 
+data class MentionChipItem(
+    val label: String,
+    val isSkill: Boolean = false,
+    val isImage: Boolean = false
+)
+
+fun parseUserMessageDisplay(fullContent: String): Pair<String, List<MentionChipItem>> {
+    val attachedIndex = fullContent.indexOf("\n\n[Attached File:")
+    val imageIndex = fullContent.indexOf("\n\n[IMAGE_BASE64:")
+    
+    val cutoffIndex = when {
+        attachedIndex != -1 && imageIndex != -1 -> minOf(attachedIndex, imageIndex)
+        attachedIndex != -1 -> attachedIndex
+        imageIndex != -1 -> imageIndex
+        else -> -1
+    }
+    
+    val rawText = if (cutoffIndex != -1) fullContent.substring(0, cutoffIndex).trim() else fullContent.trim()
+    val attachmentsPart = if (cutoffIndex != -1) fullContent.substring(cutoffIndex) else ""
+    
+    val chipItems = mutableListOf<MentionChipItem>()
+    
+    val fileMatches = Regex("""\[Attached File:\s*([^\]]+)\]""").findAll(attachmentsPart)
+    for (match in fileMatches) {
+        val name = match.groupValues[1].trim()
+        if (name.startsWith("Skill:", ignoreCase = true)) {
+            val skillName = name.substringAfter("Skill:").trim()
+            chipItems.add(MentionChipItem(label = if (skillName.startsWith("/")) skillName else "/$skillName", isSkill = true))
+        } else {
+            val fileName = if (name.startsWith("@")) name else "@$name"
+            chipItems.add(MentionChipItem(label = fileName, isSkill = false))
+        }
+    }
+    
+    if (attachmentsPart.contains("[IMAGE_BASE64:")) {
+        chipItems.add(MentionChipItem(label = "Image Attachment", isImage = true))
+    }
+    
+    val tagRegex = Regex("""(@[a-zA-Z0-9_\-\./]+|/[a-zA-Z0-9_\-]+)""")
+    val textMatches = tagRegex.findAll(rawText)
+    for (match in textMatches) {
+        val tag = match.groupValues[1]
+        val isSkillTag = tag.startsWith("/")
+        val normalizedLabel = if (isSkillTag) tag else (if (tag.startsWith("@")) tag else "@$tag")
+        if (!chipItems.any { it.label.equals(normalizedLabel, ignoreCase = true) }) {
+            chipItems.add(MentionChipItem(label = normalizedLabel, isSkill = isSkillTag))
+        }
+    }
+    
+    var cleanText = rawText
+    for (chip in chipItems) {
+        if (cleanText.startsWith(chip.label, ignoreCase = true)) {
+            cleanText = cleanText.substring(chip.label.length).trim()
+        }
+    }
+    if (cleanText.isBlank() && rawText.isNotBlank()) {
+        cleanText = rawText
+    }
+    
+    return Pair(cleanText, chipItems.distinctBy { it.label })
+}
+
+@Composable
+fun MentionChipBadge(chip: MentionChipItem) {
+    val chipBg = when {
+        chip.isSkill -> Color(0xFF2D1F47)
+        chip.isImage -> Color(0xFF1B382B)
+        else -> Color(0xFF1E293B)
+    }
+    val chipBorder = when {
+        chip.isSkill -> Color(0xFFA855F7).copy(alpha = 0.5f)
+        chip.isImage -> Color(0xFF4ADE80).copy(alpha = 0.5f)
+        else -> Color(0xFF38BDF8).copy(alpha = 0.5f)
+    }
+    val iconTint = when {
+        chip.isSkill -> Color(0xFFA855F7)
+        chip.isImage -> Color(0xFF4ADE80)
+        else -> Color(0xFF38BDF8)
+    }
+    val iconVector = when {
+        chip.isSkill -> Icons.Default.Psychology
+        chip.isImage -> Icons.Default.Image
+        else -> Icons.Default.Code
+    }
+
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = chipBg,
+        border = BorderStroke(1.dp, chipBorder),
+        modifier = Modifier.padding(vertical = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            Icon(
+                imageVector = iconVector,
+                contentDescription = null,
+                tint = iconTint,
+                modifier = Modifier.size(13.dp)
+            )
+            Text(
+                text = chip.label,
+                color = Color.White,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                fontFamily = FontFamily.Monospace
+            )
+        }
+    }
+}
+
 @Composable
 fun ChatBubble(
     message: ChatMessageEntity,
@@ -1921,8 +2034,13 @@ fun ChatBubble(
     val bg = if (isUser) Color(0xFF1C1E2A) else Color(0xFF0D0F14)
     val border = if (isUser) Color(0xFF2E3147) else Color(0xFF1A1F2C)
     val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+
+    val (userDisplayText, mentionChips) = remember(message.content) {
+        if (isUser) parseUserMessageDisplay(message.content) else Pair(message.content, emptyList())
+    }
+
     var isEditing by remember { mutableStateOf(false) }
-    var editedContent by remember { mutableStateOf(message.content) }
+    var editedContent by remember { mutableStateOf(if (isUser) userDisplayText else message.content) }
 
     val logs = remember(message.aiActionLogsJson) {
         if (!message.aiActionLogsJson.isNullOrBlank()) {
@@ -2026,7 +2144,26 @@ fun ChatBubble(
                                 }
                             }
                         } else {
-                            FormattedMarkdownText(text = message.content)
+                            if (isUser) {
+                                if (mentionChips.isNotEmpty()) {
+                                    Row(
+                                        modifier = Modifier
+                                            .horizontalScroll(rememberScrollState())
+                                            .padding(bottom = 2.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        mentionChips.forEach { chip ->
+                                            MentionChipBadge(chip = chip)
+                                        }
+                                    }
+                                }
+                                if (userDisplayText.isNotBlank()) {
+                                    FormattedMarkdownText(text = userDisplayText)
+                                }
+                            } else {
+                                FormattedMarkdownText(text = message.content)
+                            }
                         }
                     }
                 }
@@ -2066,7 +2203,7 @@ fun ChatBubble(
                 }
                 
                 MessageActionButton(Icons.Default.ContentCopy, "Copy") {
-                    clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(message.content))
+                    clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(if (isUser) userDisplayText else message.content))
                 }
                 
                 MessageActionButton(Icons.Default.Delete, "Delete", tint = Color(0xFFEE5253).copy(alpha = 0.7f)) {
