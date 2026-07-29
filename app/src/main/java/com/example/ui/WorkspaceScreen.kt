@@ -81,7 +81,7 @@ fun WorkspaceScreen(
     explorerGithubRepo: String = "",
     explorerGithubBranch: String = "main",
     gitHubWorkflows: List<GitHubWorkflow> = emptyList(),
-    onTriggerAllWorkflows: () -> Unit = {},
+    onTriggerWorkflows: (Set<Long>?) -> Unit = {},
     buildStatus: String = "Idle",
     buildSteps: List<BuildStep> = emptyList(),
     buildLogs: String = "",
@@ -182,7 +182,12 @@ fun WorkspaceScreen(
     onUpdateSkillContent: (String, String) -> Unit = { _, _ -> },
     onFetchSkillFileContent: (String, ((String) -> Unit)?) -> Unit = { _, _ -> },
     webArtifactInfo: WebArtifactInfo? = null,
-    onPreviewWebArtifact: () -> Unit = {}
+    onPreviewWebArtifact: () -> Unit = {},
+    isImportingFiles: Boolean = false,
+    importProgress: Float = 0f,
+    importProgressMessage: String = "",
+    backupsList: List<BackupVersion> = emptyList(),
+    onRestoreBackup: (BackupVersion) -> Unit = {}
 ) {
     var showExplorer by remember { mutableStateOf(false) }
     var showCreateFileDialog by remember { mutableStateOf(false) }
@@ -190,6 +195,7 @@ fun WorkspaceScreen(
     var showAgentSkillsDialog by remember { mutableStateOf(false) }
     var showPushDialog by remember { mutableStateOf(false) }
     var showSearchDialog by remember { mutableStateOf(false) }
+    var showRestoreDialog by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
@@ -242,6 +248,13 @@ fun WorkspaceScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { showRestoreDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Default.History,
+                            contentDescription = "Version Backups",
+                            tint = Color(0xFF89B4FA)
+                        )
+                    }
                     IconButton(onClick = { showAgentSkillsDialog = true }) {
                         Icon(
                             imageVector = Icons.Default.Extension,
@@ -478,7 +491,7 @@ fun WorkspaceScreen(
                                 githubToken = githubToken,
                                 githubBranch = githubBranch,
                                 gitHubWorkflows = gitHubWorkflows,
-                                onTriggerAllWorkflows = onTriggerAllWorkflows,
+                                onTriggerWorkflows = onTriggerWorkflows,
                                 buildStatus = buildStatus,
                                 buildSteps = buildSteps,
                                 buildLogs = buildLogs,
@@ -499,6 +512,73 @@ fun WorkspaceScreen(
                             )
                         }
                     }
+                }
+            }
+        }
+    }
+
+    if (showRestoreDialog) {
+        RestoreDialog(
+            projectName = project.name,
+            backups = backupsList,
+            onDismiss = { showRestoreDialog = false },
+            onRestoreConfirmed = { backup ->
+                showRestoreDialog = false
+                onRestoreBackup(backup)
+            }
+        )
+    }
+
+    if (isImportingFiles) {
+        Dialog(onDismissRequest = {}) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                shape = RoundedCornerShape(16.dp),
+                color = Color(0xFF1E1E2E),
+                border = BorderStroke(1.dp, Color(0xFF313244))
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            color = Color(0xFFEC4899),
+                            strokeWidth = 2.5.dp
+                        )
+                        Text(
+                            text = "Importing Files",
+                            color = Color.White,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    LinearProgressIndicator(
+                        progress = { importProgress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                            .clip(RoundedCornerShape(4.dp)),
+                        color = Color(0xFFEC4899),
+                        trackColor = Color(0xFF313244),
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text(
+                        text = if (importProgressMessage.isNotBlank()) importProgressMessage else "Processing imported files...",
+                        color = Color(0xFFCDD6F4),
+                        fontSize = 12.sp
+                    )
                 }
             }
         }
@@ -3429,7 +3509,7 @@ fun AndroidBuildTabContent(
     githubToken: String,
     githubBranch: String,
     gitHubWorkflows: List<GitHubWorkflow> = emptyList(),
-    onTriggerAllWorkflows: () -> Unit = {},
+    onTriggerWorkflows: (Set<Long>?) -> Unit = {},
     buildStatus: String,
     buildSteps: List<BuildStep>,
     buildLogs: String,
@@ -3452,6 +3532,7 @@ fun AndroidBuildTabContent(
     var tempBranch by remember { mutableStateOf(githubBranch) }
     var expandArtifacts by remember { mutableStateOf(true) }
     var isWorkflowsExpanded by remember { mutableStateOf(true) }
+    var selectedWorkflowIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
 
     val logsScrollState = rememberScrollState()
 
@@ -3825,7 +3906,7 @@ fun AndroidBuildTabContent(
                         }
 
                         Button(
-                            onClick = onTriggerAllWorkflows,
+                            onClick = { onTriggerWorkflows(if (selectedWorkflowIds.isNotEmpty()) selectedWorkflowIds else null) },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = Color(0xFFEC4899),
                                 contentColor = Color.White
@@ -3843,7 +3924,11 @@ fun AndroidBuildTabContent(
                                     contentDescription = null,
                                     modifier = Modifier.size(14.dp)
                                 )
-                                Text("Trigger All Workflows", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text(
+                                    text = if (selectedWorkflowIds.isNotEmpty()) "Trigger Workflow (${selectedWorkflowIds.size})" else "Trigger Workflow",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
                         }
                     }
@@ -3865,6 +3950,7 @@ fun AndroidBuildTabContent(
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 gitHubWorkflows.forEach { wf ->
+                                    val isChecked = selectedWorkflowIds.contains(wf.id)
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -3874,18 +3960,40 @@ fun AndroidBuildTabContent(
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = wf.name,
-                                                color = Color.White,
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.Bold
+                                        Row(
+                                            modifier = Modifier.weight(1f),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Checkbox(
+                                                checked = isChecked,
+                                                onCheckedChange = { checked ->
+                                                    selectedWorkflowIds = if (checked) {
+                                                        selectedWorkflowIds + wf.id
+                                                    } else {
+                                                        selectedWorkflowIds - wf.id
+                                                    }
+                                                },
+                                                colors = CheckboxDefaults.colors(
+                                                    checkedColor = Color(0xFFEC4899),
+                                                    uncheckedColor = Color(0xFF80809B),
+                                                    checkmarkColor = Color.White
+                                                )
                                             )
-                                            Text(
-                                                text = wf.path,
-                                                color = Color(0xFF80809B),
-                                                fontSize = 10.sp
-                                            )
+                                            Column(
+                                                modifier = Modifier.padding(start = 4.dp)
+                                            ) {
+                                                Text(
+                                                    text = wf.name,
+                                                    color = Color.White,
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Text(
+                                                    text = wf.path,
+                                                    color = Color(0xFF80809B),
+                                                    fontSize = 10.sp
+                                                )
+                                            }
                                         }
 
                                         Spacer(modifier = Modifier.width(8.dp))

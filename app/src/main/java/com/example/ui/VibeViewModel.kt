@@ -1363,7 +1363,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun triggerAllWorkflows() {
+    fun triggerWorkflows(selectedWorkflowIds: Set<Long>? = null) {
         val repoVal = _githubRepo.value.trim()
         val tokenVal = _githubToken.value.trim()
         val branchVal = _githubBranch.value.trim().ifBlank { "main" }
@@ -1393,38 +1393,58 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             val currentWfs = _gitHubWorkflows.value
-            _gitHubWorkflows.value = currentWfs.map { 
-                if (it.state == "active") it.copy(isTriggering = true) else it
+            val targetWfs = currentWfs.filter { wf ->
+                val status = wf.latestRunStatus.lowercase()
+                val isRunning = wf.isTriggering || 
+                        status == "in_progress" || 
+                        status == "queued" || 
+                        status == "requested" || 
+                        status == "waiting"
+                val isActive = wf.state == "active"
+                val isSelected = selectedWorkflowIds.isNullOrEmpty() || selectedWorkflowIds.contains(wf.id)
+                isActive && !isRunning && isSelected
+            }
+
+            if (targetWfs.isEmpty()) {
+                Log.d("VibeViewModel", "No eligible non-running workflows to trigger.")
+                return@launch
+            }
+
+            val targetIds = targetWfs.map { it.id }.toSet()
+            _gitHubWorkflows.value = currentWfs.map { wf ->
+                if (targetIds.contains(wf.id)) wf.copy(isTriggering = true) else wf
             }
 
             val client = OkHttpClient()
             val mediaType = "application/json; charset=utf-8".toMediaTypeOrNull()
 
-            currentWfs.forEach { wf ->
-                if (wf.state == "active") {
-                    try {
-                        val dispatchUrl = "https://api.github.com/repos/$owner/$repoName/actions/workflows/${wf.id}/dispatches"
-                        val jsonBody = "{\"ref\":\"$branchVal\"}"
-                        val requestBody = okhttp3.RequestBody.create(mediaType, jsonBody)
-                        val request = Request.Builder()
-                            .url(dispatchUrl)
-                            .header("Authorization", "token $tokenVal")
-                            .header("Accept", "application/vnd.github.v3+json")
-                            .post(requestBody)
-                            .build()
+            targetWfs.forEach { wf ->
+                try {
+                    val dispatchUrl = "https://api.github.com/repos/$owner/$repoName/actions/workflows/${wf.id}/dispatches"
+                    val jsonBody = "{\"ref\":\"$branchVal\"}"
+                    val requestBody = okhttp3.RequestBody.create(mediaType, jsonBody)
+                    val request = Request.Builder()
+                        .url(dispatchUrl)
+                        .header("Authorization", "token $tokenVal")
+                        .header("Accept", "application/vnd.github.v3+json")
+                        .post(requestBody)
+                        .build()
 
-                        val response = client.newCall(request).execute()
-                        if (response.isSuccessful) {
-                            Log.d("VibeViewModel", "Successfully triggered workflow: ${wf.name}")
-                        } else {
-                            Log.e("VibeViewModel", "Failed to trigger workflow ${wf.name}: ${response.code}")
-                        }
-                    } catch (e: Exception) {
-                        Log.e("VibeViewModel", "Error triggering workflow ${wf.name}: ${e.localizedMessage}")
+                    val response = client.newCall(request).execute()
+                    if (response.isSuccessful) {
+                        Log.d("VibeViewModel", "Successfully triggered workflow: ${wf.name}")
+                    } else {
+                        Log.e("VibeViewModel", "Failed to trigger workflow ${wf.name}: ${response.code}")
                     }
+                } catch (e: Exception) {
+                    Log.e("VibeViewModel", "Error triggering workflow ${wf.name}: ${e.localizedMessage}")
                 }
             }
         }
+    }
+
+    fun triggerAllWorkflows() {
+        triggerWorkflows(null)
     }
 
     private fun showDownloadNotification(progress: Int, title: String, content: String, isFinished: Boolean = false) {
@@ -2125,6 +2145,20 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     private val _isLoadingWorkspace = MutableStateFlow(false)
     val isLoadingWorkspace: StateFlow<Boolean> = _isLoadingWorkspace.asStateFlow()
 
+    // User file import loading bar state
+    private val _isImportingFiles = MutableStateFlow(false)
+    val isImportingFiles: StateFlow<Boolean> = _isImportingFiles.asStateFlow()
+
+    private val _importProgress = MutableStateFlow(0f)
+    val importProgress: StateFlow<Float> = _importProgress.asStateFlow()
+
+    private val _importProgressMessage = MutableStateFlow("")
+    val importProgressMessage: StateFlow<String> = _importProgressMessage.asStateFlow()
+
+    // Version backups
+    private val _backupsList = MutableStateFlow<List<BackupVersion>>(emptyList())
+    val backupsList: StateFlow<List<BackupVersion>> = _backupsList.asStateFlow()
+
     fun deleteMessage(message: ChatMessageEntity) {
         val project = _currentProject.value ?: return
         viewModelScope.launch {
@@ -2286,9 +2320,30 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun importFilesFromDevice(uris: List<android.net.Uri>) {
         val project = _currentProject.value ?: return
+        if (uris.isEmpty()) return
         viewModelScope.launch {
-            repository.importFilesToProject(project.name, uris)
-            loadProjectDetails(project.name)
+            _isImportingFiles.value = true
+            _importProgress.value = 0f
+            _importProgressMessage.value = "Preparing file import..."
+            try {
+                uris.forEachIndexed { index, uri ->
+                    val fileName = repository.getFileNameFromUri(uri) ?: "imported_${System.currentTimeMillis()}"
+                    val progress = (index + 1).toFloat() / uris.size
+                    _importProgress.value = progress
+                    _importProgressMessage.value = "Importing file (${index + 1}/${uris.size}): $fileName"
+                    repository.importFilesToProject(project.name, listOf(uri))
+                }
+                _importProgress.value = 1f
+                _importProgressMessage.value = "Import completed successfully!"
+                kotlinx.coroutines.delay(600)
+                loadProjectDetails(project.name)
+            } catch (e: Exception) {
+                Log.e("VibeViewModel", "Error importing files from device", e)
+            } finally {
+                _isImportingFiles.value = false
+                _importProgress.value = 0f
+                _importProgressMessage.value = ""
+            }
         }
     }
 
@@ -2530,6 +2585,37 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         selectActiveFile(defaultFile)
 
         _chatMessages.value = repository.getChatsForProject(projectName)
+        loadBackupsForCurrentProject(projectName)
+    }
+
+    fun loadBackupsForCurrentProject(projectName: String? = _currentProject.value?.name) {
+        val projName = projectName ?: return
+        viewModelScope.launch {
+            _backupsList.value = RestoreManager.getBackups(getApplication(), projName)
+        }
+    }
+
+    fun restoreProjectVersion(backup: BackupVersion) {
+        val project = _currentProject.value ?: return
+        viewModelScope.launch {
+            _isLoadingWorkspace.value = true
+            try {
+                val success = RestoreManager.restoreBackup(getApplication(), backup, repository)
+                if (success) {
+                    loadProjectDetails(project.name)
+                    _agentStatus.value = "Restored version from ${formatTimestamp(backup.timestamp)}"
+                }
+            } catch (e: Exception) {
+                Log.e("VibeViewModel", "Error restoring backup", e)
+            } finally {
+                _isLoadingWorkspace.value = false
+            }
+        }
+    }
+
+    private fun formatTimestamp(timestamp: Long): String {
+        val sdf = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault())
+        return sdf.format(java.util.Date(timestamp))
     }
 
     fun selectActiveFile(file: ProjectFileEntity?) {
@@ -2761,6 +2847,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                     finalPrompt += "\n\n[Attached File: ${file.name}]\n${file.contentAsText}\n[/Attached File]"
                 }
             }
+
+            // Save full project version snapshot (keeping latest 3) before AI modifies project
+            val currentFilesToBackup = repository.getFilesForProject(project.name)
+            RestoreManager.saveBackup(getApplication(), project.name, finalPrompt, currentFilesToBackup)
+            loadBackupsForCurrentProject(project.name)
 
             // 1. Save user prompt to Chat Database
             if (!isRegenerate) {
@@ -4068,6 +4159,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 _aiActionLogs.value = _aiActionLogs.value + searchLog
                                 _agentStatus.value = "Performing browser search/navigation for: $queryVal..."
 
+                                var lastUrl = ""
+                                var lastTitle = ""
+                                var lastExcerpt = ""
+
                                 val result = if (queryVal.isBlank()) {
                                     "Error: 'query' argument cannot be empty. Please provide a search term or a URL."
                                 } else {
@@ -4079,6 +4174,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     }
                                     when (browserResult) {
                                         is BrowserResult.Success -> {
+                                            lastUrl = browserResult.url
+                                            lastTitle = browserResult.title
+                                            lastExcerpt = browserResult.content.take(180)
                                             "Successfully loaded page: ${browserResult.url}\nTitle: ${browserResult.title}\n\nContent Summary:\n${browserResult.content}"
                                         }
                                         is BrowserResult.Error -> {
@@ -4090,7 +4188,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 _aiActionLogs.value = _aiActionLogs.value.map { log ->
                                     if (log.id == searchLog.id) {
                                         val isSuccess = !result.startsWith("Error")
-                                        log.copy(status = if (isSuccess) "success" else "failed", details = if (isSuccess) "Loaded successfully" else result)
+                                        val logDetails = if (isSuccess) {
+                                            "Navigated to: $lastUrl\nTitle: $lastTitle\nArticle Excerpt: $lastExcerpt..."
+                                        } else result
+                                        log.copy(status = if (isSuccess) "success" else "failed", details = logDetails)
                                     } else log
                                 }
 
@@ -4100,19 +4201,24 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                             "browser_click" -> {
                                 val selector = args?.search ?: ""
                                 val clickLog = AiActionLog(
-                                    title = "Browser click element",
+                                    title = "Browser Click & Switch",
                                     status = "thinking",
-                                    details = "Clicking element: $selector",
+                                    details = "Clicking button/element '$selector' in browser...",
                                     lineRange = "background-browser"
                                 )
                                 _aiActionLogs.value = _aiActionLogs.value + clickLog
-                                _agentStatus.value = "Clicking element: $selector..."
+                                _agentStatus.value = "Clicking element '$selector' and switching page..."
+
+                                var clickedUrl = ""
+                                var clickedTitle = ""
 
                                 val result = if (selector.isBlank()) {
                                     "Error: 'search' argument (CSS selector or XPath) cannot be empty."
                                 } else {
                                     when (val browserResult = backgroundBrowser.clickElement(selector)) {
                                         is BrowserResult.Success -> {
+                                            clickedUrl = browserResult.url
+                                            clickedTitle = browserResult.title
                                             browserResult.content
                                         }
                                         is BrowserResult.Error -> {
@@ -4124,7 +4230,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 _aiActionLogs.value = _aiActionLogs.value.map { log ->
                                     if (log.id == clickLog.id) {
                                         val isSuccess = !result.startsWith("Error")
-                                        log.copy(status = if (isSuccess) "success" else "failed", details = if (isSuccess) "Clicked successfully" else result)
+                                        val detailsText = if (isSuccess) {
+                                            "Clicked '$selector' -> Switched to: $clickedUrl\nPage Title: $clickedTitle"
+                                        } else result
+                                        log.copy(status = if (isSuccess) "success" else "failed", details = detailsText)
                                     } else log
                                 }
 
@@ -4133,16 +4242,23 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                             }
                             "browser_read" -> {
                                 val readLog = AiActionLog(
-                                    title = "Browser read content",
+                                    title = "Browser Read Site Article",
                                     status = "thinking",
-                                    details = "Reading current page content",
+                                    details = "Reading current website article & page content...",
                                     lineRange = "background-browser"
                                 )
                                 _aiActionLogs.value = _aiActionLogs.value + readLog
-                                _agentStatus.value = "Reading page content..."
+                                _agentStatus.value = "Reading article & site content..."
+
+                                var readTitle = ""
+                                var readUrl = ""
+                                var readExcerpt = ""
 
                                 val result = when (val browserResult = backgroundBrowser.readPageContent()) {
                                     is BrowserResult.Success -> {
+                                        readTitle = browserResult.title
+                                        readUrl = browserResult.url
+                                        readExcerpt = browserResult.content.take(200)
                                         val dataText = "Current URL: ${browserResult.url}\nTitle: ${browserResult.title}\n\nContent:\n${browserResult.content}"
                                         try {
                                             val files = repository.getFilesForProject(project.name)
@@ -4166,7 +4282,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 _aiActionLogs.value = _aiActionLogs.value.map { log ->
                                     if (log.id == readLog.id) {
                                         val isSuccess = !result.startsWith("Error")
-                                        log.copy(status = if (isSuccess) "success" else "failed", details = if (isSuccess) "Read and saved to browser_memory.md" else result)
+                                        val logDetails = if (isSuccess) {
+                                            "Read Article: '$readTitle'\nURL: $readUrl\nExcerpt: $readExcerpt..."
+                                        } else result
+                                        log.copy(status = if (isSuccess) "success" else "failed", details = logDetails)
                                     } else log
                                 }
 

@@ -98,6 +98,10 @@ class MainActivity : ComponentActivity() {
                         val agentSkills by viewModel.agentSkills.collectAsState()
                         val isFetchingSkills by viewModel.isFetchingSkills.collectAsState()
                         val webArtifactInfo by viewModel.webArtifactInfo.collectAsState()
+                        val isImportingFiles by viewModel.isImportingFiles.collectAsState()
+                        val importProgress by viewModel.importProgress.collectAsState()
+                        val importProgressMessage by viewModel.importProgressMessage.collectAsState()
+                        val backupsList by viewModel.backupsList.collectAsState()
 
                         if (currentProject == null) {
                             HomeScreen(
@@ -139,7 +143,7 @@ class MainActivity : ComponentActivity() {
                                 githubRepo = githubRepo,
                                 githubBranch = githubBranch,
                                 gitHubWorkflows = gitHubWorkflows,
-                                onTriggerAllWorkflows = { viewModel.triggerAllWorkflows() },
+                                onTriggerWorkflows = { selectedIds -> viewModel.triggerWorkflows(selectedIds) },
                                 explorerGithubToken = explorerGithubToken,
                                 explorerGithubRepo = explorerGithubRepo,
                                 explorerGithubBranch = explorerGithubBranch,
@@ -266,6 +270,11 @@ class MainActivity : ComponentActivity() {
                                 onImportFiles = { uris ->
                                     viewModel.importFilesFromDevice(uris)
                                 },
+                                isImportingFiles = isImportingFiles,
+                                importProgress = importProgress,
+                                importProgressMessage = importProgressMessage,
+                                backupsList = backupsList,
+                                onRestoreBackup = { backup -> viewModel.restoreProjectVersion(backup) },
                                 onDecompileApk = { apkPath ->
                                     viewModel.decompileApk(apkPath)
                                 },

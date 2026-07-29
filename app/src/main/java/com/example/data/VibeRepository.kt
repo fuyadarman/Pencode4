@@ -528,7 +528,7 @@ class VibeRepository(private val dao: VibeDao, private val context: Context) {
         syncStorageToDatabase(projectName)
     }
 
-    private fun getFileNameFromUri(uri: android.net.Uri): String? {
+    fun getFileNameFromUri(uri: android.net.Uri): String? {
         var name: String? = null
         val cursor = context.contentResolver.query(uri, null, null, null, null)
         cursor?.use {
@@ -977,7 +977,7 @@ on:
 
 jobs:
   cleanup:
-    name: Delete Runs & Artifacts Older Than 3 Days
+    name: Delete Runs & Artifacts Older Than 1 Day
     runs-on: ubuntu-latest
     permissions:
       actions: write
@@ -986,7 +986,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const daysToKeep = 3;
+            const daysToKeep = 1;
             const cutoffDate = new Date();
             cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
 
@@ -1043,7 +1043,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const daysToKeep = 3;
+            const daysToKeep = 1;
             const cutoffDate = new Date();
             cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
 
@@ -1316,7 +1316,7 @@ on:
 
 jobs:
   cleanup:
-    name: Delete Runs & Artifacts Older Than 3 Days
+    name: Delete Runs & Artifacts Older Than 1 Day
     runs-on: ubuntu-latest
     permissions:
       actions: write
@@ -1325,7 +1325,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const daysToKeep = 3;
+            const daysToKeep = 1;
             const cutoffDate = new Date();
             cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
 
@@ -1382,7 +1382,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const daysToKeep = 3;
+            const daysToKeep = 1;
             const cutoffDate = new Date();
             cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
 
@@ -1769,7 +1769,7 @@ on:
 
 jobs:
   cleanup:
-    name: Delete Runs & Artifacts Older Than 3 Days
+    name: Delete Runs & Artifacts Older Than 1 Day
     runs-on: ubuntu-latest
     permissions:
       actions: write
@@ -2307,7 +2307,7 @@ on:
 
 jobs:
   cleanup:
-    name: Delete Runs & Artifacts Older Than 3 Days
+    name: Delete Runs & Artifacts Older Than 1 Day
     runs-on: ubuntu-latest
     permissions:
       actions: write
@@ -2316,7 +2316,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const daysToKeep = 3;
+            const daysToKeep = 1;
             const cutoffDate = new Date();
             cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
 
@@ -2360,7 +2360,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const daysToKeep = 3;
+            const daysToKeep = 1;
             const cutoffDate = new Date();
             cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
 
