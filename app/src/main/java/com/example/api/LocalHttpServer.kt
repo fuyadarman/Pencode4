@@ -38,16 +38,10 @@ object LocalHttpServer {
         val packageJson = files.find { it.path.equals("package.json", ignoreCase = true) }?.content ?: ""
         if (packageJson.isNotBlank()) {
             val lowerPkg = packageJson.lowercase()
-            if (lowerPkg.contains("\"vite\"") || lowerPkg.contains("\"@vitejs/plugin-react\"")) {
+            if (lowerPkg.contains("\"vite\"") || lowerPkg.contains("'vite'") || lowerPkg.contains("@vitejs/plugin-react")) {
                 return true
             }
         }
-
-        val hasJsxOrTsx = files.any { 
-            val p = it.path.lowercase()
-            p.endsWith(".jsx") || p.endsWith(".tsx")
-        }
-        if (hasJsxOrTsx) return true
 
         val indexHtml = files.find { 
             val p = it.path.lowercase()
@@ -56,7 +50,7 @@ object LocalHttpServer {
 
         if (indexHtml.isNotBlank()) {
             val lowerHtml = indexHtml.lowercase()
-            if (lowerHtml.contains("/src/") || lowerHtml.contains(".jsx") || lowerHtml.contains(".tsx") || lowerHtml.contains("@vite")) {
+            if (lowerHtml.contains("@vite") || lowerHtml.contains("/@vite/client")) {
                 return true
             }
         }
@@ -236,15 +230,90 @@ object LocalHttpServer {
             if (matchingFile != null) {
                 val (mimeType, contentType) = getMimeTypeAndContentType(matchingFile.path)
 
-                val bodyBytes = if (matchingFile.content.startsWith("data:") && matchingFile.content.contains(";base64,")) {
-                    try {
-                        android.util.Base64.decode(matchingFile.content.substringAfter(";base64,"), android.util.Base64.DEFAULT)
+                var fileText = matchingFile.content
+                if (fileText.startsWith("data:") && fileText.contains(";base64,")) {
+                    val bodyBytes = try {
+                        android.util.Base64.decode(fileText.substringAfter(";base64,"), android.util.Base64.DEFAULT)
                     } catch (e: Exception) {
-                        matchingFile.content.toByteArray(Charsets.UTF_8)
+                        fileText.toByteArray(Charsets.UTF_8)
                     }
-                } else {
-                    matchingFile.content.toByteArray(Charsets.UTF_8)
+                    output.write("HTTP/1.1 200 OK\r\n".toByteArray())
+                    output.write("Content-Type: $contentType\r\n".toByteArray())
+                    output.write("Content-Length: ${bodyBytes.size}\r\n".toByteArray())
+                    output.write("Access-Control-Allow-Origin: *\r\n".toByteArray())
+                    output.write("Connection: close\r\n\r\n".toByteArray())
+                    output.write(bodyBytes)
+                    output.flush()
+                    return
                 }
+
+                // If it's a React CDN or HTML/JSX/JS file, apply CDN import compatibility
+                if (!isReactVite) {
+                    val lowerPath = matchingFile.path.lowercase()
+                    if (lowerPath.endsWith(".html") || lowerPath.endsWith(".htm")) {
+                        // Ensure script tags loading JS/JSX/TSX use type="text/babel" for Babel standalone
+                        fileText = fileText.replace(Regex("""<script\s+(?:type=["']module["']\s+)?src=["']([^"']+\.(?:jsx?|tsx?))["']""")) { match ->
+                            val src = match.groupValues[1]
+                            """<script type="text/babel" data-presets="react,stage-3" src="$src""""
+                        }
+
+                        if (!fileText.contains("babel.min.js")) {
+                            val cdnScripts = """
+                            <script src="https://cdn.tailwindcss.com"></script>
+                            <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+                            <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+                            <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+                            <script>
+                              window.React = window.React || React;
+                              window.ReactDOM = window.ReactDOM || ReactDOM;
+                              window.exports = window.exports || {};
+                              window.module = window.module || { exports: window.exports };
+                            </script>
+                            """.trimIndent()
+                            fileText = if (fileText.contains("<head>", ignoreCase = true)) {
+                                fileText.replace("(?i)<head>".toRegex(), "<head>\n$cdnScripts\n")
+                            } else {
+                                "$cdnScripts\n$fileText"
+                            }
+                        }
+                    } else if (lowerPath.endsWith(".js") || lowerPath.endsWith(".jsx") || lowerPath.endsWith(".ts") || lowerPath.endsWith(".tsx")) {
+                        // Prepend window globals for Babel standalone
+                        val prependHeader = "var exports = window.exports = window.exports || {}; var React = window.React || React; var ReactDOM = window.ReactDOM || ReactDOM;\n"
+                        // Transform ES module imports for React CDN compatibility
+                        var transformed = fileText
+                            .replace(Regex("""import\s+React\s*,\s*\{([^}]+)\}\s+from\s+['"]react['"];?""")) { match ->
+                                val destructured = match.groupValues[1]
+                                "const React = window.React || {}; const {$destructured} = window.React || React || {};"
+                            }
+                            .replace(Regex("""import\s+React\s+from\s+['"]react['"];?""")) {
+                                "const React = window.React || {};"
+                            }
+                            .replace(Regex("""import\s+\{([^}]+)\}\s+from\s+['"]react['"];?""")) { match ->
+                                val destructured = match.groupValues[1]
+                                "const {$destructured} = window.React || {};"
+                            }
+                            .replace(Regex("""import\s+ReactDOM\s+from\s+['"]react-dom/(?:client|server)['"];?""")) {
+                                "const ReactDOM = window.ReactDOM || {};"
+                            }
+                            .replace(Regex("""import\s+ReactDOM\s+from\s+['"]react-dom['"];?""")) {
+                                "const ReactDOM = window.ReactDOM || {};"
+                            }
+                            .replace(Regex("""import\s+\{([^}]+)\}\s+from\s+['"]react-dom/(?:client|server)['"];?""")) { match ->
+                                val destructured = match.groupValues[1]
+                                "const {$destructured} = window.ReactDOM || {};"
+                            }
+                            .replace(Regex("""import\s+\{([^}]+)\}\s+from\s+['"]react-dom['"];?""")) { match ->
+                                val destructured = match.groupValues[1]
+                                "const {$destructured} = window.ReactDOM || {};"
+                            }
+                            .replace(Regex("""import\s+['"][^'"]+\.css['"];?""")) {
+                                "/* CSS import omitted in CDN mode */"
+                            }
+                        fileText = prependHeader + transformed
+                    }
+                }
+
+                val bodyBytes = fileText.toByteArray(Charsets.UTF_8)
                 
                 output.write("HTTP/1.1 200 OK\r\n".toByteArray())
                 output.write("Content-Type: $contentType\r\n".toByteArray())

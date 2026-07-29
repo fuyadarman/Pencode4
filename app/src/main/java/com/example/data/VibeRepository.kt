@@ -1948,28 +1948,15 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <div id="root"></div>
 
     <script type="text/babel" data-presets="react,stage-3">
-        const { useState } = React;
-
         function App() {
-            const [count, setCount] = useState(0);
             return (
                 <div className="bg-[#151726] border border-[#2b2f4a] p-8 rounded-2xl shadow-2xl max-w-md text-center">
-                    <h1 className="text-3xl font-extrabold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent mb-4">
-                        React Hello World
+                    <h1 className="text-3xl font-extrabold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent mb-2">
+                        Hello World
                     </h1>
-                    <p className="text-gray-400 mb-6">
-                        Powered by React 18 & ReactDOM directly from unpkg CDN.
+                    <p className="text-gray-400 text-sm">
+                        Welcome to your clean React CDN application.
                     </p>
-                    <div className="p-6 bg-[#0d0e15] rounded-xl border border-[#23273f] mb-6">
-                        <p className="text-sm font-semibold text-cyan-400 mb-2">Interactive Counter</p>
-                        <span className="text-4xl font-bold text-white">{count}</span>
-                    </div>
-                    <button 
-                        onClick={() => setCount(count + 1)}
-                        className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-bold py-3 px-8 rounded-xl transition duration-300 transform hover:scale-105 shadow-lg shadow-cyan-500/20"
-                    >
-                        Click Me!
-                    </button>
                 </div>
             );
         }
@@ -1980,52 +1967,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     </script>
 </body>
 </html>"""
-                ),
-                ProjectFileEntity(
-                    projectName = projectName,
-                    path = "src/main.tsx",
-                    content = """import React from 'react';
-import ReactDOM from 'react-dom/client';
-import App from './app';
-
-const container = document.getElementById('root');
-if (container) {
-  const root = ReactDOM.createRoot(container);
-  root.render(
-    <React.StrictMode>
-      <App />
-    </React.StrictMode>
-  );
-}"""
-                ),
-                ProjectFileEntity(
-                    projectName = projectName,
-                    path = "src/app.tsx",
-                    content = """import React, { useState } from 'react';
-
-export default function App() {
-    const [count, setCount] = useState(0);
-    return (
-        <div className="bg-[#151726] border border-[#2b2f4a] p-8 rounded-2xl shadow-2xl max-w-md text-center">
-            <h1 className="text-3xl font-extrabold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent mb-4">
-                React Hello World
-            </h1>
-            <p className="text-gray-400 mb-6">
-                Powered by React 18 & ReactDOM directly from unpkg CDN.
-            </p>
-            <div className="p-6 bg-[#0d0e15] rounded-xl border border-[#23273f] mb-6">
-                <p className="text-sm font-semibold text-cyan-400 mb-2">Interactive Counter</p>
-                <span className="text-4xl font-bold text-white">{count}</span>
-            </div>
-            <button 
-                onClick={() => setCount(count + 1)}
-                className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-bold py-3 px-8 rounded-xl transition duration-300 transform hover:scale-105 shadow-lg shadow-cyan-500/20"
-            >
-                Click Me!
-            </button>
-        </div>
-    );
-}"""
                 )
             )
             "vanilla" -> listOf(

@@ -300,41 +300,9 @@ fun WorkspaceScreen(
                 .imePadding()
                 .background(Color(0xFF08080C))
         ) {
-            Row(modifier = Modifier.fillMaxSize()) {
-                // Side Navigation Files Panel Tree-View
-                AnimatedVisibility(
-                    visible = showExplorer,
-                    enter = slideInHorizontally { -it } + fadeIn(),
-                    exit = slideOutHorizontally { -it } + fadeOut()
-                ) {
-                    Row(modifier = Modifier.fillMaxHeight()) {
-                        ExplorerPanel(
-                            files = files,
-                            activeFile = activeFile,
-                            onSelectFile = {
-                                onSelectFile(it)
-                                showExplorer = false
-                            },
-                            onCreateFile = onCreateFile,
-                            onDeleteFile = onDeleteFile,
-                            onRenameFile = onRenameFile,
-                            onMoveFile = onMoveFile,
-                            onImportFiles = onImportFiles,
-                            onDecompileApk = onDecompileApk,
-                            onPush = { showPushDialog = true },
-                            onSearch = { showSearchDialog = true },
-                            modifier = Modifier
-                                .width(280.dp)
-                                .fillMaxHeight()
-                                .background(Color(0xFF0C0D14))
-                        )
-                        VerticalDivider(color = Color(0xFF222533))
-                    }
-                }
-
-                // Workspace Content Display based on selected tab
-                Box(modifier = Modifier.weight(1f)) {
-                    when (currentTab) {
+            // Workspace Content Display based on selected tab
+            Box(modifier = Modifier.fillMaxSize()) {
+                when (currentTab) {
                         WorkspaceTab.CHAT -> {
                             ChatTabContent(
                                 messages = chatMessages,
@@ -514,8 +482,52 @@ fun WorkspaceScreen(
                     }
                 }
             }
+
+            // Side Navigation Files Panel Tree-View Overlay Drawer
+            AnimatedVisibility(
+                visible = showExplorer,
+                enter = slideInHorizontally { -it } + fadeIn(),
+                exit = slideOutHorizontally { -it } + fadeOut(),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    // Dark semi-transparent backdrop scrim
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.6f))
+                            .clickable { showExplorer = false }
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .width(290.dp)
+                    ) {
+                        ExplorerPanel(
+                            files = files,
+                            activeFile = activeFile,
+                            onSelectFile = {
+                                onSelectFile(it)
+                                showExplorer = false
+                            },
+                            onCreateFile = onCreateFile,
+                            onDeleteFile = onDeleteFile,
+                            onRenameFile = onRenameFile,
+                            onMoveFile = onMoveFile,
+                            onImportFiles = onImportFiles,
+                            onDecompileApk = onDecompileApk,
+                            onPush = { showPushDialog = true },
+                            onSearch = { showSearchDialog = true },
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .weight(1f)
+                                .background(Color(0xFF0C0D14))
+                        )
+                        VerticalDivider(color = Color(0xFF222533))
+                    }
+                }
+            }
         }
-    }
 
     if (showRestoreDialog) {
         RestoreDialog(
@@ -2829,7 +2841,7 @@ fun PreviewTabContent(
     val instructionHtml = remember {
         """
         <!DOCTYPE html>
-        <html lang="bn">
+        <html lang="en">
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -2873,14 +2885,10 @@ fun PreviewTabContent(
                     font-size: 14px;
                     color: #94a3b8;
                     line-height: 1.6;
-                    margin: 0 0 20px 0;
+                    margin: 0 0 16px 0;
                 }
-                .bn-text {
-                    border-top: 1px solid #23273f;
-                    padding-top: 16px;
-                    margin-top: 16px;
-                    color: #cbd5e1;
-                    font-size: 13.5px;
+                p:last-child {
+                    margin-bottom: 0;
                 }
                 .highlight {
                     color: #38bdf8;
@@ -2894,11 +2902,6 @@ fun PreviewTabContent(
                 <h1>Compilation Required</h1>
                 <p>This is a <span class="highlight">React + Vite</span> project. It needs to be built before it can run in the live preview.</p>
                 <p>Go to the <span class="highlight">Build Tab</span> (Android Build Pipeline), configure your GitHub repository, and click <span class="highlight">Force Push & Build</span> to compile and load the preview.</p>
-                
-                <div class="bn-text">
-                    <p>👋 এটি একটি <span class="highlight">React + Vite</span> প্রজেক্ট। লাইভ প্রিভিউ দেখতে প্রথমে প্রজেক্টটি কম্পাইল করা প্রয়োজন।</p>
-                    <p>দয়া করে <span class="highlight">Build Tab</span> এ গিয়ে আপনার GitHub Repository সেটআপ করুন এবং <span class="highlight">Force Push & Build</span> বাটনে ক্লিক করুন।</p>
-                </div>
             </div>
         </body>
         </html>
@@ -4348,7 +4351,23 @@ fun ExplorerPanel(
     onSearch: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var expandedFolders by remember { mutableStateOf(setOf<String>()) }
+    val rootNode = remember(files) {
+        buildFileTree(files)
+    }
+
+    // Auto-expand all folders by default so all files are visible immediately
+    var expandedFolders by remember(files, rootNode) {
+        val folderPaths = mutableSetOf<String>()
+        fun collectFolders(node: FileNode) {
+            if (node.path.isNotEmpty() && (!node.isFile || node.children.isNotEmpty())) {
+                folderPaths.add(node.path)
+            }
+            node.children.forEach { collectFolders(it) }
+        }
+        collectFolders(rootNode)
+        mutableStateOf<Set<String>>(folderPaths)
+    }
+
     var showCreateDialog by remember { mutableStateOf(false) }
     var fileToRename by remember { mutableStateOf<String?>(null) }
     var fileToMove by remember { mutableStateOf<String?>(null) }
@@ -4362,10 +4381,6 @@ fun ExplorerPanel(
 
     val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
     val context = androidx.compose.ui.platform.LocalContext.current
-
-    val rootNode = remember(files) {
-        buildFileTree(files)
-    }
 
     // Flatten the tree into a list of visible nodes for LazyColumn performance
     val visibleNodes = remember(rootNode, expandedFolders) {
