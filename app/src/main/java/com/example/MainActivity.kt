@@ -33,6 +33,22 @@ import androidx.compose.ui.unit.dp
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Pre-create WebView HTTP Code Cache directories to prevent Chromium folder-not-found errors
+        try {
+            val cacheDir = cacheDir
+            if (cacheDir != null) {
+                val webViewDefaultCacheDir = java.io.File(cacheDir, "WebView/Default/HTTP Cache/Code Cache")
+                if (!webViewDefaultCacheDir.exists()) {
+                    webViewDefaultCacheDir.mkdirs()
+                }
+                java.io.File(webViewDefaultCacheDir, "js").apply { if (!exists()) mkdirs() }
+                java.io.File(webViewDefaultCacheDir, "wasm").apply { if (!exists()) mkdirs() }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
         enableEdgeToEdge()
         setContent {
             // Force true dark theme for the sleek professional Cursor/Lovable feel

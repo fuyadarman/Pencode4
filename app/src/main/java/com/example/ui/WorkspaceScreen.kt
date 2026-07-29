@@ -202,42 +202,10 @@ fun WorkspaceScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
-                        Text(
-                            text = project.name,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        if (isThinking) Color(0xFF38BDF8) else Color(0xFF2ED573)
-                                    )
-                            )
-                            Text(
-                                text = if (isThinking) agentStatus else "Vibe Agent Ready",
-                                fontSize = 11.sp,
-                                color = if (isThinking) Color(0xFF38BDF8) else Color(0xFF80809B)
-                            )
-                        }
-                    }
-                },
-                navigationIcon = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                imageVector = Icons.Default.ArrowBack,
-                                contentDescription = "Back",
-                                tint = Color.White
-                            )
-                        }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
                         IconButton(onClick = { showExplorer = !showExplorer }) {
                             Icon(
                                 imageVector = Icons.Default.Menu,
@@ -245,6 +213,42 @@ fun WorkspaceScreen(
                                 tint = Color(0xFF38BDF8)
                             )
                         }
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Column {
+                            Text(
+                                text = project.name,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            if (isThinking) Color(0xFF38BDF8) else Color(0xFF2ED573)
+                                        )
+                                )
+                                Text(
+                                    text = if (isThinking) agentStatus else "Vibe Agent Ready",
+                                    fontSize = 11.sp,
+                                    color = if (isThinking) Color(0xFF38BDF8) else Color(0xFF80809B)
+                                )
+                            }
+                        }
+                    }
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Back",
+                            tint = Color.White
+                        )
                     }
                 },
                 actions = {
@@ -300,9 +304,41 @@ fun WorkspaceScreen(
                 .imePadding()
                 .background(Color(0xFF08080C))
         ) {
-            // Workspace Content Display based on selected tab
-            Box(modifier = Modifier.fillMaxSize()) {
-                when (currentTab) {
+            Row(modifier = Modifier.fillMaxSize()) {
+                // Side Navigation Files Panel Tree-View
+                AnimatedVisibility(
+                    visible = showExplorer,
+                    enter = slideInHorizontally { -it } + fadeIn(),
+                    exit = slideOutHorizontally { -it } + fadeOut()
+                ) {
+                    Row(modifier = Modifier.fillMaxHeight()) {
+                        ExplorerPanel(
+                            files = files,
+                            activeFile = activeFile,
+                            onSelectFile = {
+                                onSelectFile(it)
+                                showExplorer = false
+                            },
+                            onCreateFile = onCreateFile,
+                            onDeleteFile = onDeleteFile,
+                            onRenameFile = onRenameFile,
+                            onMoveFile = onMoveFile,
+                            onImportFiles = onImportFiles,
+                            onDecompileApk = onDecompileApk,
+                            onPush = { showPushDialog = true },
+                            onSearch = { showSearchDialog = true },
+                            modifier = Modifier
+                                .width(280.dp)
+                                .fillMaxHeight()
+                                .background(Color(0xFF0C0D14))
+                        )
+                        VerticalDivider(color = Color(0xFF222533))
+                    }
+                }
+
+                // Workspace Content Display based on selected tab
+                Box(modifier = Modifier.weight(1f)) {
+                    when (currentTab) {
                         WorkspaceTab.CHAT -> {
                             ChatTabContent(
                                 messages = chatMessages,
@@ -482,52 +518,8 @@ fun WorkspaceScreen(
                     }
                 }
             }
-
-            // Side Navigation Files Panel Tree-View Overlay Drawer
-            AnimatedVisibility(
-                visible = showExplorer,
-                enter = slideInHorizontally { -it } + fadeIn(),
-                exit = slideOutHorizontally { -it } + fadeOut(),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    // Dark semi-transparent backdrop scrim
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.6f))
-                            .clickable { showExplorer = false }
-                    )
-                    Row(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .width(290.dp)
-                    ) {
-                        ExplorerPanel(
-                            files = files,
-                            activeFile = activeFile,
-                            onSelectFile = {
-                                onSelectFile(it)
-                                showExplorer = false
-                            },
-                            onCreateFile = onCreateFile,
-                            onDeleteFile = onDeleteFile,
-                            onRenameFile = onRenameFile,
-                            onMoveFile = onMoveFile,
-                            onImportFiles = onImportFiles,
-                            onDecompileApk = onDecompileApk,
-                            onPush = { showPushDialog = true },
-                            onSearch = { showSearchDialog = true },
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .weight(1f)
-                                .background(Color(0xFF0C0D14))
-                        )
-                        VerticalDivider(color = Color(0xFF222533))
-                    }
-                }
-            }
         }
+    }
 
     if (showRestoreDialog) {
         RestoreDialog(
@@ -2751,6 +2743,60 @@ fun getInlinedHtml(files: List<ProjectFileEntity>): String {
     return content
 }
 
+fun preprocessHtmlForBabel(html: String): String {
+    var content = html
+
+    // 1. Inject Babel setup to register 'react-classic' preset with classic runtime
+    val babelCdnRegex = Regex("""(<script\s+[^>]*src=["'][^"']*babel\.min\.js["'][^>]*>\s*</script>)""", RegexOption.IGNORE_CASE)
+    if (babelCdnRegex.containsMatchIn(content)) {
+        content = babelCdnRegex.replace(content) { matchResult ->
+            matchResult.value + "\n<script>\n" +
+                    "if (window.Babel) {\n" +
+                    "  Babel.registerPreset('react-classic', {\n" +
+                    "    presets: [\n" +
+                    "      [Babel.availablePresets['react'], { runtime: 'classic' }]\n" +
+                    "    ]\n" +
+                    "  });\n" +
+                    "}\n" +
+                    "</script>"
+        }
+    } else {
+        val headRegex = Regex("""(<head>)""", RegexOption.IGNORE_CASE)
+        if (headRegex.containsMatchIn(content)) {
+            content = headRegex.replace(content) { matchResult ->
+                matchResult.value + "\n<script>\n" +
+                        "window.addEventListener('DOMContentLoaded', () => {\n" +
+                        "  if (window.Babel) {\n" +
+                        "    Babel.registerPreset('react-classic', {\n" +
+                        "      presets: [\n" +
+                        "        [Babel.availablePresets['react'], { runtime: 'classic' }]\n" +
+                        "      ]\n" +
+                        "    });\n" +
+                        "  }\n" +
+                        "});\n" +
+                        "</script>"
+            }
+        }
+    }
+
+    // 2. Replace 'react' preset with 'react-classic' in data-presets attribute
+    val dataPresetsRegex = Regex("""data-presets\s*=\s*["']([^"']*)\breact\b([^"']*)["']""", RegexOption.IGNORE_CASE)
+    content = dataPresetsRegex.replace(content) { matchResult ->
+        val before = matchResult.groups[1]?.value ?: ""
+        val after = matchResult.groups[2]?.value ?: ""
+        "data-presets=\"${before}react-classic${after}\""
+    }
+
+    // 3. Keep data-type="module" additions to avoid 'Cannot use import statement outside a module'
+    val babelScriptRegex = Regex("""<script\s+type\s*=\s*["']text/babel["'](?![^>]*data-type\s*=)([^>]*)>""", RegexOption.IGNORE_CASE)
+    content = babelScriptRegex.replace(content) { matchResult ->
+        val attrs = matchResult.groups[1]?.value ?: ""
+        "<script type=\"text/babel\" data-type=\"module\"$attrs>"
+    }
+
+    return content
+}
+
 fun uploadToPasteEe(htmlContent: String, onSuccess: (String) -> Unit, onError: (String) -> Unit) {
     val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
     val client = okhttp3.OkHttpClient()
@@ -2841,7 +2887,7 @@ fun PreviewTabContent(
     val instructionHtml = remember {
         """
         <!DOCTYPE html>
-        <html lang="en">
+        <html lang="bn">
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -2885,10 +2931,14 @@ fun PreviewTabContent(
                     font-size: 14px;
                     color: #94a3b8;
                     line-height: 1.6;
-                    margin: 0 0 16px 0;
+                    margin: 0 0 20px 0;
                 }
-                p:last-child {
-                    margin-bottom: 0;
+                .bn-text {
+                    border-top: 1px solid #23273f;
+                    padding-top: 16px;
+                    margin-top: 16px;
+                    color: #cbd5e1;
+                    font-size: 13.5px;
                 }
                 .highlight {
                     color: #38bdf8;
@@ -2902,6 +2952,11 @@ fun PreviewTabContent(
                 <h1>Compilation Required</h1>
                 <p>This is a <span class="highlight">React + Vite</span> project. It needs to be built before it can run in the live preview.</p>
                 <p>Go to the <span class="highlight">Build Tab</span> (Android Build Pipeline), configure your GitHub repository, and click <span class="highlight">Force Push & Build</span> to compile and load the preview.</p>
+                
+                <div class="bn-text">
+                    <p>👋 এটি একটি <span class="highlight">React + Vite</span> প্রজেক্ট। লাইভ প্রিভিউ দেখতে প্রথমে প্রজেক্টটি কম্পাইল করা প্রয়োজন।</p>
+                    <p>দয়া করে <span class="highlight">Build Tab</span> এ গিয়ে আপনার GitHub Repository সেটআপ করুন এবং <span class="highlight">Force Push & Build</span> বাটনে ক্লিক করুন।</p>
+                </div>
             </div>
         </body>
         </html>
@@ -3300,7 +3355,7 @@ fun PreviewTabContent(
                                                     }
                                                     java.io.ByteArrayInputStream(bytes)
                                                  } else {
-                                                    java.io.ByteArrayInputStream(matchingFile.content.toByteArray())
+                                                    java.io.ByteArrayInputStream((if (matchingFile.path.equals("index.html", ignoreCase = true) || matchingFile.path.endsWith("/index.html", ignoreCase = true)) preprocessHtmlForBabel(matchingFile.content) else matchingFile.content).toByteArray())
                                                  }
                                                  return createWebResponse(mimeType, encoding, stream)
                                             }
@@ -3317,7 +3372,7 @@ fun PreviewTabContent(
                                 } else if (htmlFile != null) {
                                     loadDataWithBaseURL(
                                         "https://virtual-app/",
-                                        htmlFile.content,
+                                        preprocessHtmlForBabel(htmlFile.content),
                                         "text/html",
                                         "UTF-8",
                                         null
@@ -3328,7 +3383,7 @@ fun PreviewTabContent(
                         update = { webView ->
                             webViewRef = webView
                             if (!hasWebDist && htmlFile != null) {
-                                val currentContent = htmlFile.content
+                                val currentContent = preprocessHtmlForBabel(htmlFile.content)
                                 if (lastLoadedHtml != currentContent) {
                                     lastLoadedHtml = currentContent
                                     webView.loadDataWithBaseURL(
@@ -4351,23 +4406,7 @@ fun ExplorerPanel(
     onSearch: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val rootNode = remember(files) {
-        buildFileTree(files)
-    }
-
-    // Auto-expand all folders by default so all files are visible immediately
-    var expandedFolders by remember(files, rootNode) {
-        val folderPaths = mutableSetOf<String>()
-        fun collectFolders(node: FileNode) {
-            if (node.path.isNotEmpty() && (!node.isFile || node.children.isNotEmpty())) {
-                folderPaths.add(node.path)
-            }
-            node.children.forEach { collectFolders(it) }
-        }
-        collectFolders(rootNode)
-        mutableStateOf<Set<String>>(folderPaths)
-    }
-
+    var expandedFolders by remember { mutableStateOf(setOf<String>()) }
     var showCreateDialog by remember { mutableStateOf(false) }
     var fileToRename by remember { mutableStateOf<String?>(null) }
     var fileToMove by remember { mutableStateOf<String?>(null) }
@@ -4381,6 +4420,10 @@ fun ExplorerPanel(
 
     val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
     val context = androidx.compose.ui.platform.LocalContext.current
+
+    val rootNode = remember(files) {
+        buildFileTree(files)
+    }
 
     // Flatten the tree into a list of visible nodes for LazyColumn performance
     val visibleNodes = remember(rootNode, expandedFolders) {

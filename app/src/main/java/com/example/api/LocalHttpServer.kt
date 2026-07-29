@@ -38,19 +38,7 @@ object LocalHttpServer {
         val packageJson = files.find { it.path.equals("package.json", ignoreCase = true) }?.content ?: ""
         if (packageJson.isNotBlank()) {
             val lowerPkg = packageJson.lowercase()
-            if (lowerPkg.contains("\"vite\"") || lowerPkg.contains("'vite'") || lowerPkg.contains("@vitejs/plugin-react")) {
-                return true
-            }
-        }
-
-        val indexHtml = files.find { 
-            val p = it.path.lowercase()
-            p == "index.html" || p.endsWith("/index.html") 
-        }?.content ?: ""
-
-        if (indexHtml.isNotBlank()) {
-            val lowerHtml = indexHtml.lowercase()
-            if (lowerHtml.contains("@vite") || lowerHtml.contains("/@vite/client")) {
+            if (lowerPkg.contains("\"vite\"") || lowerPkg.contains("\"@vitejs/plugin-react\"") || lowerPkg.contains("\"build\": \"vite build\"")) {
                 return true
             }
         }
@@ -230,90 +218,19 @@ object LocalHttpServer {
             if (matchingFile != null) {
                 val (mimeType, contentType) = getMimeTypeAndContentType(matchingFile.path)
 
-                var fileText = matchingFile.content
-                if (fileText.startsWith("data:") && fileText.contains(";base64,")) {
-                    val bodyBytes = try {
-                        android.util.Base64.decode(fileText.substringAfter(";base64,"), android.util.Base64.DEFAULT)
+                val bodyBytes = if (matchingFile.content.startsWith("data:") && matchingFile.content.contains(";base64,")) {
+                    try {
+                        android.util.Base64.decode(matchingFile.content.substringAfter(";base64,"), android.util.Base64.DEFAULT)
                     } catch (e: Exception) {
-                        fileText.toByteArray(Charsets.UTF_8)
+                        matchingFile.content.toByteArray(Charsets.UTF_8)
                     }
-                    output.write("HTTP/1.1 200 OK\r\n".toByteArray())
-                    output.write("Content-Type: $contentType\r\n".toByteArray())
-                    output.write("Content-Length: ${bodyBytes.size}\r\n".toByteArray())
-                    output.write("Access-Control-Allow-Origin: *\r\n".toByteArray())
-                    output.write("Connection: close\r\n\r\n".toByteArray())
-                    output.write(bodyBytes)
-                    output.flush()
-                    return
-                }
-
-                // If it's a React CDN or HTML/JSX/JS file, apply CDN import compatibility
-                if (!isReactVite) {
-                    val lowerPath = matchingFile.path.lowercase()
-                    if (lowerPath.endsWith(".html") || lowerPath.endsWith(".htm")) {
-                        // Ensure script tags loading JS/JSX/TSX use type="text/babel" for Babel standalone
-                        fileText = fileText.replace(Regex("""<script\s+(?:type=["']module["']\s+)?src=["']([^"']+\.(?:jsx?|tsx?))["']""")) { match ->
-                            val src = match.groupValues[1]
-                            """<script type="text/babel" data-presets="react,stage-3" src="$src""""
-                        }
-
-                        if (!fileText.contains("babel.min.js")) {
-                            val cdnScripts = """
-                            <script src="https://cdn.tailwindcss.com"></script>
-                            <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
-                            <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
-                            <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-                            <script>
-                              window.React = window.React || React;
-                              window.ReactDOM = window.ReactDOM || ReactDOM;
-                              window.exports = window.exports || {};
-                              window.module = window.module || { exports: window.exports };
-                            </script>
-                            """.trimIndent()
-                            fileText = if (fileText.contains("<head>", ignoreCase = true)) {
-                                fileText.replace("(?i)<head>".toRegex(), "<head>\n$cdnScripts\n")
-                            } else {
-                                "$cdnScripts\n$fileText"
-                            }
-                        }
-                    } else if (lowerPath.endsWith(".js") || lowerPath.endsWith(".jsx") || lowerPath.endsWith(".ts") || lowerPath.endsWith(".tsx")) {
-                        // Prepend window globals for Babel standalone
-                        val prependHeader = "var exports = window.exports = window.exports || {}; var React = window.React || React; var ReactDOM = window.ReactDOM || ReactDOM;\n"
-                        // Transform ES module imports for React CDN compatibility
-                        var transformed = fileText
-                            .replace(Regex("""import\s+React\s*,\s*\{([^}]+)\}\s+from\s+['"]react['"];?""")) { match ->
-                                val destructured = match.groupValues[1]
-                                "const React = window.React || {}; const {$destructured} = window.React || React || {};"
-                            }
-                            .replace(Regex("""import\s+React\s+from\s+['"]react['"];?""")) {
-                                "const React = window.React || {};"
-                            }
-                            .replace(Regex("""import\s+\{([^}]+)\}\s+from\s+['"]react['"];?""")) { match ->
-                                val destructured = match.groupValues[1]
-                                "const {$destructured} = window.React || {};"
-                            }
-                            .replace(Regex("""import\s+ReactDOM\s+from\s+['"]react-dom/(?:client|server)['"];?""")) {
-                                "const ReactDOM = window.ReactDOM || {};"
-                            }
-                            .replace(Regex("""import\s+ReactDOM\s+from\s+['"]react-dom['"];?""")) {
-                                "const ReactDOM = window.ReactDOM || {};"
-                            }
-                            .replace(Regex("""import\s+\{([^}]+)\}\s+from\s+['"]react-dom/(?:client|server)['"];?""")) { match ->
-                                val destructured = match.groupValues[1]
-                                "const {$destructured} = window.ReactDOM || {};"
-                            }
-                            .replace(Regex("""import\s+\{([^}]+)\}\s+from\s+['"]react-dom['"];?""")) { match ->
-                                val destructured = match.groupValues[1]
-                                "const {$destructured} = window.ReactDOM || {};"
-                            }
-                            .replace(Regex("""import\s+['"][^'"]+\.css['"];?""")) {
-                                "/* CSS import omitted in CDN mode */"
-                            }
-                        fileText = prependHeader + transformed
+                } else {
+                    var content = matchingFile.content
+                    if (matchingFile.path.equals("index.html", ignoreCase = true) || matchingFile.path.endsWith("/index.html", ignoreCase = true)) {
+                        content = preprocessHtmlForBabel(content)
                     }
+                    content.toByteArray(Charsets.UTF_8)
                 }
-
-                val bodyBytes = fileText.toByteArray(Charsets.UTF_8)
                 
                 output.write("HTTP/1.1 200 OK\r\n".toByteArray())
                 output.write("Content-Type: $contentType\r\n".toByteArray())
@@ -332,6 +249,60 @@ object LocalHttpServer {
             try { output?.close() } catch (e: Exception) {}
             try { socket.close() } catch (e: Exception) {}
         }
+    }
+
+    private fun preprocessHtmlForBabel(html: String): String {
+        var content = html
+
+        // 1. Inject Babel setup to register 'react-classic' preset with classic runtime
+        val babelCdnRegex = Regex("""(<script\s+[^>]*src=["'][^"']*babel\.min\.js["'][^>]*>\s*</script>)""", RegexOption.IGNORE_CASE)
+        if (babelCdnRegex.containsMatchIn(content)) {
+            content = babelCdnRegex.replace(content) { matchResult ->
+                matchResult.value + "\n<script>\n" +
+                        "if (window.Babel) {\n" +
+                        "  Babel.registerPreset('react-classic', {\n" +
+                        "    presets: [\n" +
+                        "      [Babel.availablePresets['react'], { runtime: 'classic' }]\n" +
+                        "    ]\n" +
+                        "  });\n" +
+                        "}\n" +
+                        "</script>"
+            }
+        } else {
+            val headRegex = Regex("""(<head>)""", RegexOption.IGNORE_CASE)
+            if (headRegex.containsMatchIn(content)) {
+                content = headRegex.replace(content) { matchResult ->
+                    matchResult.value + "\n<script>\n" +
+                            "window.addEventListener('DOMContentLoaded', () => {\n" +
+                            "  if (window.Babel) {\n" +
+                            "    Babel.registerPreset('react-classic', {\n" +
+                            "      presets: [\n" +
+                            "        [Babel.availablePresets['react'], { runtime: 'classic' }]\n" +
+                            "      ]\n" +
+                            "    });\n" +
+                            "  }\n" +
+                            "});\n" +
+                            "</script>"
+                }
+            }
+        }
+
+        // 2. Replace 'react' preset with 'react-classic' in data-presets attribute
+        val dataPresetsRegex = Regex("""data-presets\s*=\s*["']([^"']*)\breact\b([^"']*)["']""", RegexOption.IGNORE_CASE)
+        content = dataPresetsRegex.replace(content) { matchResult ->
+            val before = matchResult.groups[1]?.value ?: ""
+            val after = matchResult.groups[2]?.value ?: ""
+            "data-presets=\"${before}react-classic${after}\""
+        }
+
+        // 3. Keep data-type="module" additions to avoid 'Cannot use import statement outside a module'
+        val babelScriptRegex = Regex("""<script\s+type\s*=\s*["']text/babel["'](?![^>]*data-type\s*=)([^>]*)>""", RegexOption.IGNORE_CASE)
+        content = babelScriptRegex.replace(content) { matchResult ->
+            val attrs = matchResult.groups[1]?.value ?: ""
+            "<script type=\"text/babel\" data-type=\"module\"$attrs>"
+        }
+
+        return content
     }
 
     private fun sendError(output: OutputStream, code: Int, message: String) {
