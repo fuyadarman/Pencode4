@@ -1077,11 +1077,13 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     fun saveGithubRepo(repo: String) {
         _githubRepo.value = repo
         sharedPrefs.edit().putString("github_repo", repo).apply()
+        startPollingBuild()
     }
 
     fun saveGithubBranch(branch: String) {
         _githubBranch.value = branch
         sharedPrefs.edit().putString("github_branch", branch).apply()
+        startPollingBuild()
     }
 
     fun startPollingBuild() {
@@ -2024,6 +2026,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     fun saveGithubToken(token: String) {
         _githubToken.value = token
         sharedPrefs.edit().putString("github_token", token).apply()
+        startPollingBuild()
     }
 
     fun saveExplorerGithubToken(token: String) {
@@ -2066,12 +2069,14 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     fun pushGitRepo(projectName: String, repo: String, token: String, branch: String, force: Boolean, onComplete: (Result<Unit>) -> Unit) {
         viewModelScope.launch {
             clearAndroidBuildErrors()
-            _gitProgress.value = "Initializing push..."
+            _gitProgress.value = if (force) "Force pushing code to GitHub..." else "Pushing code to GitHub..."
             val result = repository.pushToGitHub(projectName, repo, token, branch, force) { progress ->
                 _gitProgress.value = progress
             }
             if (result.isSuccess) {
-                _gitProgress.value = "Push complete!"
+                _gitProgress.value = "Push complete! Workflows & build tracking started."
+                startPollingBuild()
+                triggerAllWorkflows()
                 onComplete(result)
                 delay(3000)
                 _gitProgress.value = ""
@@ -2321,6 +2326,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             _currentProject.value = project
             _currentTab.value = WorkspaceTab.CHAT
             _agentStatus.value = ""
+            startPollingBuild()
             
             try {
                 // Sync files on startup to verify integrity
@@ -2593,11 +2599,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 
     fun changeTab(tab: WorkspaceTab) {
         _currentTab.value = tab
-        if (tab == WorkspaceTab.ANDROID_BUILD) {
-            startPollingBuild()
-        } else {
-            stopPollingBuild()
-        }
+        startPollingBuild()
     }
 
     fun runTerminalCommand(command: String) {
