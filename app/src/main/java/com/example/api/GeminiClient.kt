@@ -746,7 +746,7 @@ object GeminiClient {
 
                 try {
                     var attempt = 0
-                    val maxAttempts = 8
+                    val maxAttempts = 10
                     var response: okhttp3.Response? = null
                     var rawResponse: String? = null
                     var lastCode = 0
@@ -762,10 +762,10 @@ object GeminiClient {
                              if (!response.isSuccessful) {
                                 attempt++
                                 if (attempt < maxAttempts) {
-                                    val isTransientError = (lastCode == 429 || lastCode == 503 || lastCode == 502 || lastCode == 504) || (rawResponse ?: "").contains("quota", ignoreCase = true) || (rawResponse ?: "").contains("rate limit", ignoreCase = true) || (rawResponse ?: "").contains("overloaded", ignoreCase = true) || (rawResponse ?: "").contains("unavailable", ignoreCase = true) || (rawResponse ?: "").contains("503", ignoreCase = true) || (rawResponse ?: "").contains("429", ignoreCase = true)
-                                    val isRateLimit = lastCode == 429 || (rawResponse ?: "").contains("rate limit", ignoreCase = true) || (rawResponse ?: "").contains("quota", ignoreCase = true)
+                                    val isTransientError = (lastCode == 429 || lastCode == 503 || lastCode == 502 || lastCode == 504) || (rawResponse ?: "").contains("quota", ignoreCase = true) || (rawResponse ?: "").contains("rate limit", ignoreCase = true) || (rawResponse ?: "").contains("overloaded", ignoreCase = true) || (rawResponse ?: "").contains("unavailable", ignoreCase = true) || (rawResponse ?: "").contains("RESOURCE_EXHAUSTED", ignoreCase = true) || (rawResponse ?: "").contains("exhausted", ignoreCase = true) || (rawResponse ?: "").contains("503", ignoreCase = true) || (rawResponse ?: "").contains("429", ignoreCase = true)
+                                    val isRateLimit = lastCode == 429 || (rawResponse ?: "").contains("rate limit", ignoreCase = true) || (rawResponse ?: "").contains("quota", ignoreCase = true) || (rawResponse ?: "").contains("RESOURCE_EXHAUSTED", ignoreCase = true) || (rawResponse ?: "").contains("exhausted", ignoreCase = true)
                                     val backoff = if (isRateLimit) {
-                                        val base = Math.min(6000L * (1 shl (attempt - 1)), 60000L)
+                                        val base = Math.min(5000L * (1 shl (attempt - 1)), 60000L)
                                         val jitter = (Math.random() * 1000).toLong()
                                         base + jitter
                                     } else if (isTransientError) {
@@ -809,7 +809,7 @@ object GeminiClient {
 
                     if (response == null || !response.isSuccessful || rawResponse == null) {
                         Log.e(TAG, "Gemini Error response: $rawResponse")
-                        val isRateLimit = lastCode == 429 || (rawResponse ?: "").contains("quota", ignoreCase = true) || (rawResponse ?: "").contains("rate limit", ignoreCase = true)
+                        val isRateLimit = lastCode == 429 || (rawResponse ?: "").contains("quota", ignoreCase = true) || (rawResponse ?: "").contains("rate limit", ignoreCase = true) || (rawResponse ?: "").contains("RESOURCE_EXHAUSTED", ignoreCase = true) || (rawResponse ?: "").contains("exhausted", ignoreCase = true)
                         val advice = when {
                             isRateLimit -> {
                                 "Rate limit or quota exceeded (Code $lastCode). The Gemini API server is receiving too many requests. Please wait a moment before trying again, or reduce your request frequency."

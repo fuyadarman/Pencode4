@@ -3350,6 +3350,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             var agentMessageSaved = false
             var lastThought: String? = null
             val recentToolCallsHistory = mutableListOf<com.example.api.ToolCallItem>()
+            val readFilesThisSession = mutableSetOf<String>()
 
             // Initial automatic thinking log triggered ONCE when processing user prompt starts
             val initialThoughtLog = createAiLog(
@@ -3752,8 +3753,12 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     "Error: Reading, editing, patching, or appending to binary image or 3D files directly as text is NOT allowed. You can only view their existence via 'list_directory' or perform operations like rename, delete, move, resize, or format change."
                                 } else {
                                     val files = repository.getFilesForProject(project.name)
-                                    val targetFile = files.find { it.path == filePath }
+                                    val targetFile = files.find { it.path == filePath || normalizePath(it.path) == filePath || it.path.endsWith(filePath) || filePath.endsWith(it.path) }
                                     if (targetFile != null) {
+                                        readFilesThisSession.add(filePath)
+                                        readFilesThisSession.add(normalizePath(filePath))
+                                        readFilesThisSession.add(targetFile.path)
+                                        readFilesThisSession.add(normalizePath(targetFile.path))
                                         "--- File: $filePath ---\n${targetFile.content}"
                                     } else {
                                         "Error: File '$filePath' not found."
@@ -3764,7 +3769,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     "Error: Cannot read binary files as text"
                                 } else {
                                     val files = repository.getFilesForProject(project.name)
-                                    val targetFile = files.find { it.path == filePath }
+                                    val targetFile = files.find { it.path == filePath || normalizePath(it.path) == filePath || it.path.endsWith(filePath) || filePath.endsWith(it.path) }
                                     if (targetFile != null) {
                                         "Read ${targetFile.content.lines().size} lines from $filePath"
                                     } else {
@@ -3813,8 +3818,12 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     "Error: Reading, editing, patching, or appending to binary image or 3D files directly as text is NOT allowed. You can only view their existence via 'list_directory' or perform operations like rename, delete, move, resize, or format change."
                                 } else {
                                     val files = repository.getFilesForProject(project.name)
-                                    val targetFile = files.find { it.path == filePath }
+                                    val targetFile = files.find { it.path == filePath || normalizePath(it.path) == filePath || it.path.endsWith(filePath) || filePath.endsWith(it.path) }
                                     if (targetFile != null) {
+                                        readFilesThisSession.add(filePath)
+                                        readFilesThisSession.add(normalizePath(filePath))
+                                        readFilesThisSession.add(targetFile.path)
+                                        readFilesThisSession.add(normalizePath(targetFile.path))
                                         val lines = targetFile.content.lines()
                                         val startIdx = (startLine - 1).coerceAtLeast(0).coerceAtMost(lines.size)
                                         val endIdx = endLine.coerceAtLeast(startIdx).coerceAtMost(lines.size)
@@ -3829,7 +3838,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     "Error: Cannot read binary files as text"
                                 } else {
                                     val files = repository.getFilesForProject(project.name)
-                                    val targetFile = files.find { it.path == filePath }
+                                    val targetFile = files.find { it.path == filePath || normalizePath(it.path) == filePath || it.path.endsWith(filePath) || filePath.endsWith(it.path) }
                                     if (targetFile != null) {
                                         "Read lines $startLine-$endLine from $filePath"
                                     } else {
@@ -3853,10 +3862,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 _aiActionLogs.value = _aiActionLogs.value + createLog
 
                                 val existingFiles = _projectFiles.value
-                                val fileAlreadyExists = existingFiles.any { it.path == filePath }
+                                val fileAlreadyExists = existingFiles.any { it.path == filePath || normalizePath(it.path) == filePath || it.path.endsWith(filePath) || filePath.endsWith(it.path) }
 
                                 val result = if (fileAlreadyExists) {
-                                    "Error: File '$filePath' already exists. Overwriting or recreating existing files is strictly prohibited. You MUST use 'edit_file' or 'patch_file' to modify existing files."
+                                    "Error: File '$filePath' already exists. Overwriting or recreating existing files with 'create_file' is strictly prohibited. You MUST call 'read_file' or 'read_file_range' first and then use 'edit_file' or 'patch_file' to modify existing files."
                                 } else {
                                     try {
                                         repository.saveFile(project.name, filePath, fileContent)
@@ -3889,14 +3898,19 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 _aiActionLogs.value = _aiActionLogs.value + writeLog
 
                                 val existingFiles = _projectFiles.value
-                                val targetFile = existingFiles.find { it.path == filePath }
+                                val targetFile = existingFiles.find { it.path == filePath || normalizePath(it.path) == filePath || it.path.endsWith(filePath) || filePath.endsWith(it.path) }
                                 val linesCount = targetFile?.content?.lines()?.size ?: 0
 
                                 val fileHasBeenRead = if (targetFile != null) {
+                                    readFilesThisSession.contains(filePath) ||
+                                    readFilesThisSession.contains(normalizePath(filePath)) ||
+                                    readFilesThisSession.contains(targetFile.path) ||
+                                    readFilesThisSession.contains(normalizePath(targetFile.path)) ||
                                     history.any { content ->
                                         content.parts.any { part ->
                                             val t = part.text ?: ""
-                                            (t.contains("System/Tool Output for 'read_file'") || t.contains("System/Tool Output for 'read_file_range'")) && t.contains(filePath)
+                                            (t.contains("System/Tool Output for 'read_file'") || t.contains("System/Tool Output for 'read_file_range'")) &&
+                                            (t.contains(filePath) || t.contains(normalizePath(filePath)) || t.contains(targetFile.path) || t.contains(normalizePath(targetFile.path)))
                                         }
                                     }
                                 } else true
