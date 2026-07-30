@@ -917,7 +917,7 @@ object GeminiClient {
                     if (!response.isSuccessful) {
                         attempt++
                         if (attempt < maxAttempts) {
-                            val isRateLimit = (lastCode == 429)
+                            val isRateLimit = (lastCode == 429) || (rawResponse ?: "").contains("quota", ignoreCase = true) || (rawResponse ?: "").contains("rate limit", ignoreCase = true) || (rawResponse ?: "").contains("exhausted", ignoreCase = true) || (rawResponse ?: "").contains("429", ignoreCase = true)
                             val backoff = if (isRateLimit) {
                                 val base = 2000L * (1 shl (attempt - 1))
                                 val jitter = (Math.random() * 500).toLong()

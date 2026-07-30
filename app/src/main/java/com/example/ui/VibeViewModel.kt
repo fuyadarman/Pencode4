@@ -4736,6 +4736,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 turn++
                 // Reload project files list inside the loop so changes update dynamically
                 loadProjectDetails(project.name)
+                
+                // Add a smart, polite delay of 1.8 seconds between successive turns to prevent slamming the API (429 errors)
+                if (!loopCompleted && turn <= 500 && actionsCount < maxActionSteps) {
+                    kotlinx.coroutines.delay(1800)
+                }
             }
 
             if (!loopCompleted && actionsCount >= maxActionSteps) {
