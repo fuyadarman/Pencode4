@@ -3070,7 +3070,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 $fileTreeStr
                 $activeSkillsPrompt
                 
-                :warning: if You're trying to use edit,patch or append tool without using read_file or read_file_rannge you will be punished and your request will be rejected and dont forget about exploring codebase,if you Don't explore codebase you will be rejected.
+                :warning: CRITICAL RESTRICTED TOOL & READ-BEFORE-MODIFY MANDATE:
+                - 'write_file' (and 'write') is a STRICTLY RESTRICTED tool. You are STRICTLY FORBIDDEN from using 'write_file' to overwrite or recreate existing files unless you have READ the file first using 'read_file' or 'read_file_range'!
+                - If you attempt to use 'write_file' to overwrite or recreate an existing file without reading it first, the system WILL REJECT your request and instruct you to read the file first.
+                - For all normal edits, fixes, or code modifications, you MUST use 'edit_file' or 'patch_file' for surgical edits instead of overwriting files with 'write_file'.
                 
                 KNOW YOUR TOOL EXECUTION BUDGET (CRITICAL):
                 - You have a strict dynamic maximum step/tool call execution limit of $maxActionSteps steps for this entire task.
@@ -3142,7 +3145,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 - Use 'patch_file' (alias 'patch') for very small, surgical changes (1-3 lines). This is mandatory for precise fixes.
                 - Use 'edit_file' (alias 'edit') for larger modifications involving multiple lines or structural changes.
                 - Use 'create_file' ONLY when creating a NEW file. This tool will fail if the file already exists.
-                - Use 'write_file' (alias 'write') ONLY as a RESTRICTED tool. You are STRICTLY FORBIDDEN from using 'write_file' to overwrite or recreate an existing file unless the user explicitly asks you to "recreate", "overwrite", "rewrite", or "replace" the entire file. For all normal edits, fixes, or modifications, you MUST use 'edit_file', 'patch_file', or 'append' instead.
+                - Use 'write_file' (alias 'write') ONLY as a RESTRICTED tool. You are STRICTLY FORBIDDEN from using 'write_file' to overwrite or recreate an existing file unless you have FIRST READ the file using 'read_file' or 'read_file_range'! If you attempt to use 'write_file' to overwrite or recreate an unread existing file, the system WILL REJECT your call. For all normal edits, fixes, or modifications, you MUST use 'edit_file', 'patch_file', or 'append' instead.
                 - NEVER overwrite an entire file for small changes. Always read the file first and then apply surgical edits with edit_file or patch_file.
                 
                 CHRONOLOGICAL TRACKER:
@@ -3186,7 +3189,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 1. 'read_file': Read content of a file. MANDATORY before any edit.
                 2. 'read_file_range': Read specific line ranges. Required args: 'path' (file path), 'startLine' (first line to read, integer), 'endLine' (last line to read, integer). Alternatively, you can specify 'lineRange' (string, e.g., "100-130").
                 3. 'create_file': Use ONLY for creating a NEW file. This tool will fail if the file already exists.
-                3b. 'write_file' (alias 'write'): RESTRICTED TOOL. Use ONLY if the user explicitly requests to "recreate", "overwrite", "rewrite", or "replace" the entire file. For normal edits, use 'edit_file', 'patch_file', or 'append' instead. Required args: 'path' (file path), 'content' (the complete content to write).
+                3b. 'write_file' (alias 'write'): RESTRICTED TOOL. Use ONLY if you have FIRST READ the file with 'read_file'/'read_file_range' AND full file replacement is strictly required. If the existing file has not been read, the system WILL REJECT the tool call. Prefer 'edit_file' or 'patch_file' for surgical edits. Required args: 'path' (file path), 'content' (the complete content to write).
                 4. 'edit_file' (alias 'edit'): Replace a precise unique block of code with new code.
                 5. 'patch_file' (alias 'patch'): Replace a small, precise snippet of code.
                 6. 'delete_code': Safely delete a specific unique block of code from a file.
@@ -3889,6 +3892,15 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 val targetFile = existingFiles.find { it.path == filePath }
                                 val linesCount = targetFile?.content?.lines()?.size ?: 0
 
+                                val fileHasBeenRead = if (targetFile != null) {
+                                    history.any { content ->
+                                        content.parts.any { part ->
+                                            val t = part.text ?: ""
+                                            (t.contains("System/Tool Output for 'read_file'") || t.contains("System/Tool Output for 'read_file_range'")) && t.contains(filePath)
+                                        }
+                                    }
+                                } else true
+
                                 var allowed = true
                                 if (false) {
                                     _writeFileConfirmInfo.value = WriteFileConfirmInfo(filePath, fileContent, linesCount)
@@ -3899,7 +3911,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     allowed = deferred.await()
                                 }
 
-                                val result = if (!allowed) {
+                                val result = if (targetFile != null && !fileHasBeenRead) {
+                                    "Error: SYSTEM REJECTION - Overwriting/recreating existing file '$filePath' without reading it first is STRICTLY FORBIDDEN! You MUST call 'read_file' or 'read_file_range' on '$filePath' before attempting to modify or overwrite it. Furthermore, 'write_file' is a RESTRICTED tool—prefer using 'edit_file' or 'patch_file' for surgical code edits instead of overwriting full files."
+                                } else if (!allowed) {
                                     "Error: Overwriting '$filePath' (which has $linesCount lines) was denied by the user. You must use 'edit_file' or 'patch_file' instead."
                                 } else {
                                     try {
