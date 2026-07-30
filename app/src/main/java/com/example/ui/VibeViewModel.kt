@@ -3330,7 +3330,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             var maxActionSteps = _maxActionSteps.value
             var agentMessageSaved = false
             var lastThought: String? = null
-            var prematureCompletionAttempts = 0
             val recentToolCallsHistory = mutableListOf<com.example.api.ToolCallItem>()
 
             // Initial automatic thinking log triggered ONCE when processing user prompt starts
@@ -3390,30 +3389,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                         }
 
                         if (toolCalls.isEmpty() || (toolCalls.size == 1 && toolCalls[0].tool == "complete")) {
-                            val isAction = isActionPrompt(finalPrompt)
-                            val hasEdits = checkHasCodeChangesThisTurn(editsAtPromptStart)
-                            if (!hasEdits && prematureCompletionAttempts < 2 && turn <= 6 && isAction) {
-                                prematureCompletionAttempts++
-                                val warningText = """
-                                    SYSTEM ENFORCEMENT NOTICE (PREMATURE COMPLETION REJECTED):
-                                    You called 'complete' or returned without executing any code modifications (0 files created/edited/patched). You only inspected/scanned/read files!
-                                    Simply reading, scanning, or inspecting files does NOT complete an action task.
-                                    You MUST execute actual code changes (using 'edit_file', 'patch_file', 'create_file', 'append', or other modification tools) to fulfill the user's request.
-                                    Do NOT call 'complete' or stop until you have actually created or modified the required files!
-                                """.trimIndent()
-                                
-                                history.add(Content(role = "user", parts = listOf(Part(text = warningText))))
-                                
-                                val warnLog = createAiLog(
-                                    title = "Premature completion rejected",
-                                    status = "failed",
-                                    details = "Blocked AI from ending task after only scanning files. Prompting AI to execute required code edits."
-                                )
-                                _aiActionLogs.value = _aiActionLogs.value + warnLog
-                                turn++
-                                kotlinx.coroutines.delay(3500)
-                                continue
-                            }
                             loopCompleted = true
                         }
 
@@ -3574,29 +3549,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                             
                             when (tool) {
                             "complete" -> {
-                                val isAction = isActionPrompt(finalPrompt)
-                                val hasEdits = checkHasCodeChangesThisTurn(editsAtPromptStart)
-                                if (!hasEdits && prematureCompletionAttempts < 2 && turn <= 6 && isAction) {
-                                    prematureCompletionAttempts++
-                                    val warningText = """
-                                        SYSTEM ENFORCEMENT NOTICE (PREMATURE COMPLETION REJECTED):
-                                        You called 'complete' without executing any code modifications (0 files created/edited/patched). You only inspected/scanned/read files!
-                                        Simply reading, scanning, or inspecting files does NOT complete an action task.
-                                        You MUST execute actual code changes (using 'edit_file', 'patch_file', 'create_file', 'append', or other modification tools) to fulfill the user's request.
-                                        Do NOT call 'complete' until you have actually created or modified the required files!
-                                    """.trimIndent()
-                                    
-                                    history.add(Content(role = "user", parts = listOf(Part(text = warningText))))
-                                    
-                                    val warnLog = createAiLog(
-                                        title = "Premature completion rejected",
-                                        status = "failed",
-                                        details = "Blocked AI from ending task after only scanning files. Prompting AI to execute required code edits."
-                                    )
-                                    _aiActionLogs.value = _aiActionLogs.value + warnLog
-                                    break
-                                }
-
                                 val message = args?.message ?: "Task completed successfully!"
                                 val logEntry = createAiLog(
                                     title = "AI finished task execution",
