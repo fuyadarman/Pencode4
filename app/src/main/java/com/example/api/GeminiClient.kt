@@ -856,7 +856,7 @@ object GeminiClient {
                     return@withContext ToolCallResponse(
                         thought = "Exception caught.",
                         tool = "complete",
-                        arguments = ToolArguments(message = "An error occurred during communication: ${e.localizedMessage}")
+                        arguments = ToolArguments(message = "An error occurred during communication: ${formatNetworkError(e)}")
                     )
                 }
             }
@@ -987,8 +987,27 @@ object GeminiClient {
             return@withContext AgentResponse(
                 thought = "Exception caught.",
                 actions = emptyList(),
-                message = "An error occurred during communication: ${e.localizedMessage}"
+                message = "An error occurred during communication: ${formatNetworkError(e)}"
             )
         }
+    }
+
+    fun formatNetworkError(e: Throwable): String {
+        val msg = e.localizedMessage ?: e.message ?: "Unknown error"
+        if (e is java.net.UnknownHostException || 
+            msg.contains("Unable to resolve host", ignoreCase = true) || 
+            msg.contains("UnknownHostException", ignoreCase = true) ||
+            msg.contains("No address associated with hostname", ignoreCase = true)
+        ) {
+            return "Network Connection Failed (ইন্টারনেট কানেকশন সমস্যা):\n" +
+                    "Unable to resolve host \"generativelanguage.googleapis.com\".\n\n" +
+                    "This error occurs when the Android device or Emulator has no internet access or its DNS configuration is failing.\n\n" +
+                    "How to fix / সমাধান:\n" +
+                    "1. Check if your phone/computer has an active internet connection.\n" +
+                    "2. Enable Mobile Data or Wi-Fi on the Android Emulator.\n" +
+                    "3. Go to Emulator Settings -> Network, or try restarting the emulator with a 'Cold Boot'.\n" +
+                    "4. If you are using a proxy or VPN, please disable it or configure a custom Base URL in Settings."
+        }
+        return msg
     }
 }

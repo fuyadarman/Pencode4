@@ -59,7 +59,29 @@ class VibeRepository(private val dao: VibeDao, private val context: Context) {
 
     fun isBinaryExtension(path: String): Boolean {
         val ext = path.substringAfterLast(".", "").lowercase()
-        return ext in setOf("png", "jpg", "jpeg", "webp", "gif", "bmp", "ico", "obj", "gltf", "glb", "fbx", "3ds", "stl")
+        return ext in setOf("png", "jpg", "jpeg", "webp", "gif", "bmp", "ico", "obj", "gltf", "glb", "fbx", "3ds", "stl", "dex", "arsc", "so", "jar", "apk", "zip")
+    }
+
+    fun isPhysicalFileBinary(file: File, relativePath: String): Boolean {
+        if (isBinaryExtension(relativePath)) return true
+        val ext = file.extension.lowercase()
+        if (ext in setOf("dex", "arsc", "so", "jar", "apk", "zip", "class", "bin", "exe", "dll")) return true
+        if (ext in setOf("java", "kt", "xml", "json", "txt", "properties", "gradle", "kts", "md", "html", "js", "css", "smali")) {
+            return false
+        }
+        if (file.exists() && file.length() > 0) {
+            try {
+                val bytes = file.inputStream().use { stream ->
+                    val buf = ByteArray(1024)
+                    val read = stream.read(buf)
+                    if (read > 0) buf.copyOf(read) else ByteArray(0)
+                }
+                return isBinaryBytes(bytes)
+            } catch (e: Exception) {
+                return true
+            }
+        }
+        return false
     }
 
     fun decodeBase64Content(content: String): ByteArray? {
@@ -135,9 +157,9 @@ class VibeRepository(private val dao: VibeDao, private val context: Context) {
                 val relativePath = file.relativeTo(projectDir).path.replace("\\", "/")
                 diskPaths.add(relativePath)
                 
-                val isBinary = isBinaryExtension(relativePath) || file.length() > 200_000L
+                val isBinary = isPhysicalFileBinary(file, relativePath)
                 val content = if (isBinary) {
-                    if (file.length() <= 100_000L) {
+                    if (file.length() <= 500_000L) {
                         val bytes = try { file.readBytes() } catch (e: Exception) { ByteArray(0) }
                         val mimeType = when (file.extension.lowercase()) {
                             "png" -> "image/png"
@@ -378,16 +400,20 @@ class VibeRepository(private val dao: VibeDao, private val context: Context) {
                     zip.getInputStream(entry).use { input ->
                         val bytes = input.readBytes()
                         if (entryName.equals("AndroidManifest.xml", ignoreCase = true)) {
-                            val decompiledXml = decodeAxml(bytes)
+                            val decompiledXml = com.example.api.Decompiler.decodeAxml(bytes)
                             outFile.writeText(decompiledXml)
                         } else if (entryName.endsWith(".xml", ignoreCase = true) || entryName.endsWith(".json", ignoreCase = true) || entryName.endsWith(".txt", ignoreCase = true) || entryName.endsWith(".properties", ignoreCase = true)) {
                             if (bytes.isNotEmpty() && bytes[0] == '<'.toByte()) {
                                 outFile.writeText(String(bytes, Charsets.UTF_8))
                             } else {
-                                val decoded = decodeAxml(bytes)
+                                val decoded = com.example.api.Decompiler.decodeAxml(bytes)
                                 outFile.writeText(decoded)
                             }
-                        } else if (isBinaryExtension(entryName) || entryName.endsWith(".dex") || entryName.endsWith(".arsc") || entryName.endsWith(".so")) {
+                        } else if (entryName.endsWith(".dex")) {
+                            outFile.writeBytes(bytes)
+                            // Parse & decompile DEX bytecode classes into editable, readable text .java files
+                            com.example.api.Decompiler.decompileDex(bytes, projectDir)
+                        } else if (isBinaryExtension(entryName) || entryName.endsWith(".arsc") || entryName.endsWith(".so")) {
                             outFile.writeBytes(bytes)
                         } else {
                             try {
@@ -413,90 +439,7 @@ class VibeRepository(private val dao: VibeDao, private val context: Context) {
     }
 
     private fun decodeAxml(bytes: ByteArray): String {
-        try {
-            if (bytes.size < 8) return String(bytes, Charsets.UTF_8)
-            if (bytes[0] == '<'.toByte() && bytes[1] == '?'.toByte()) {
-                return String(bytes, Charsets.UTF_8)
-            }
-            val buffer = java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN)
-            val magic = buffer.int
-            if (magic != 0x00080003) {
-                return String(bytes, Charsets.UTF_8).filter { it.code in 32..126 || it == '\n' || it == '\r' || it == '\t' }
-            }
-            val fileSize = buffer.int
-            val strings = mutableListOf<String>()
-
-            while (buffer.hasRemaining()) {
-                val chunkPos = buffer.position()
-                if (chunkPos + 8 > bytes.size) break
-                val chunkType = buffer.short.toInt() and 0xFFFF
-                val headerSize = buffer.short.toInt() and 0xFFFF
-                val chunkSize = buffer.int
-                if (chunkSize <= 0 || chunkPos + chunkSize > bytes.size) break
-
-                if (chunkType == 0x0001) { // String Pool
-                    val stringCount = buffer.int
-                    val styleCount = buffer.int
-                    val flags = buffer.int
-                    val stringsStart = buffer.int
-                    val isUtf8 = (flags and (1 shl 8)) != 0
-                    val stringOffsets = IntArray(stringCount)
-                    for (i in 0 until stringCount) {
-                        stringOffsets[i] = buffer.int
-                    }
-                    val poolDataStart = chunkPos + stringsStart
-                    for (i in 0 until stringCount) {
-                        val strPos = poolDataStart + stringOffsets[i]
-                        if (strPos >= bytes.size) {
-                            strings.add("")
-                            continue
-                        }
-                        if (isUtf8) {
-                            var uPos = strPos
-                            while (uPos < bytes.size && (bytes[uPos].toInt() and 0x80) != 0) uPos++
-                            uPos++
-                            if (uPos < bytes.size) {
-                                val bLen = bytes[uPos].toInt() and 0xFF
-                                uPos++
-                                if (uPos + bLen <= bytes.size) {
-                                    strings.add(String(bytes, uPos, bLen, Charsets.UTF_8))
-                                } else strings.add("")
-                            } else strings.add("")
-                        } else {
-                            val charLen = (bytes[strPos].toInt() and 0xFF) or ((bytes[strPos + 1].toInt() and 0xFF) shl 8)
-                            val strBytes = charLen * 2
-                            if (strPos + 2 + strBytes <= bytes.size) {
-                                strings.add(String(bytes, strPos + 2, strBytes, Charsets.UTF_16LE))
-                            } else strings.add("")
-                        }
-                    }
-                    buffer.position(chunkPos + chunkSize)
-                } else {
-                    buffer.position(chunkPos + chunkSize)
-                }
-            }
-
-            val xmlBuilder = StringBuilder()
-            xmlBuilder.append("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n")
-            xmlBuilder.append("<!-- Decompiled AndroidManifest.xml -->\n")
-            xmlBuilder.append("<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n")
-
-            val permissions = strings.filter { it.contains("permission", ignoreCase = true) }.distinct()
-            permissions.forEach { perm ->
-                xmlBuilder.append("    <uses-permission android:name=\"$perm\" />\n")
-            }
-
-            val activities = strings.filter { it.endsWith("Activity") || it.contains("activity", ignoreCase = true) }.distinct()
-            xmlBuilder.append("\n    <application android:allowBackup=\"true\" android:label=\"Decompiled App\">\n")
-            activities.forEach { act ->
-                xmlBuilder.append("        <activity android:name=\"$act\" android:exported=\"true\" />\n")
-            }
-            xmlBuilder.append("    </application>\n")
-            xmlBuilder.append("</manifest>\n")
-            return xmlBuilder.toString()
-        } catch (e: Exception) {
-            return "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n    <!-- Decompiled Manifest Fallback -->\n</manifest>"
-        }
+        return com.example.api.Decompiler.decodeAxml(bytes)
     }
 
     suspend fun extractZipToProject(projectName: String, zipUri: android.net.Uri) = withContext(Dispatchers.IO) {
