@@ -763,7 +763,12 @@ object GeminiClient {
                                 attempt++
                                 if (attempt < maxAttempts) {
                                     val isTransientError = (lastCode == 429 || lastCode == 503 || lastCode == 502 || lastCode == 504) || (rawResponse ?: "").contains("quota", ignoreCase = true) || (rawResponse ?: "").contains("rate limit", ignoreCase = true) || (rawResponse ?: "").contains("overloaded", ignoreCase = true) || (rawResponse ?: "").contains("unavailable", ignoreCase = true) || (rawResponse ?: "").contains("503", ignoreCase = true) || (rawResponse ?: "").contains("429", ignoreCase = true)
-                                    val backoff = if (isTransientError) {
+                                    val isRateLimit = lastCode == 429 || (rawResponse ?: "").contains("rate limit", ignoreCase = true) || (rawResponse ?: "").contains("quota", ignoreCase = true)
+                                    val backoff = if (isRateLimit) {
+                                        val base = Math.min(6000L * (1 shl (attempt - 1)), 60000L)
+                                        val jitter = (Math.random() * 1000).toLong()
+                                        base + jitter
+                                    } else if (isTransientError) {
                                         val base = Math.min(3000L * (1 shl (attempt - 1)), 60000L)
                                         val jitter = (Math.random() * 1000).toLong()
                                         base + jitter

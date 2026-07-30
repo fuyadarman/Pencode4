@@ -2777,11 +2777,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                         part.copy(text = "System/Tool Output for '$toolName' (File: $filePath): [Omitted older content of $filePath to save context/tokens. Refer to the most recent read of this file below for full/range contents.]")
                                     } else {
                                         seenReadFilePaths.add(filePath)
-                                        // If the single file content read is extremely massive, truncate it to save tokens and prevent 429 errors
-                                        if (text.length > 20000) {
-                                            val header = text.take(5000)
-                                            val footer = text.takeLast(5000)
-                                            val truncatedMsg = "\n\n[... Truncated ${text.length - 10000} characters of file content to prevent Rate Limit / Token bloat ...]\n\n"
+                                        // Truncate large file content reads to 6000 chars (~1500 tokens) max to prevent Rate Limit / Token bloat
+                                        if (text.length > 6000) {
+                                            val header = text.take(2500)
+                                            val footer = text.takeLast(2500)
+                                            val truncatedMsg = "\n\n[... Truncated ${text.length - 5000} characters of file content to optimize context & prevent API rate limits ...]\n\n"
                                             part.copy(text = header + truncatedMsg + footer)
                                         } else {
                                             part
@@ -2794,16 +2794,31 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 part
                             }
                         } else {
-                            // Truncate extremely large command outputs, directory listings, or search results
-                            if (text.length > 10000) {
-                                val header = text.take(3000)
-                                val footer = text.takeLast(3000)
-                                val truncatedMsg = "\n\n[... Truncated ${text.length - 6000} characters of output to prevent Rate Limit / Token bloat ...]\n\n"
+                            // Truncate large command outputs, directory listings, or search results to 4000 chars max
+                            if (text.length > 4000) {
+                                val header = text.take(1500)
+                                val footer = text.takeLast(1500)
+                                val truncatedMsg = "\n\n[... Truncated ${text.length - 3000} characters of output to optimize context & prevent API rate limits ...]\n\n"
                                 part.copy(text = header + truncatedMsg + footer)
                             } else {
                                 part
                             }
                         }
+                    } else if (text != null && text.contains("[IMAGE_BASE64:")) {
+                        val cleanText = text.replace("""\[IMAGE_BASE64: data:.*?;base64,.*?\]""".toRegex(), "[Attached Image]")
+                        part.copy(text = cleanText)
+                    } else {
+                        part
+                    }
+                }
+                optimized[i] = content.copy(parts = updatedParts)
+            } else if (content.role == "model") {
+                val updatedParts = content.parts.map { part ->
+                    val text = part.text
+                    if (text != null && text.length > 3000) {
+                        val header = text.take(1200)
+                        val footer = text.takeLast(1200)
+                        part.copy(text = "$header\n[... Omitted middle model output to optimize context ...]\n$footer")
                     } else {
                         part
                     }
@@ -2811,14 +2826,14 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 optimized[i] = content.copy(parts = updatedParts)
             }
         }
-        if (optimized.size > 16) {
+        if (optimized.size > 10) {
             val pruned = mutableListOf<Content>()
             pruned.add(optimized.first())
             pruned.add(Content(
                 role = "user",
-                parts = listOf(Part(text = "[System Note: Older agent execution history has been archived to maintain optimal processing speeds and prevent looping. The last few operations are retained below. Proceed with finishing the task.]"))
+                parts = listOf(Part(text = "[System Note: Older agent execution history summarized/archived to maintain light payload & optimal speed.]"))
             ))
-            pruned.addAll(optimized.takeLast(14))
+            pruned.addAll(optimized.takeLast(8))
             return pruned
         }
         return optimized
@@ -2894,7 +2909,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                     val lastUserEntity = historicalMessages.lastOrNull { 
                         it.role == "user" && it.timestamp <= lastAssistantEntity.timestamp 
                     }
-                    val previousUserPrompt = lastUserEntity?.content ?: "[Previous Request]"
+                    val rawPrevPrompt = lastUserEntity?.content ?: "[Previous Request]"
+                    val previousUserPrompt = rawPrevPrompt.replace("""\[IMAGE_BASE64: data:.*?;base64,.*?\]""".toRegex(), "[Attached Image]")
 
                     // Alternate role: add the actual previous user query
                     history.add(Content(
@@ -4753,9 +4769,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 // Reload project files list inside the loop so changes update dynamically
                 loadProjectDetails(project.name)
                 
-                // Add a smart, polite delay of 3.5 seconds between successive turns to prevent slamming the API (429 errors)
+                // Add a smart, polite delay of 4.5 seconds between successive turns to prevent slamming the API (429 rate limit errors)
                 if (!loopCompleted && turn <= 500 && actionsCount < maxActionSteps) {
-                    kotlinx.coroutines.delay(3500)
+                    kotlinx.coroutines.delay(4500)
                 }
             }
 
