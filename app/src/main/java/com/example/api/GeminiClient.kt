@@ -316,8 +316,8 @@ object GeminiClient {
                              if (!response.isSuccessful) {
                                 attempt++
                                 if (attempt < maxAttempts) {
-                                    val isRateLimit = (lastCode == 429)
-                                    val backoff = if (isRateLimit) {
+                                    val isTransientError = (lastCode == 429 || lastCode == 503 || lastCode == 502 || lastCode == 504) || (rawResponse ?: "").contains("quota", ignoreCase = true) || (rawResponse ?: "").contains("rate limit", ignoreCase = true) || (rawResponse ?: "").contains("overloaded", ignoreCase = true) || (rawResponse ?: "").contains("unavailable", ignoreCase = true) || (rawResponse ?: "").contains("503", ignoreCase = true)
+                                    val backoff = if (isTransientError) {
                                         val base = 2000L * (1 shl (attempt - 1))
                                         val jitter = (Math.random() * 500).toLong()
                                         base + jitter
@@ -336,8 +336,9 @@ object GeminiClient {
                             Log.e(TAG, "Exception during Cloudflare execute", e)
                             attempt++
                             if (attempt < maxAttempts) {
-                                val isRateLimit = e.message?.contains("429") == true || e.message?.lowercase()?.contains("rate limit") == true
-                                val backoff = if (isRateLimit) {
+                                val msg = e.message?.lowercase() ?: ""
+                                val isTransientError = msg.contains("429") || msg.contains("503") || msg.contains("502") || msg.contains("504") || msg.contains("rate limit") || msg.contains("overloaded") || msg.contains("unavailable")
+                                val backoff = if (isTransientError) {
                                     val base = 2000L * (1 shl (attempt - 1))
                                     val jitter = (Math.random() * 500).toLong()
                                     base + jitter
@@ -464,8 +465,8 @@ object GeminiClient {
                              if (!response.isSuccessful) {
                                 attempt++
                                 if (attempt < maxAttempts) {
-                                    val isRateLimit = (lastCode == 429)
-                                    val backoff = if (isRateLimit) {
+                                    val isTransientError = (lastCode == 429 || lastCode == 503 || lastCode == 502 || lastCode == 504) || (rawResponse ?: "").contains("quota", ignoreCase = true) || (rawResponse ?: "").contains("rate limit", ignoreCase = true) || (rawResponse ?: "").contains("overloaded", ignoreCase = true) || (rawResponse ?: "").contains("unavailable", ignoreCase = true) || (rawResponse ?: "").contains("503", ignoreCase = true) || (rawResponse ?: "").contains("429", ignoreCase = true)
+                                    val backoff = if (isTransientError) {
                                         val base = 2000L * (1 shl (attempt - 1))
                                         val jitter = (Math.random() * 500).toLong()
                                         base + jitter
@@ -484,8 +485,9 @@ object GeminiClient {
                             Log.e(TAG, "Exception during $provider call execution", e)
                             attempt++
                             if (attempt < maxAttempts) {
-                                val isRateLimit = e.message?.contains("429") == true || e.message?.lowercase()?.contains("rate limit") == true
-                                val backoff = if (isRateLimit) {
+                                val msg = e.message?.lowercase() ?: ""
+                                val isTransientError = msg.contains("429") || msg.contains("503") || msg.contains("502") || msg.contains("504") || msg.contains("rate limit") || msg.contains("overloaded") || msg.contains("unavailable")
+                                val backoff = if (isTransientError) {
                                     val base = 2000L * (1 shl (attempt - 1))
                                     val jitter = (Math.random() * 500).toLong()
                                     base + jitter
@@ -619,8 +621,8 @@ object GeminiClient {
                              if (!response.isSuccessful) {
                                 attempt++
                                 if (attempt < maxAttempts) {
-                                    val isRateLimit = (lastCode == 429)
-                                    val backoff = if (isRateLimit) {
+                                    val isTransientError = (lastCode == 429 || lastCode == 503 || lastCode == 502 || lastCode == 504) || (rawResponse ?: "").contains("quota", ignoreCase = true) || (rawResponse ?: "").contains("rate limit", ignoreCase = true) || (rawResponse ?: "").contains("overloaded", ignoreCase = true) || (rawResponse ?: "").contains("unavailable", ignoreCase = true) || (rawResponse ?: "").contains("503", ignoreCase = true) || (rawResponse ?: "").contains("429", ignoreCase = true)
+                                    val backoff = if (isTransientError) {
                                         val base = 2000L * (1 shl (attempt - 1))
                                         val jitter = (Math.random() * 500).toLong()
                                         base + jitter
@@ -639,8 +641,9 @@ object GeminiClient {
                             Log.e(TAG, "Exception during Claude execute", e)
                             attempt++
                             if (attempt < maxAttempts) {
-                                val isRateLimit = e.message?.contains("429") == true || e.message?.lowercase()?.contains("rate limit") == true
-                                val backoff = if (isRateLimit) {
+                                val msg = e.message?.lowercase() ?: ""
+                                val isTransientError = msg.contains("429") || msg.contains("503") || msg.contains("502") || msg.contains("504") || msg.contains("rate limit") || msg.contains("overloaded") || msg.contains("unavailable")
+                                val backoff = if (isTransientError) {
                                     val base = 2000L * (1 shl (attempt - 1))
                                     val jitter = (Math.random() * 500).toLong()
                                     base + jitter
@@ -759,8 +762,8 @@ object GeminiClient {
                              if (!response.isSuccessful) {
                                 attempt++
                                 if (attempt < maxAttempts) {
-                                    val isRateLimit = (lastCode == 429)
-                                    val backoff = if (isRateLimit) {
+                                    val isTransientError = (lastCode == 429 || lastCode == 503 || lastCode == 502 || lastCode == 504) || (rawResponse ?: "").contains("quota", ignoreCase = true) || (rawResponse ?: "").contains("rate limit", ignoreCase = true) || (rawResponse ?: "").contains("overloaded", ignoreCase = true) || (rawResponse ?: "").contains("unavailable", ignoreCase = true) || (rawResponse ?: "").contains("503", ignoreCase = true) || (rawResponse ?: "").contains("429", ignoreCase = true)
+                                    val backoff = if (isTransientError) {
                                         val base = 2000L * (1 shl (attempt - 1))
                                         val jitter = (Math.random() * 500).toLong()
                                         base + jitter
@@ -779,8 +782,9 @@ object GeminiClient {
                             Log.e(TAG, "Exception during Gemini execute", e)
                             attempt++
                             if (attempt < maxAttempts) {
-                                val isRateLimit = e.message?.contains("429") == true || e.message?.lowercase()?.contains("rate limit") == true
-                                val backoff = if (isRateLimit) {
+                                val msg = e.message?.lowercase() ?: ""
+                                val isTransientError = msg.contains("429") || msg.contains("503") || msg.contains("502") || msg.contains("504") || msg.contains("rate limit") || msg.contains("overloaded") || msg.contains("unavailable")
+                                val backoff = if (isTransientError) {
                                     val base = 2000L * (1 shl (attempt - 1))
                                     val jitter = (Math.random() * 500).toLong()
                                     base + jitter
@@ -917,8 +921,8 @@ object GeminiClient {
                     if (!response.isSuccessful) {
                         attempt++
                         if (attempt < maxAttempts) {
-                            val isRateLimit = (lastCode == 429) || (rawResponse ?: "").contains("quota", ignoreCase = true) || (rawResponse ?: "").contains("rate limit", ignoreCase = true) || (rawResponse ?: "").contains("exhausted", ignoreCase = true) || (rawResponse ?: "").contains("429", ignoreCase = true)
-                            val backoff = if (isRateLimit) {
+                            val isTransientError = (lastCode == 429 || lastCode == 503 || lastCode == 502 || lastCode == 504) || (rawResponse ?: "").contains("quota", ignoreCase = true) || (rawResponse ?: "").contains("rate limit", ignoreCase = true) || (rawResponse ?: "").contains("overloaded", ignoreCase = true) || (rawResponse ?: "").contains("unavailable", ignoreCase = true) || (rawResponse ?: "").contains("503", ignoreCase = true) || (rawResponse ?: "").contains("429", ignoreCase = true) || (rawResponse ?: "").contains("exhausted", ignoreCase = true)
+                            val backoff = if (isTransientError) {
                                 val base = 2000L * (1 shl (attempt - 1))
                                 val jitter = (Math.random() * 500).toLong()
                                 base + jitter
@@ -937,8 +941,9 @@ object GeminiClient {
                     Log.e(TAG, "Exception during direct Gemini execute", e)
                     attempt++
                     if (attempt < maxAttempts) {
-                        val isRateLimit = e.message?.contains("429") == true || e.message?.lowercase()?.contains("rate limit") == true
-                        val backoff = if (isRateLimit) {
+                        val msg = e.message?.lowercase() ?: ""
+                        val isTransientError = msg.contains("429") || msg.contains("503") || msg.contains("502") || msg.contains("504") || msg.contains("rate limit") || msg.contains("overloaded") || msg.contains("unavailable")
+                        val backoff = if (isTransientError) {
                             val base = 2000L * (1 shl (attempt - 1))
                             val jitter = (Math.random() * 500).toLong()
                             base + jitter

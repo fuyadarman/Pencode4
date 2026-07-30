@@ -3101,10 +3101,17 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                       "three": "https://esm.sh/three@0.150.0"
                     }
                   }
-                STRICT AGENT TERMINATION & ANTI-LOOPING RULES (CRITICAL):
-                - LOOP PREVENTION: AI agents must NEVER loop endlessly. If you have completed the modifications requested by the user, you MUST STOP immediately by calling the 'complete' tool.
-                - NO TRIVIAL RE-READING OR PADDING: Do not perform repetitive file reads, edits, or search queries that do not add any value. Once files are updated, compile/build and complete the task.
-                - BE EFFICIENT LIKE BOLT/V0/LOVABLE: Professional developers execute changes in a single robust step and exit immediately. Make all edits in one turn where possible, and immediately finish.
+                STRICT AGENT TERMINATION & ANTI-LOOPING RULES (CRITICAL - SWE-AGENT / OPENCODE / LOVABLE PROTOCOL):
+                - MANDATORY TOOL EXECUTION PROTOCOL: If the user's prompt requests an action (creating, building, modifying, fixing, decompiling, refactoring, or searching), you MUST execute actual tool calls! Plain text responses saying you completed or will complete a task without invoking tools are STRICTLY FORBIDDEN.
+                - NO PREMATURE COMPLETION: You MUST NOT call the 'complete' tool after merely reading, scanning, or listing files. Simply inspecting code is NOT completing the task. Calling 'complete' without actually creating/editing/writing the required code changes is considered a FATAL FAILURE.
+                - AUTONOMOUS EXECUTION: Continue calling tools autonomously step-by-step until all user requirements are completely built and modified in the files.
+                - LOOP PREVENTION: AI agents must NEVER loop endlessly on redundant actions. Once you have actually executed and completed the code modifications requested by the user, call the 'complete' tool to terminate.
+                
+                SEARCH & RESOLUTION HIERARCHY RULE (MANDATORY):
+                - When searching or looking for code, functions, classes, symbols, or files across the codebase:
+                  1. FIRST: Use direct code search tools ('grep', 'find', or 'scan_dir').
+                  2. SECOND: IF 'grep' or 'find' yields no results or fails to find the code, perform a broader 'global_search' across the workspace.
+                  3. THIRD: AFTER locating relevant files via search, call 'read_file' or 'read_file_range' on those specific files to inspect their contents before applying edits.
 
                 SURGICAL EDITING & FILE MODIFICATION RULES (CRITICAL):
                 - Use 'patch_file' (alias 'patch') for very small, surgical changes (1-3 lines). This is mandatory for precise fixes.
