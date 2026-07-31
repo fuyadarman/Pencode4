@@ -222,6 +222,7 @@ class MainActivity : ComponentActivity() {
                                 onFetchSkillFileContent = { id, cb -> viewModel.fetchSkillFileContent(id, cb) },
                                 webArtifactInfo = webArtifactInfo,
                                 onPreviewWebArtifact = { viewModel.previewWebArtifact() },
+                                onFetchLatestArtifact = { viewModel.fetchLatestArtifact() },
                                 onToggleError = { id -> viewModel.toggleWebErrorSelection(id) },
                                 onToggleAllErrors = { selectAll -> viewModel.toggleAllWebErrors(selectAll) },
                                 onClearErrors = { viewModel.clearWebErrors() },

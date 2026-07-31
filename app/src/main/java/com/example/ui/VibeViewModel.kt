@@ -1483,71 +1483,135 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun downloadAndUnzipApk(owner: String, repoName: String, runId: Long, tokenVal: String) {
-        if (lastDownloadedRunId == runId) return
+    fun downloadAndUnzipApk(owner: String, repoName: String, runId: Long, tokenVal: String, force: Boolean = false) {
+        if (!force && lastDownloadedRunId == runId) return
         lastDownloadedRunId = runId
         
         applicationScope.launch(Dispatchers.IO) {
             _apkDownloadProgress.value = "Fetching build artifacts..."
             showDownloadNotification(-1, "Pencode AI Build", "Fetching build artifacts...")
             try {
-                val artifactsUrl = "https://api.github.com/repos/$owner/$repoName/actions/runs/$runId/artifacts"
-                val request = Request.Builder()
-                    .url(artifactsUrl)
-                    .header("Authorization", "token $tokenVal")
-                    .header("Accept", "application/vnd.github.v3+json")
+                val okHttpClient = OkHttpClient.Builder()
+                    .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+                    .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+                    .writeTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
                     .build()
-                
-                val response = OkHttpClient().newCall(request).execute()
-                if (!response.isSuccessful) {
-                    _apkDownloadProgress.value = "Artifact fetch failed (Status: ${response.code})"
-                    return@launch
-                }
-                
-                val bodyStr = response.body?.string() ?: ""
                 val moshi = Moshi.Builder().addLast(com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory()).build()
-                val map = moshi.adapter(Map::class.java).fromJson(bodyStr) as? Map<*, *>
-                val artifacts = map?.get("artifacts") as? List<*>
+
+                var artifacts: List<*>? = null
+                var attempt = 0
+                val artifactsUrl = "https://api.github.com/repos/$owner/$repoName/actions/runs/$runId/artifacts"
+
+                // Retry up to 3 times for run-specific artifacts
+                while (attempt < 3 && artifacts.isNullOrEmpty()) {
+                    attempt++
+                    try {
+                        val request = Request.Builder()
+                            .url(artifactsUrl)
+                            .header("Authorization", "token $tokenVal")
+                            .header("Accept", "application/vnd.github.v3+json")
+                            .build()
+                        val response = okHttpClient.newCall(request).execute()
+                        if (response.isSuccessful) {
+                            val bodyStr = response.body?.string() ?: ""
+                            val map = moshi.adapter(Map::class.java).fromJson(bodyStr) as? Map<*, *>
+                            artifacts = map?.get("artifacts") as? List<*>
+                        }
+                    } catch (e: Exception) {
+                        Log.e("VibeViewModel", "Error fetching artifacts attempt $attempt: ${e.message}")
+                    }
+                    if (artifacts.isNullOrEmpty() && attempt < 3) {
+                        delay(3000) // Wait 3s for GitHub Actions to register artifacts
+                    }
+                }
+
+                // Fallback: Query repo-level artifacts if run-level artifacts are empty
                 if (artifacts.isNullOrEmpty()) {
-                    _apkDownloadProgress.value = "No build artifacts found for run #$runId."
+                    try {
+                        val repoArtifactsUrl = "https://api.github.com/repos/$owner/$repoName/actions/artifacts?per_page=10"
+                        val request = Request.Builder()
+                            .url(repoArtifactsUrl)
+                            .header("Authorization", "token $tokenVal")
+                            .header("Accept", "application/vnd.github.v3+json")
+                            .build()
+                        val response = okHttpClient.newCall(request).execute()
+                        if (response.isSuccessful) {
+                            val bodyStr = response.body?.string() ?: ""
+                            val map = moshi.adapter(Map::class.java).fromJson(bodyStr) as? Map<*, *>
+                            val repoArtifacts = map?.get("artifacts") as? List<*>
+                            if (!repoArtifacts.isNullOrEmpty()) {
+                                // Match artifact by runId if possible, else take most recent
+                                val matched = repoArtifacts.firstOrNull { art ->
+                                    val artMap = art as? Map<*, *>
+                                    val wfRun = artMap?.get("workflow_run") as? Map<*, *>
+                                    val rId = (wfRun?.get("id") as? Number)?.toLong()
+                                    rId == runId
+                                } ?: repoArtifacts.firstOrNull()
+                                if (matched != null) {
+                                    artifacts = listOf(matched)
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e("VibeViewModel", "Fallback repo artifact fetch error: ${e.message}")
+                    }
+                }
+
+                if (artifacts.isNullOrEmpty()) {
+                    _apkDownloadProgress.value = "No build artifacts found yet for run #$runId. Will retry on next check."
+                    lastDownloadedRunId = 0L // Reset so retry can happen
                     return@launch
                 }
                 
                 // Find first artifact
-                val firstArtifact = artifacts.firstOrNull() as? Map<*, *>
+                val firstArtifact = artifacts!!.firstOrNull() as? Map<*, *>
                 val artifactId = (firstArtifact?.get("id") as? Number)?.toLong()
                 val downloadUrl = firstArtifact?.get("archive_download_url") as? String
                 
                 if (artifactId == null || downloadUrl == null) {
                     _apkDownloadProgress.value = "Invalid artifact data."
                     _apkDownloadPercentage.value = null
+                    lastDownloadedRunId = 0L
                     return@launch
                 }
                 
                 _apkDownloadProgress.value = "Downloading built APK..."
                 _apkDownloadPercentage.value = 0f
-                val downloadRequest = Request.Builder()
-                    .url(downloadUrl)
-                    .header("Authorization", "token $tokenVal")
-                    .header("Accept", "application/vnd.github.v3+json")
-                    .build()
-                
-                val client = OkHttpClient.Builder().followRedirects(false).build()
-                var downloadResponse = client.newCall(downloadRequest).execute()
-                
+
+                // Follow redirects manually to preserve or drop Auth header appropriately across domain shifts
+                var currentUrl: String = downloadUrl
+                var downloadResponse: okhttp3.Response? = null
                 var redirectCount = 0
-                while (downloadResponse.isRedirect && redirectCount < 5) {
-                    val location = downloadResponse.header("Location")
-                    if (location == null) break
-                    val redirectedRequest = Request.Builder().url(location).build()
-                    downloadResponse.close()
-                    downloadResponse = client.newCall(redirectedRequest).execute()
-                    redirectCount++
+                val redirectClient = okHttpClient.newBuilder().followRedirects(false).build()
+
+                while (redirectCount < 10) {
+                    val reqBuilder = Request.Builder().url(currentUrl)
+                    if (currentUrl.contains("github.com") || currentUrl.contains("api.github")) {
+                        reqBuilder.header("Authorization", "token $tokenVal")
+                        reqBuilder.header("Accept", "application/vnd.github.v3+json")
+                    }
+                    val req = reqBuilder.build()
+                    val resp = redirectClient.newCall(req).execute()
+
+                    if (resp.isRedirect) {
+                        val loc = resp.header("Location")
+                        resp.close()
+                        if (loc.isNullOrEmpty()) {
+                            downloadResponse = resp
+                            break
+                        }
+                        currentUrl = loc
+                        redirectCount++
+                    } else {
+                        downloadResponse = resp
+                        break
+                    }
                 }
 
-                if (!downloadResponse.isSuccessful) {
-                    _apkDownloadProgress.value = "Download failed (Status: ${downloadResponse.code})"
+                if (downloadResponse == null || !downloadResponse.isSuccessful) {
+                    _apkDownloadProgress.value = "Download failed (Status: ${downloadResponse?.code ?: "No Response"})"
                     _apkDownloadPercentage.value = null
+                    lastDownloadedRunId = 0L
                     return@launch
                 }
                 
@@ -1555,6 +1619,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 if (body == null) {
                     _apkDownloadProgress.value = "Empty response body."
                     _apkDownloadPercentage.value = null
+                    lastDownloadedRunId = 0L
                     return@launch
                 }
                 
@@ -1766,11 +1831,63 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 } else {
                     _apkDownloadProgress.value = "Unzip completed but no valid build artifacts found."
                     showDownloadNotification(0, "Pencode AI Build", "Unzip completed but no valid artifacts found.", true)
+                    lastDownloadedRunId = 0L
                 }
             } catch (e: Exception) {
                 _apkDownloadProgress.value = "Extraction failed: ${e.localizedMessage}"
                 _apkDownloadPercentage.value = null
                 showDownloadNotification(0, "Pencode AI Build", "Extraction failed: ${e.localizedMessage}", true)
+                lastDownloadedRunId = 0L
+            }
+        }
+    }
+
+    fun fetchLatestArtifact() {
+        val repoVal = _githubRepo.value.trim()
+        val tokenVal = _githubToken.value.trim()
+        if (repoVal.isEmpty() || tokenVal.isEmpty()) {
+            _apkDownloadProgress.value = "Please configure GitHub repo and token."
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            _apkDownloadProgress.value = "Fetching latest build artifacts..."
+            val cleanRepo = repoVal.removePrefix("https://github.com/").removePrefix("http://github.com/").removeSuffix(".git")
+            val parts = cleanRepo.split("/")
+            val owner = if (parts.size >= 2) parts[0] else cachedUsername ?: ""
+            val repoName = if (parts.size >= 2) parts[1] else parts[0]
+
+            try {
+                val okHttpClient = OkHttpClient.Builder()
+                    .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+                    .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+                    .build()
+                val runsUrl = "https://api.github.com/repos/$owner/$repoName/actions/runs?per_page=10"
+                val request = Request.Builder()
+                    .url(runsUrl)
+                    .header("Authorization", "token $tokenVal")
+                    .header("Accept", "application/vnd.github.v3+json")
+                    .build()
+                val response = okHttpClient.newCall(request).execute()
+                if (response.isSuccessful) {
+                    val bodyStr = response.body?.string() ?: ""
+                    val moshi = Moshi.Builder().addLast(com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory()).build()
+                    val map = moshi.adapter(Map::class.java).fromJson(bodyStr) as? Map<*, *>
+                    val runs = map?.get("workflow_runs") as? List<*>
+                    val completedRun = runs?.firstOrNull { run ->
+                        val rMap = run as? Map<*, *>
+                        rMap?.get("status") == "completed" && rMap?.get("conclusion") == "success"
+                    } as? Map<*, *>
+                    val runId = (completedRun?.get("id") as? Number)?.toLong()
+                    if (runId != null) {
+                        downloadAndUnzipApk(owner, repoName, runId, tokenVal, force = true)
+                    } else {
+                        _apkDownloadProgress.value = "No successful workflow run found to fetch artifacts."
+                    }
+                } else {
+                    _apkDownloadProgress.value = "Failed to list workflow runs (HTTP ${response.code})."
+                }
+            } catch (e: Exception) {
+                _apkDownloadProgress.value = "Fetch failed: ${e.localizedMessage}"
             }
         }
     }
@@ -2096,7 +2213,6 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             if (result.isSuccess) {
                 _gitProgress.value = "Push complete! Workflows & build tracking started."
                 startPollingBuild()
-                triggerAllWorkflows()
                 onComplete(result)
                 delay(3000)
                 _gitProgress.value = ""

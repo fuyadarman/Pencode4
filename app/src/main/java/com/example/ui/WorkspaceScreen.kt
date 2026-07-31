@@ -183,6 +183,7 @@ fun WorkspaceScreen(
     onFetchSkillFileContent: (String, ((String) -> Unit)?) -> Unit = { _, _ -> },
     webArtifactInfo: WebArtifactInfo? = null,
     onPreviewWebArtifact: () -> Unit = {},
+    onFetchLatestArtifact: () -> Unit = {},
     isImportingFiles: Boolean = false,
     importProgress: Float = 0f,
     importProgressMessage: String = "",
@@ -507,6 +508,7 @@ fun WorkspaceScreen(
                                 webArtifactInfo = webArtifactInfo,
                                 onInstallApk = onInstallApk,
                                 onPreviewWebArtifact = onPreviewWebArtifact,
+                                onFetchLatestArtifact = onFetchLatestArtifact,
                                 onSaveRepo = onSaveGithubRepo,
                                 onSaveToken = onSaveGithubToken,
                                 onSaveBranch = onSaveGithubBranch,
@@ -2951,11 +2953,11 @@ fun PreviewTabContent(
                 <div class="icon">🚀</div>
                 <h1>Compilation Required</h1>
                 <p>This is a <span class="highlight">React + Vite</span> project. It needs to be built before it can run in the live preview.</p>
-                <p>Go to the <span class="highlight">Build Tab</span> (Android Build Pipeline), configure your GitHub repository, and click <span class="highlight">Force Push & Build</span> to compile and load the preview.</p>
+                <p>Go to the <span class="highlight">Build Tab</span> (Android Build Pipeline), configure your GitHub repository, and click <span class="highlight">Build</span> to compile and load the preview.</p>
                 
                 <div class="bn-text">
                     <p>👋 এটি একটি <span class="highlight">React + Vite</span> প্রজেক্ট। লাইভ প্রিভিউ দেখতে প্রথমে প্রজেক্টটি কম্পাইল করা প্রয়োজন।</p>
-                    <p>দয়া করে <span class="highlight">Build Tab</span> এ গিয়ে আপনার GitHub Repository সেটআপ করুন এবং <span class="highlight">Force Push & Build</span> বাটনে ক্লিক করুন।</p>
+                    <p>দয়া করে <span class="highlight">Build Tab</span> এ গিয়ে আপনার GitHub Repository সেটআপ করুন এবং <span class="highlight">Build</span> বাটনে ক্লিক করুন।</p>
                 </div>
             </div>
         </body>
@@ -3579,6 +3581,7 @@ fun AndroidBuildTabContent(
     webArtifactInfo: WebArtifactInfo? = null,
     onInstallApk: () -> Unit = {},
     onPreviewWebArtifact: () -> Unit = {},
+    onFetchLatestArtifact: () -> Unit = {},
     onSaveRepo: (String) -> Unit,
     onSaveToken: (String) -> Unit,
     onSaveBranch: (String) -> Unit,
@@ -3589,7 +3592,7 @@ fun AndroidBuildTabContent(
     var tempToken by remember { mutableStateOf(githubToken) }
     var tempBranch by remember { mutableStateOf(githubBranch) }
     var expandArtifacts by remember { mutableStateOf(true) }
-    var isWorkflowsExpanded by remember { mutableStateOf(true) }
+    var isWorkflowsExpanded by remember { mutableStateOf(false) }
     var selectedWorkflowIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
 
     val logsScrollState = rememberScrollState()
@@ -3866,7 +3869,7 @@ fun AndroidBuildTabContent(
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(14.dp))
-                            Text("Force Push & Build", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("Build", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -3983,7 +3986,7 @@ fun AndroidBuildTabContent(
                                     modifier = Modifier.size(14.dp)
                                 )
                                 Text(
-                                    text = if (selectedWorkflowIds.isNotEmpty()) "Trigger Workflow (${selectedWorkflowIds.size})" else "Trigger Workflow",
+                                    text = if (selectedWorkflowIds.isNotEmpty()) "Trigger Selected Workflows (${selectedWorkflowIds.size})" else "Trigger Non-Running Workflows",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -4342,6 +4345,18 @@ fun AndroidBuildTabContent(
                                     }
                                 } else if (webArtifactInfo == null) {
                                     Text("No artifacts generated yet.", color = Color.Gray, fontSize = 11.sp)
+                                }
+
+                                Button(
+                                    onClick = onFetchLatestArtifact,
+                                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E293B)),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(vertical = 6.dp)
+                                ) {
+                                    Icon(Icons.Default.CloudDownload, contentDescription = "Fetch Artifact", modifier = Modifier.size(14.dp), tint = Color(0xFF38BDF8))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Fetch Latest Artifact", color = Color(0xFF38BDF8), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
