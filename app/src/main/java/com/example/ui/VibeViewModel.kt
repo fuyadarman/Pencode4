@@ -1557,14 +1557,17 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
 
-                if (artifacts.isNullOrEmpty()) {
-                    _apkDownloadProgress.value = "No build artifacts found yet for run #$runId. Will retry on next check."
+                // Filter out expired artifacts
+                val validArtifacts = artifacts?.mapNotNull { it as? Map<*, *> }?.filter { it["expired"] != true }
+
+                if (validArtifacts.isNullOrEmpty()) {
+                    _apkDownloadProgress.value = "Artifacts expired or not found for run #$runId. Click 'Build' to generate a fresh build."
                     lastDownloadedRunId = 0L // Reset so retry can happen
                     return@launch
                 }
                 
-                // Find first artifact
-                val firstArtifact = artifacts!!.firstOrNull() as? Map<*, *>
+                // Find first valid artifact
+                val firstArtifact = validArtifacts.firstOrNull()
                 val artifactId = (firstArtifact?.get("id") as? Number)?.toLong()
                 val downloadUrl = firstArtifact?.get("archive_download_url") as? String
                 
@@ -1578,7 +1581,8 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 _apkDownloadProgress.value = "Downloading built APK..."
                 _apkDownloadPercentage.value = 0f
 
-                // Follow redirects manually to preserve or drop Auth header appropriately across domain shifts
+                // Follow redirects manually. ONLY send Authorization on initial API call to api.github.com.
+                // Do NOT send Authorization header on redirected CDN/storage URLs (e.g., pipelines.actions.githubusercontent.com / S3 / Azure Blob) as signed URLs reject custom Auth headers with 410/400.
                 var currentUrl: String = downloadUrl
                 var downloadResponse: okhttp3.Response? = null
                 var redirectCount = 0
@@ -1586,7 +1590,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
 
                 while (redirectCount < 10) {
                     val reqBuilder = Request.Builder().url(currentUrl)
-                    if (currentUrl.contains("github.com") || currentUrl.contains("api.github")) {
+                    if (redirectCount == 0 && (currentUrl.contains("api.github.com") || currentUrl.contains("/actions/artifacts/"))) {
                         reqBuilder.header("Authorization", "token $tokenVal")
                         reqBuilder.header("Accept", "application/vnd.github.v3+json")
                     }
@@ -1609,7 +1613,12 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 if (downloadResponse == null || !downloadResponse.isSuccessful) {
-                    _apkDownloadProgress.value = "Download failed (Status: ${downloadResponse?.code ?: "No Response"})"
+                    val statusCode = downloadResponse?.code
+                    if (statusCode == 410) {
+                        _apkDownloadProgress.value = "Artifact expired on GitHub (Status: 410). Click 'Build' to generate a new build."
+                    } else {
+                        _apkDownloadProgress.value = "Download failed (Status: ${statusCode ?: "No Response"})"
+                    }
                     _apkDownloadPercentage.value = null
                     lastDownloadedRunId = 0L
                     return@launch
