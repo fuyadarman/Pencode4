@@ -407,6 +407,7 @@ fun WorkspaceScreen(
                                     onAddWebConsoleLog(msg, "error", src, line)
                                     onWebError(msg, src, line)
                                 },
+                                onClearErrors = onClearErrors,
                                 onInspectorElementSelected = { identifier, outerHTML ->
                                     val fileName = "index.html"
                                     val htmlContent = files.find { it.path == fileName }?.content ?: ""
@@ -2873,6 +2874,7 @@ fun PreviewTabContent(
     onConsoleLog: (String, String, String, Int) -> Unit,
     onClearLogs: () -> Unit,
     onWebError: (message: String, sourceId: String, lineNumber: Int) -> Unit,
+    onClearErrors: () -> Unit = {},
     onInspectorElementSelected: (identifier: String, html: String) -> Unit = { _, _ -> },
     webPreviewRefreshTrigger: Int = 0
 ) {
@@ -3201,6 +3203,13 @@ fun PreviewTabContent(
                                 }
 
                                 webViewClient = object : WebViewClient() {
+                                    override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                                        super.onPageStarted(view, url, favicon)
+                                        if (url == "https://virtual-app/" || url?.startsWith("https://virtual-app/") == true) {
+                                            onClearErrors()
+                                        }
+                                    }
+
                                     override fun onPageFinished(view: WebView?, url: String?) {
                                         super.onPageFinished(view, url)
                                         val js = """

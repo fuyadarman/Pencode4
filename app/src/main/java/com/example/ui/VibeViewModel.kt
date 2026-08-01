@@ -229,13 +229,16 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     private fun checkAndTriggerAutoFixOnAgentFinish() {
         if (_allowAutoFix.value && !_isThinking.value) {
             viewModelScope.launch(Dispatchers.Main) {
+                // Realtime check: Wait 2500ms for web preview / build runner to reload and verify if errors still exist
+                kotlinx.coroutines.delay(2500)
+                if (_isThinking.value) return@launch
+
                 val unattemptedWebErrors = _detectedWebErrors.value.filter { err ->
                     val key = "${err.sourceId}:${err.lineNumber}:${err.message}"
                     !attemptedWebErrorKeys.contains(key)
                 }
                 if (unattemptedWebErrors.isNotEmpty() && !isAutoFixingWebErrors) {
                     isAutoFixingWebErrors = true
-                    kotlinx.coroutines.delay(500)
                     _detectedWebErrors.value = _detectedWebErrors.value.map { err ->
                         val key = "${err.sourceId}:${err.lineNumber}:${err.message}"
                         err.copy(isSelected = !attemptedWebErrorKeys.contains(key))
@@ -4867,11 +4870,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                     }
                     
                     _isThinking.value = false
-                    checkAndTriggerAutoFixOnAgentFinish()
                     _chatMessages.value = repository.getChatsForProject(project.name)
                     if (project.templateKey == "vanilla" || project.templateKey == "react" || project.templateKey == "vanilla_three") {
                         _webPreviewRefreshTrigger.value += 1
                     }
+                    checkAndTriggerAutoFixOnAgentFinish()
 
                     // Auto-trigger framework detection and Github push prompting on task completion
                     try {
