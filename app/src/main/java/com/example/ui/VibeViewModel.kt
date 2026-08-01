@@ -3314,6 +3314,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                   }
                 }
 
+                STRICT FORMAT MANDATE:
+                - Output strictly raw valid JSON. Do NOT use XML/HTML tags like '<arg_key>', '<arg_value>', or '.read_file<arg_key>path</arg_key>'.
+                - Do NOT use markdown codeblock wrappers around JSON unless necessary. Return pure JSON objects.
+
                 AI THINKING & RESPONSE RULES:
                 - MANDATORY 'ai_think': When receiving any prompt, before starting operations, or before debugging/error fixing/problem solving, you MUST invoke 'ai_think' first to analyze the prompt, plan architecture, discuss problem, and define solution steps.
                 - Call 'ai_response' after operation steps to document reasoning if needed.

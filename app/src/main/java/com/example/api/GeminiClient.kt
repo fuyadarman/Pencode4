@@ -190,10 +190,86 @@ object GeminiClient {
             .replace(Regex("(?i)</?tool_input>"), "")
             .replace(Regex("(?i)</?function_call>"), "")
             .replace(Regex("(?i)</?tool_name>"), "")
+            .replace(Regex("(?i)</?arg_key>"), "")
+            .replace(Regex("(?i)</?arg_value>"), "")
             .trim()
     }
 
+    private fun parseArgKeyXmlToolCall(rawText: String, finishReason: String? = null): ToolCallResponse? {
+        if (!rawText.contains("<arg_key>", ignoreCase = true) && !rawText.contains("<arg_value>", ignoreCase = true)) {
+            return null
+        }
+
+        var tool: String? = null
+        val toolRegex = Regex("""(?:\.|\b)([a_zA-Z0-9_]{2,30})\s*<arg_key>""", RegexOption.IGNORE_CASE)
+        val toolMatch = toolRegex.find(rawText)
+        if (toolMatch != null) {
+            tool = toolMatch.groupValues[1].lowercase().trim()
+        }
+
+        if (tool == null) {
+            tool = extractField(rawText, "tool")
+                ?: extractXmlField(rawText, "tool")
+                ?: extractXmlField(rawText, "tool_name")
+                ?: extractXmlField(rawText, "name")
+        }
+
+        val argMap = mutableMapOf<String, String>()
+        val pairRegex = Regex("""<arg_key>(.*?)</arg_key>\s*<arg_value>(.*?)</arg_value>""", setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE))
+        pairRegex.findAll(rawText).forEach { matchResult ->
+            val key = matchResult.groupValues[1].trim().lowercase()
+            val value = matchResult.groupValues[2]
+            argMap[key] = value
+        }
+
+        if (tool != null || argMap.isNotEmpty()) {
+            val inferredTool = tool ?: "read_file"
+            val path = argMap["path"] ?: argMap["file"] ?: argMap["filepath"]
+            val content = argMap["content"] ?: argMap["code"] ?: argMap["text"]
+            val search = argMap["search"] ?: argMap["target"]
+            val replace = argMap["replace"] ?: argMap["replacement"]
+            val command = argMap["command"] ?: argMap["cmd"]
+            val message = argMap["message"] ?: argMap["msg"] ?: argMap["reasoning"]
+            val query = argMap["query"]
+            val destPath = argMap["destinationpath"] ?: argMap["dest"]
+            val destSearch = argMap["destinationsearch"]
+            val lineRange = argMap["linerange"] ?: argMap["range"]
+            val startLine = argMap["startline"]?.toIntOrNull()
+            val endLine = argMap["endline"]?.toIntOrNull()
+            val prompt = argMap["prompt"]
+
+            val thoughtText = rawText.substringBefore("<arg_key>").substringBefore(".$inferredTool").replace(Regex("<[^>]+>"), "").trim()
+
+            return ToolCallResponse(
+                thought = if (thoughtText.isNotBlank()) thoughtText else "Parsed from arg_key tags.",
+                tool = inferredTool,
+                arguments = ToolArguments(
+                    path = path,
+                    content = content,
+                    search = search,
+                    replace = replace,
+                    command = command,
+                    message = message,
+                    query = query,
+                    destinationPath = destPath,
+                    destinationSearch = destSearch,
+                    lineRange = lineRange,
+                    startLine = startLine,
+                    endLine = endLine,
+                    prompt = prompt
+                ),
+                finishReason = finishReason
+            )
+        }
+        return null
+    }
+
     private fun parseFallbackToolCall(rawText: String, finishReason: String? = null): ToolCallResponse {
+        val argKeyParsed = parseArgKeyXmlToolCall(rawText, finishReason)
+        if (argKeyParsed != null) {
+            return argKeyParsed
+        }
+
         val tool = extractField(rawText, "tool") 
             ?: extractXmlField(rawText, "tool")
             ?: extractXmlField(rawText, "tool_name")
@@ -234,10 +310,15 @@ object GeminiClient {
     }
 
     private fun parseToolCallResponse(cleaned: String, rawText: String, finishReason: String? = null): ToolCallResponse {
+        val argKeyParsed = parseArgKeyXmlToolCall(rawText, finishReason)
+        if (argKeyParsed != null) {
+            return argKeyParsed
+        }
+
         return try {
             val toolCallAdapter = moshi.adapter(ToolCallResponse::class.java).lenient()
             val parsed = toolCallAdapter.fromJson(cleaned)
-            if (parsed != null) {
+            if (parsed != null && (parsed.tool != null || parsed.tools != null)) {
                 if (finishReason != null) {
                     parsed.copy(finishReason = finishReason)
                 } else {
