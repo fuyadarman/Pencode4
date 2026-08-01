@@ -354,19 +354,19 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         attemptedAndroidErrorKeys.clear()
     }
 
-    fun parseAndroidBuildErrors(logs: String, stepName: String): List<AndroidBuildError> {
+    fun parseAndroidBuildErrors(logs: String, stepName: String, workflowPath: String = ".github/workflows/android.yml"): List<AndroidBuildError> {
         val errors = mutableListOf<AndroidBuildError>()
         val lines = logs.split("\n")
         
-        // Pattern 1: Kotlin/Java Compiler errors e.g. "e: file:///app/src/main/java/com/example/ui/VibeViewModel.kt:463:24 Unresolved reference 'name'."
-        val compilerErrorRegex = Regex("""(?:e:\s+)?file:///(.+?):(\d+):(\d+)\s+(.+)""")
+        // Pattern 1: Kotlin/Java/File Compiler errors e.g. "e: file:///app/src/main/java/.../VibeViewModel.kt:463:24 Unresolved reference" or "/path/to/file.kt:12:34: error"
+        val compilerErrorRegex = Regex("""(?:e:\s+)?(?:file:///)?([^:\n]+?):(\d+):(\d+)\s+(.+)""")
         val webErrorRegex = Regex("""(?:Failed to compile|SyntaxError|Error|Type error):\s*(.+?)(?:\s+in\s+(.+?):(\d+):(\d+))?""", RegexOption.IGNORE_CASE)
         
         for (line in lines) {
             val cleanLine = line.trim()
             val match = compilerErrorRegex.find(cleanLine)
-            if (match != null) {
-                val filePath = match.groupValues[1]
+            if (match != null && !cleanLine.startsWith("at ") && !cleanLine.contains("Process completed with exit code")) {
+                val filePath = match.groupValues[1].removePrefix("file:///")
                 val lineNumber = match.groupValues[2].toIntOrNull() ?: 1
                 val errorMsg = match.groupValues[4]
                 val alreadyExists = errors.any { it.message == errorMsg && it.filePath == filePath && it.lineNumber == lineNumber }
@@ -438,7 +438,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                     AndroidBuildError(
                         stepName = stepName,
                         message = specificErrorLine.take(200),
-                        filePath = ".github/workflows/android.yml",
+                        filePath = workflowPath,
                         lineNumber = 1,
                         logsSnippet = snippet
                     )
@@ -457,7 +457,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 AndroidBuildError(
                     stepName = stepName,
                     message = "Build failed at step: '$stepName'.",
-                    filePath = ".github/workflows/android.yml",
+                    filePath = workflowPath,
                     lineNumber = 1,
                     logsSnippet = lastLines.ifEmpty { "Check build tab logs for details." }
                 )
@@ -1292,8 +1292,13 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                                     val jobsList = jobsMap?.get("jobs") as? List<*>
                                     
                                     if (!jobsList.isNullOrEmpty()) {
-                                        val primaryJob = jobsList[0] as? Map<*, *>
-                                        val stepsList = primaryJob?.get("steps") as? List<*>
+                                        val jobsMapList = jobsList.mapNotNull { it as? Map<*, *> }
+                                        val failedJobInList = jobsMapList.find { (it["conclusion"] as? String) == "failure" }
+                                        val primaryJob = failedJobInList 
+                                            ?: jobsMapList.find { (it["status"] as? String) == "in_progress" } 
+                                            ?: jobsMapList[0]
+
+                                        val stepsList = primaryJob["steps"] as? List<*>
                                         val parsedSteps = mutableListOf<BuildStep>()
                                         
                                         stepsList?.forEach { stepObj ->
@@ -1308,14 +1313,19 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                                         _buildSteps.value = parsedSteps
 
                                         val failedStep = parsedSteps.find { it.conclusion == "failure" }
+                                        val runName = (latestRun["name"] as? String) ?: "Workflow"
+                                        val wfPath = (latestRun["path"] as? String) ?: ".github/workflows/android.yml"
+
                                         if (failedStep != null) {
-                                            _buildError.value = "Build failed at step: '${failedStep.name}'."
+                                            _buildError.value = "$runName failed at step: '${failedStep.name}'."
+                                        } else if (conclusion == "failure") {
+                                            _buildError.value = "$runName failed."
                                         } else {
                                             _buildError.value = null
                                             _detectedAndroidBuildErrors.value = emptyList()
                                         }
 
-                                        val jobId = (primaryJob?.get("id") as? Number)?.toLong()
+                                        val jobId = (primaryJob["id"] as? Number)?.toLong()
                                         if (jobId != null) {
                                             val logsUrl = "https://api.github.com/repos/$owner/$repoName/actions/jobs/$jobId/logs"
                                             val logsRequest = Request.Builder()
@@ -1330,9 +1340,10 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                                                 val cleanLogs = rawLogs.replace(Regex("\u001B\\[[;\\d]*m"), "")
                                                 _buildLogs.value = cleanLogs
                                                 
-                                                if (failedStep != null) {
+                                                if (failedStep != null || conclusion == "failure") {
                                                     if (lastAutoFixedRunId != runId) {
-                                                        val parsedErrors = parseAndroidBuildErrors(cleanLogs, failedStep.name)
+                                                        val stepTitle = failedStep?.name ?: "Workflow execution"
+                                                        val parsedErrors = parseAndroidBuildErrors(cleanLogs, stepTitle, wfPath)
                                                         _detectedAndroidBuildErrors.value = parsedErrors
                                                         
                                                         val unattemptedErrors = parsedErrors.filter { err ->
