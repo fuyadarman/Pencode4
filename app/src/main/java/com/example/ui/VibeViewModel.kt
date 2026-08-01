@@ -3239,6 +3239,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 - 'create_todo_list': Create todo checklist (query with '|' separator).
                 - 'complete_todo_task': Check off todo item (query index).
                 - 'load_skill': Load background agent skill (path/query).
+                - 'ai_think': MANDATORY before starting any task or operation. Use to analyze prompt, plan, understand code, discuss problems, debug, and plan error fixing (message).
                 - 'ai_response': Document reasoning/observations (message).
                 - 'complete': Terminate task execution (message).
 
@@ -3246,16 +3247,17 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 Return ONLY valid JSON matching this schema:
                 {
                   "thought": "Short professional reasoning (at most 1-2 sentences).",
-                  "tool": "read_file" | "edit_file" | "patch_file" | "create_file" | "write_file" | "scan_dir" | "global_search" | "complete" | ...,
+                  "tool": "ai_think" | "read_file" | "edit_file" | "patch_file" | "create_file" | "write_file" | "scan_dir" | "global_search" | "complete" | ...,
                   "arguments": {
                     "path": "app/src/main/java/com/example/Main.kt",
                     "search": "exact code block to find",
                     "replace": "new code block",
-                    "message": "Completion summary or reasoning"
+                    "message": "Completion summary, thought analysis, or reasoning"
                   }
                 }
 
-                AI RESPONSE & COMPLETION RULES:
+                AI THINKING & RESPONSE RULES:
+                - MANDATORY 'ai_think': When receiving any prompt, before starting operations, or before debugging/error fixing/problem solving, you MUST invoke 'ai_think' first to analyze the prompt, plan architecture, discuss problem, and define solution steps.
                 - Call 'ai_response' after operation steps to document reasoning if needed.
                 - When calling 'complete', provide a concise, structured Markdown summary of all completed actions in the 'message' parameter.
             """.trimIndent()
@@ -3609,17 +3611,20 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     _showGithubPushPrompt.value = false
                                 }
                             }
-                            "ai_response" -> {
-                                val message = args?.message ?: args?.query ?: args?.content ?: "Documenting formulating logic."
+                            "ai_think", "ai_response" -> {
+                                val message = args?.message ?: args?.query ?: args?.content ?: args?.prompt ?: "Analyzing and thinking through task requirements."
+                                val isThink = stepResponse.tool == "ai_think"
+                                val title = if (isThink) "AI Thinking & Analysis" else "AI formulating logic"
                                 val responseLog = createAiLog(
-                                    title = "AI formulating logic",
+                                    title = title,
                                     status = "success",
                                     details = message
                                 )
                                 _aiActionLogs.value = _aiActionLogs.value + responseLog
 
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
-                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'ai_response': Formulating logic logged successfully. Proceed with your plan."))))
+                                val toolName = stepResponse.tool ?: "ai_think"
+                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$toolName': $title logged successfully. Proceed with your plan."))))
                             }
                             "list_directory" -> {
                                 val targetPath = args?.path ?: "."
