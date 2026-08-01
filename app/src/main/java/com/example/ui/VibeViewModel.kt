@@ -185,10 +185,12 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     // Stateful detected web preview console errors
     private val _detectedWebErrors = MutableStateFlow<List<WebConsoleError>>(emptyList())
     val detectedWebErrors: StateFlow<List<WebConsoleError>> = _detectedWebErrors.asStateFlow()
+    private val attemptedWebErrorKeys = mutableSetOf<String>()
 
     // Stateful detected android build errors
     private val _detectedAndroidBuildErrors = MutableStateFlow<List<AndroidBuildError>>(emptyList())
     val detectedAndroidBuildErrors: StateFlow<List<AndroidBuildError>> = _detectedAndroidBuildErrors.asStateFlow()
+    private val attemptedAndroidErrorKeys = mutableSetOf<String>()
 
     // Stateful downloaded web build artifact
     private val _webArtifactInfo = MutableStateFlow<WebArtifactInfo?>(null)
@@ -200,6 +202,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         } else {
             sourceId
         }
+        val errorKey = "$cleanSource:$lineNumber:$message"
         val alreadyExists = _detectedWebErrors.value.any { 
             it.message == message && it.lineNumber == lineNumber && it.sourceId == cleanSource 
         }
@@ -209,7 +212,9 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 sourceId = cleanSource,
                 lineNumber = lineNumber
             )
-            if (_allowAutoFix.value && !_isThinking.value && !isAutoFixingWebErrors) {
+            // Do not auto-fix if this exact error key was already attempted without success
+            val hasAttempted = attemptedWebErrorKeys.contains(errorKey)
+            if (_allowAutoFix.value && !_isThinking.value && !isAutoFixingWebErrors && !hasAttempted) {
                 isAutoFixingWebErrors = true
                 viewModelScope.launch(Dispatchers.Main) {
                     kotlinx.coroutines.delay(500)
@@ -224,16 +229,19 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     private fun checkAndTriggerAutoFixOnAgentFinish() {
         if (_allowAutoFix.value && !_isThinking.value) {
             viewModelScope.launch(Dispatchers.Main) {
-                if (_detectedWebErrors.value.isNotEmpty() && !isAutoFixingWebErrors) {
+                val unattemptedWebErrors = _detectedWebErrors.value.filter { err ->
+                    val key = "${err.sourceId}:${err.lineNumber}:${err.message}"
+                    !attemptedWebErrorKeys.contains(key)
+                }
+                if (unattemptedWebErrors.isNotEmpty() && !isAutoFixingWebErrors) {
                     isAutoFixingWebErrors = true
                     kotlinx.coroutines.delay(500)
-                    _detectedWebErrors.value = _detectedWebErrors.value.map { it.copy(isSelected = true) }
+                    _detectedWebErrors.value = _detectedWebErrors.value.map { err ->
+                        val key = "${err.sourceId}:${err.lineNumber}:${err.message}"
+                        err.copy(isSelected = !attemptedWebErrorKeys.contains(key))
+                    }
                     fixSelectedWebErrors()
                     isAutoFixingWebErrors = false
-                }
-                if (_detectedAndroidBuildErrors.value.isNotEmpty()) {
-                    _detectedAndroidBuildErrors.value = _detectedAndroidBuildErrors.value.map { it.copy(isSelected = true) }
-                    fixSelectedAndroidBuildErrors()
                 }
             }
         }
@@ -253,6 +261,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearWebErrors() {
         _detectedWebErrors.value = emptyList()
+        attemptedWebErrorKeys.clear()
     }
 
     fun previewWebArtifact() {
@@ -303,6 +312,10 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         
         val project = _currentProject.value ?: return
         
+        for (it in selected) {
+            attemptedWebErrorKeys.add("${it.sourceId}:${it.lineNumber}:${it.message}")
+        }
+
         viewModelScope.launch {
             val errorReportBuilder = StringBuilder()
             for (it in selected) {
@@ -311,8 +324,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             }
             
             val errorReport = errorReportBuilder.toString()
-            
-            clearWebErrors()
+            _detectedWebErrors.value = emptyList()
             
             // Switch tab to Chat to show the ongoing fixing conversation
             _currentTab.value = WorkspaceTab.CHAT
@@ -339,6 +351,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearAndroidBuildErrors() {
         _detectedAndroidBuildErrors.value = emptyList()
+        attemptedAndroidErrorKeys.clear()
     }
 
     fun parseAndroidBuildErrors(logs: String, stepName: String): List<AndroidBuildError> {
@@ -460,6 +473,10 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         
         val project = _currentProject.value ?: return
         
+        for (it in selected) {
+            attemptedAndroidErrorKeys.add("${it.filePath}:${it.lineNumber}:${it.message}")
+        }
+
         viewModelScope.launch {
             val errorReportBuilder = StringBuilder()
             for (it in selected) {
@@ -469,7 +486,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             
             val errorReport = errorReportBuilder.toString()
             
-            clearAndroidBuildErrors()
+            _detectedAndroidBuildErrors.value = emptyList()
             
             // Switch tab to Chat to show the ongoing fixing conversation
             _currentTab.value = WorkspaceTab.CHAT
@@ -1314,14 +1331,25 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                                                 _buildLogs.value = cleanLogs
                                                 
                                                 if (failedStep != null) {
-                                                    val parsedErrors = parseAndroidBuildErrors(cleanLogs, failedStep.name)
-                                                    _detectedAndroidBuildErrors.value = parsedErrors
-                                                    if (_allowAutoFix.value && parsedErrors.isNotEmpty() && lastAutoFixedRunId != runId) {
-                                                        lastAutoFixedRunId = runId
-                                                        _detectedAndroidBuildErrors.value = parsedErrors.map { it.copy(isSelected = true) }
-                                                        if (!_isThinking.value) {
-                                                            viewModelScope.launch(Dispatchers.Main) {
-                                                                fixSelectedAndroidBuildErrors()
+                                                    if (lastAutoFixedRunId != runId) {
+                                                        val parsedErrors = parseAndroidBuildErrors(cleanLogs, failedStep.name)
+                                                        _detectedAndroidBuildErrors.value = parsedErrors
+                                                        
+                                                        val unattemptedErrors = parsedErrors.filter { err ->
+                                                            val key = "${err.filePath}:${err.lineNumber}:${err.message}"
+                                                            !attemptedAndroidErrorKeys.contains(key)
+                                                        }
+                                                        
+                                                        if (_allowAutoFix.value && unattemptedErrors.isNotEmpty()) {
+                                                            lastAutoFixedRunId = runId
+                                                            _detectedAndroidBuildErrors.value = parsedErrors.map { err ->
+                                                                val key = "${err.filePath}:${err.lineNumber}:${err.message}"
+                                                                err.copy(isSelected = !attemptedAndroidErrorKeys.contains(key))
+                                                            }
+                                                            if (!_isThinking.value) {
+                                                                viewModelScope.launch(Dispatchers.Main) {
+                                                                    fixSelectedAndroidBuildErrors()
+                                                                }
                                                             }
                                                         }
                                                     }
@@ -1364,6 +1392,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun triggerWorkflows(selectedWorkflowIds: Set<Long>? = null) {
+        lastAutoFixedRunId = -1L
         val repoVal = _githubRepo.value.trim()
         val tokenVal = _githubToken.value.trim()
         val branchVal = _githubBranch.value.trim().ifBlank { "main" }
@@ -1492,9 +1521,11 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             showDownloadNotification(-1, "Pencode AI Build", "Fetching build artifacts...")
             try {
                 val okHttpClient = OkHttpClient.Builder()
-                    .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
-                    .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
-                    .writeTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+                    .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+                    .readTimeout(120, java.util.concurrent.TimeUnit.SECONDS)
+                    .writeTimeout(120, java.util.concurrent.TimeUnit.SECONDS)
+                    .connectionPool(okhttp3.ConnectionPool(10, 5, java.util.concurrent.TimeUnit.MINUTES))
+                    .retryOnConnectionFailure(true)
                     .build()
                 val moshi = Moshi.Builder().addLast(com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory()).build()
 
@@ -1640,33 +1671,40 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                     tempZipFile.delete()
                 }
                 
-                val inputStream = java.io.BufferedInputStream(body.byteStream())
-                val outputStream = java.io.BufferedOutputStream(java.io.FileOutputStream(tempZipFile))
-                val buffer = ByteArray(131072) // 128KB for faster download
+                val inputStream = java.io.BufferedInputStream(body.byteStream(), 262144)
+                val outputStream = java.io.BufferedOutputStream(java.io.FileOutputStream(tempZipFile), 262144)
+                val buffer = ByteArray(262144) // 256KB buffer for max network speed
                 var bytesRead: Int
                 var totalBytesRead = 0L
                 
-                // Throttle progress updates to avoid UI stuttering which also slows down download
-                var lastUpdateBytes = 0L
+                var lastNotificationTime = 0L
+                var lastProgressPercent = -1
                 
                 while (inputStream.read(buffer).also { bytesRead = it } != -1) {
                     outputStream.write(buffer, 0, bytesRead)
                     totalBytesRead += bytesRead
                     
-                    // Update progress every 1MB or so
-                    if (totalBytesRead - lastUpdateBytes > 1048576) {
-                        lastUpdateBytes = totalBytesRead
+                    val currentTime = System.currentTimeMillis()
+                    val progress = if (contentLength > 0) (totalBytesRead * 100f / contentLength) else -1f
+                    val currentPercent = progress.toInt()
+
+                    // Throttle progress updates to at most once every 800ms or 5% change to avoid IPC/UI lock slowdowns
+                    if (currentTime - lastNotificationTime > 800L || currentPercent >= lastProgressPercent + 5) {
+                        lastNotificationTime = currentTime
+                        lastProgressPercent = currentPercent
+                        
                         if (contentLength > 0) {
-                            val progress = (totalBytesRead * 100f / contentLength)
                             _apkDownloadPercentage.value = progress
-                            _apkDownloadProgress.value = "Downloading built APK (${progress.toInt()}%)..."
-                            showDownloadNotification(progress.toInt(), "Pencode AI Build", "Downloading built APK (${progress.toInt()}%)...")
+                            _apkDownloadProgress.value = "Downloading built APK (${currentPercent}%)..."
+                            showDownloadNotification(currentPercent, "Pencode AI Build", "Downloading built APK (${currentPercent}%)...")
                         } else {
-                            _apkDownloadProgress.value = "Downloading built APK (${(totalBytesRead / 1024 / 1024)} MB)..."
-                            showDownloadNotification(-1, "Pencode AI Build", "Downloading built APK (${(totalBytesRead / 1024 / 1024)} MB)...")
+                            val mbRead = totalBytesRead / (1024 * 1024)
+                            _apkDownloadProgress.value = "Downloading built APK (${mbRead} MB)..."
+                            showDownloadNotification(-1, "Pencode AI Build", "Downloading built APK (${mbRead} MB)...")
                         }
                     }
                 }
+                outputStream.flush()
                 outputStream.close()
                 inputStream.close()
                 
@@ -1695,8 +1733,8 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 while (entry != null) {
                     val entryName = entry.name.replace('\\', '/')
                     if (!entry.isDirectory && entryName.endsWith(".apk")) {
-                        val outStream = java.io.BufferedOutputStream(java.io.FileOutputStream(outputApkFile))
-                        val outBuffer = ByteArray(131072) // 128KB for faster extraction
+                        val outStream = java.io.BufferedOutputStream(java.io.FileOutputStream(outputApkFile), 262144)
+                        val outBuffer = ByteArray(262144) // 256KB for faster extraction
                         var len = zipIn.read(outBuffer)
                         while (len > 0) {
                             outStream.write(outBuffer, 0, len)
@@ -1708,8 +1746,8 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                     } else if (!entry.isDirectory) {
                         val destFile = java.io.File(webDistDir, entryName)
                         destFile.parentFile?.mkdirs()
-                        val outStream = java.io.BufferedOutputStream(java.io.FileOutputStream(destFile))
-                        val outBuffer = ByteArray(131072)
+                        val outStream = java.io.BufferedOutputStream(java.io.FileOutputStream(destFile), 262144)
+                        val outBuffer = ByteArray(262144)
                         var len = zipIn.read(outBuffer)
                         while (len > 0) {
                             outStream.write(outBuffer, 0, len)
