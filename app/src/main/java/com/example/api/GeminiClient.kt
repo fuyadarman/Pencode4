@@ -482,21 +482,29 @@ object GeminiClient {
 
             useCustom && (provider == "mistral" || provider == "openai" || provider == "custom" || provider == "groq" || provider == "cohere" || provider == "ollama_cloud" || provider == "ollama" || provider == "openrouter") -> {
                 val baseUrl = when {
+                    !customBaseUrl.isNullOrBlank() -> customBaseUrl.trimEnd('/')
                     provider == "mistral" -> "https://api.mistral.ai"
                     provider == "openai" -> "https://api.openai.com"
                     provider == "groq" -> "https://api.groq.com/openai"
                     provider == "cohere" -> "https://api.cohere.com"
                     provider == "openrouter" -> "https://openrouter.ai/api"
-                    provider == "ollama_cloud" || provider == "ollama" -> {
-                        if (!customBaseUrl.isNullOrBlank()) customBaseUrl.trimEnd('/') else "https://api.ollama.com"
-                    }
-                    !customBaseUrl.isNullOrBlank() -> customBaseUrl.trimEnd('/')
+                    provider == "ollama_cloud" || provider == "ollama" -> "https://api.ollama.com"
                     else -> "https://api.openai.com"
                 }
                 
                 val url = when {
-                    baseUrl.contains("/chat/completions") -> baseUrl
+                    baseUrl.contains("/chat/completions") || baseUrl.contains("/completions") -> baseUrl
                     baseUrl.endsWith("/v1") -> "$baseUrl/chat/completions"
+                    baseUrl.startsWith("http://") || baseUrl.startsWith("https://") -> {
+                        val path = try { java.net.URI(baseUrl).path } catch (e: Exception) { "" }
+                        if (path.isNullOrBlank() || path == "/") {
+                            "$baseUrl/v1/chat/completions"
+                        } else if (baseUrl.endsWith("/v1")) {
+                            "$baseUrl/chat/completions"
+                        } else {
+                            baseUrl
+                        }
+                    }
                     else -> "$baseUrl/v1/chat/completions"
                 }
 
@@ -676,7 +684,7 @@ object GeminiClient {
 
             useCustom && provider == "claude" -> {
                 val baseUrl = if (!customBaseUrl.isNullOrBlank()) customBaseUrl.trimEnd('/') else "https://api.anthropic.com"
-                val url = "$baseUrl/v1/messages"
+                val url = if (baseUrl.contains("/messages")) baseUrl else if (baseUrl.endsWith("/v1")) "$baseUrl/messages" else "$baseUrl/v1/messages"
 
                 // Map conversation history to Claude message format (Claude system prompt is in a separate parameter)
                 val messages = mutableListOf<Map<String, Any>>()
@@ -835,7 +843,11 @@ object GeminiClient {
                 // Gemini flow (default or custom with custom endpoint/modelId)
                 val baseUrl = if (useCustom && !customBaseUrl.isNullOrBlank()) customBaseUrl.trimEnd('/') else "https://generativelanguage.googleapis.com"
                 val activeModel = if (useCustom && modelId.isNotBlank()) modelId else MODEL_NAME
-                val url = "$baseUrl/v1beta/models/$activeModel:generateContent?key=$activeApiKey"
+                val url = when {
+                    baseUrl.contains(":generateContent") -> if (baseUrl.contains("key=")) baseUrl else "$baseUrl?key=$activeApiKey"
+                    baseUrl.contains("/models/") -> "$baseUrl:generateContent?key=$activeApiKey"
+                    else -> "$baseUrl/v1beta/models/$activeModel:generateContent?key=$activeApiKey"
+                }
 
                 val requestBodyData = GenerateContentRequest(
                     contents = conversationHistory,

@@ -3438,7 +3438,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                             val tool = call.tool
                             val args = call.arguments
                             
-                            if (tool != "complete") {
+                            if (tool != "complete" && tool != "ai_think" && tool != "ai_response") {
                                 // Track tool call to detect infinite loops (direct and oscillating sequence patterns)
                                 recentToolCallsHistory.add(call)
                                 val size = recentToolCallsHistory.size
