@@ -18,6 +18,7 @@ import com.example.data.ProjectFileEntity
 import com.example.data.VibeDatabase
 import com.example.data.VibeRepository
 import com.example.data.VibeAgentService
+import com.example.context.ContextOptimizationManager
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
@@ -2929,91 +2930,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         }
     }
 
+    private val contextOptimizationManager = ContextOptimizationManager()
+
     private fun optimizeConversationHistory(history: List<Content>): List<Content> {
-        val seenReadFilePaths = mutableSetOf<String>()
-        val optimized = history.toMutableList()
-        
-        for (i in optimized.indices.reversed()) {
-            val content = optimized[i]
-            if (content.role == "user") {
-                val updatedParts = content.parts.map { part ->
-                    val text = part.text
-                    if (text != null && text.contains("System/Tool Output for")) {
-                        if (text.contains("System/Tool Output for 'read_file'") || text.contains("System/Tool Output for 'read_file_range'")) {
-                            val fileLine = text.lineSequence().firstOrNull { it.contains("--- File:") }
-                            if (fileLine != null) {
-                                val filePath = fileLine.substringAfter("--- File:")
-                                    .substringBefore(" (Lines")
-                                    .substringBefore(" (lines")
-                                    .substringBefore("---")
-                                    .trim()
-                                if (filePath.isNotEmpty()) {
-                                    if (seenReadFilePaths.contains(filePath)) {
-                                        val isRange = text.contains("read_file_range")
-                                        val toolName = if (isRange) "read_file_range" else "read_file"
-                                        part.copy(text = "System/Tool Output for '$toolName' (File: $filePath): [Omitted older content of $filePath to save context/tokens. Refer to the most recent read of this file below for full/range contents.]")
-                                    } else {
-                                        seenReadFilePaths.add(filePath)
-                                        // Truncate large file content reads to 6000 chars (~1500 tokens) max to prevent Rate Limit / Token bloat
-                                        if (text.length > 6000) {
-                                            val header = text.take(2500)
-                                            val footer = text.takeLast(2500)
-                                            val truncatedMsg = "\n\n[... Truncated ${text.length - 5000} characters of file content to optimize context & prevent API rate limits ...]\n\n"
-                                            part.copy(text = header + truncatedMsg + footer)
-                                        } else {
-                                            part
-                                        }
-                                    }
-                                } else {
-                                    part
-                                }
-                            } else {
-                                part
-                            }
-                        } else {
-                            // Truncate large command outputs, directory listings, or search results to 4000 chars max
-                            if (text.length > 4000) {
-                                val header = text.take(1500)
-                                val footer = text.takeLast(1500)
-                                val truncatedMsg = "\n\n[... Truncated ${text.length - 3000} characters of output to optimize context & prevent API rate limits ...]\n\n"
-                                part.copy(text = header + truncatedMsg + footer)
-                            } else {
-                                part
-                            }
-                        }
-                    } else if (text != null && text.contains("[IMAGE_BASE64:")) {
-                        val cleanText = text.replace("""\[IMAGE_BASE64: data:.*?;base64,.*?\]""".toRegex(), "[Attached Image]")
-                        part.copy(text = cleanText)
-                    } else {
-                        part
-                    }
-                }
-                optimized[i] = content.copy(parts = updatedParts)
-            } else if (content.role == "model") {
-                val updatedParts = content.parts.map { part ->
-                    val text = part.text
-                    if (text != null && text.length > 3000) {
-                        val header = text.take(1200)
-                        val footer = text.takeLast(1200)
-                        part.copy(text = "$header\n[... Omitted middle model output to optimize context ...]\n$footer")
-                    } else {
-                        part
-                    }
-                }
-                optimized[i] = content.copy(parts = updatedParts)
-            }
-        }
-        if (optimized.size > 10) {
-            val pruned = mutableListOf<Content>()
-            pruned.add(optimized.first())
-            pruned.add(Content(
-                role = "user",
-                parts = listOf(Part(text = "[System Note: Older agent execution history summarized/archived to maintain light payload & optimal speed.]"))
-            ))
-            pruned.addAll(optimized.takeLast(8))
-            return pruned
-        }
-        return optimized
+        return contextOptimizationManager.optimizeHistory(history)
     }
 
     private fun appendToTerminal(command: String, result: String) {
