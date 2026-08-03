@@ -94,6 +94,19 @@ class SymbolCodeIndexer {
         }.toString()
     }
 
+    fun indexProjectDirectory(projectDir: File) {
+        if (!projectDir.exists()) return
+        clearIndex()
+        projectDir.walkTopDown().filter { file ->
+            file.isFile && (file.extension == "kt" || file.extension == "java" || file.extension == "js" || file.extension == "ts" || file.extension == "py")
+        }.forEach { file ->
+            val relPath = file.relativeToOrNull(projectDir)?.path ?: file.name
+            try {
+                indexFileContent(relPath, file.readText())
+            } catch (_: Exception) {}
+        }
+    }
+
     fun clearIndex() {
         index.clear()
     }

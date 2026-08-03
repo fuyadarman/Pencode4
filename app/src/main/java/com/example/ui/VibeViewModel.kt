@@ -3040,8 +3040,14 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 
     private val contextOptimizationManager = ContextOptimizationManager()
 
-    private fun optimizeConversationHistory(history: List<Content>): List<Content> {
-        return contextOptimizationManager.optimizeHistory(history)
+    private fun optimizeConversationHistory(history: List<Content>, activeQuery: String? = null): List<Content> {
+        _currentProject.value?.let { proj ->
+            val projectDir = java.io.File(getApplication<Application>().filesDir, "projects/${proj.name}")
+            if (projectDir.exists()) {
+                contextOptimizationManager.symbolIndexer.indexProjectDirectory(projectDir)
+            }
+        }
+        return contextOptimizationManager.optimizeHistory(history, activeTaskQuery = activeQuery)
     }
 
     private fun appendToTerminal(command: String, result: String) {
@@ -3430,7 +3436,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                     val stepResponse = GeminiClient.generateAgentStep(
                         apiKey = activeApiKey,
                         systemInstruction = dynamicSystemInstruction,
-                        conversationHistory = optimizeConversationHistory(history),
+                        conversationHistory = optimizeConversationHistory(history, userPrompt),
                         provider = provider,
                         modelId = modelId,
                         customBaseUrl = baseUrl,
