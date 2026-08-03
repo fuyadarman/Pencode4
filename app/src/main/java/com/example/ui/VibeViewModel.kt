@@ -2875,15 +2875,123 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         startPollingBuild()
     }
 
+    private val gitHubCommandWorkflowManager = com.example.data.GitHubCommandWorkflowManager()
+
     fun runTerminalCommand(command: String) {
         val project = _currentProject.value ?: return
         if (command.isBlank()) return
         viewModelScope.launch {
             autoSaveActiveFile()
-            _terminalOutput.value += " $command"
-            val result = repository.executeCommand(project.name, command)
-            val resultStr = if (result.isEmpty()) "" else "\n$result"
-            _terminalOutput.value += "$resultStr\n\n$"
+            _terminalOutput.value += " $command\n"
+
+            val repo = _githubRepo.value
+            val token = _githubToken.value
+            val branch = _githubBranch.value.ifBlank { "main" }
+            val projectDir = java.io.File(getApplication<Application>().filesDir, "projects/${project.name}")
+
+            val isHeavy = gitHubCommandWorkflowManager.isHeavyCommand(command)
+
+            if (isHeavy) {
+                val credCheck = gitHubCommandWorkflowManager.checkGitHubCredentials(repo, token)
+                if (!credCheck.isValid) {
+                    _terminalOutput.value += "\n${credCheck.promptMessage}\n\n$"
+                    return@launch
+                }
+
+                _terminalOutput.value += "[Detected Heavy Command] Routing to GitHub Action command.yml...\n"
+                _terminalOutput.value += "[1/3] Updating .github/workflows/command.yml with custom command...\n"
+
+                try {
+                    gitHubCommandWorkflowManager.updateCommandWorkflow(projectDir, command)
+                    repository.saveFile(
+                        project.name,
+                        ".github/workflows/command.yml",
+                        java.io.File(projectDir, ".github/workflows/command.yml").readText()
+                    )
+                } catch (e: Exception) {
+                    Log.e("VibeViewModel", "Error creating workflow file: ${e.message}")
+                }
+
+                _terminalOutput.value += "[2/3] Force pushing codebase & file explorer state to GitHub repository...\n"
+                var pushSuccess = false
+                var pushErrorMsg = ""
+
+                val latch = kotlinx.coroutines.CompletableDeferred<Boolean>()
+                pushGitRepo(project.name, repo, token, branch, force = true) { res ->
+                    if (res.isSuccess) {
+                        pushSuccess = true
+                        latch.complete(true)
+                    } else {
+                        pushErrorMsg = res.exceptionOrNull()?.localizedMessage ?: "Git push failed"
+                        latch.complete(false)
+                    }
+                }
+                latch.await()
+
+                if (!pushSuccess) {
+                    _terminalOutput.value += "[PUSH ERROR] $pushErrorMsg\n\n$"
+                    return@launch
+                }
+
+                _terminalOutput.value += "[3/3] Triggering command.yml workflow on GitHub Actions...\n"
+                triggerAllWorkflows()
+
+                val framework = gitHubCommandWorkflowManager.detectFramework(projectDir)
+                val formattedLog = gitHubCommandWorkflowManager.formatCommandExecutionLog(
+                    command = command,
+                    framework = framework,
+                    isSuccess = true,
+                    output = "Command queued and executing on GitHub Actions runner.\nCodebase & all files forcefully pushed and synchronized."
+                )
+
+                _terminalOutput.value += "\n$formattedLog\n\n$"
+            } else {
+                val result = repository.executeCommand(project.name, command)
+                if (result.contains("inaccessible or not found") || result.contains("not found")) {
+                    _terminalOutput.value += "[Local shell missing binary] Intercepting command and routing to GitHub Actions...\n"
+                    val credCheck = gitHubCommandWorkflowManager.checkGitHubCredentials(repo, token)
+                    if (!credCheck.isValid) {
+                        _terminalOutput.value += "\n${credCheck.promptMessage}\n\n$"
+                        return@launch
+                    }
+                    try {
+                        gitHubCommandWorkflowManager.updateCommandWorkflow(projectDir, command)
+                        val wfFile = java.io.File(projectDir, ".github/workflows/command.yml")
+                        if (wfFile.exists()) {
+                            repository.saveFile(
+                                project.name,
+                                ".github/workflows/command.yml",
+                                wfFile.readText()
+                            )
+                        }
+                    } catch (e: Exception) {
+                        Log.e("VibeViewModel", "Error updating workflow: ${e.message}")
+                    }
+
+                    _terminalOutput.value += "Force pushing codebase & dispatching command.yml workflow...\n"
+                    val fallbackLatch = kotlinx.coroutines.CompletableDeferred<Boolean>()
+                    pushGitRepo(project.name, repo, token, branch, force = true) { res ->
+                        fallbackLatch.complete(res.isSuccess)
+                    }
+                    val pushed = fallbackLatch.await()
+                    if (pushed) {
+                        triggerAllWorkflows()
+                        val framework = gitHubCommandWorkflowManager.detectFramework(projectDir)
+                        val formattedLog = gitHubCommandWorkflowManager.formatCommandExecutionLog(
+                            command = command,
+                            framework = framework,
+                            isSuccess = true,
+                            output = "Fallback execution started on GitHub Actions runner.\nCodebase & all files forcefully pushed and synchronized."
+                        )
+                        _terminalOutput.value += "\n$formattedLog\n\n$"
+                    } else {
+                        _terminalOutput.value += "[PUSH ERROR] Failed to push codebase to GitHub. Check repository URL and GHP Token.\n\n$"
+                    }
+                } else {
+                    val resultStr = if (result.isEmpty()) "(no output)" else result
+                    _terminalOutput.value += "$resultStr\n\n$"
+                }
+            }
             loadProjectDetails(project.name)
         }
     }

@@ -29,8 +29,8 @@ class GitHubCommandWorkflowManager {
         val heavyKeywords = listOf(
             "npm", "npx", "yarn", "pnpm", "node", "flutter", "dart",
             "docker", "cargo", "mvn", "python", "pip", "pytest", "go ",
-            "gradlew", "git push", "git commit", "integration-test",
-            "heavy", "build-apk", "compile"
+            "gradlew", "gradle", "git push", "git commit", "integration-test",
+            "heavy", "build-apk", "compile", "esbuild", "vite", "webpack", "rollup", "next"
         )
         return heavyKeywords.any { cmdLower.contains(it) }
     }
