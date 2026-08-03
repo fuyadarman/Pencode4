@@ -65,4 +65,26 @@ class GitHubCommandWorkflowManagerTest {
         assertTrue(log.contains("BUILD SUCCESSFUL"))
         assertTrue(log.contains("[SUCCESS LOG]"))
     }
+
+    @Test
+    fun testIsHeavyCommand() {
+        val manager = GitHubCommandWorkflowManager()
+        assertTrue(manager.isHeavyCommand("npm install"))
+        assertTrue(manager.isHeavyCommand("flutter test"))
+        assertTrue(manager.isHeavyCommand("docker build ."))
+        assertFalse(manager.isHeavyCommand("ls -la"))
+        assertFalse(manager.isHeavyCommand("pwd"))
+    }
+
+    @Test
+    fun testCheckGitHubCredentials() {
+        val manager = GitHubCommandWorkflowManager()
+        val invalidResult = manager.checkGitHubCredentials(null, null)
+        assertFalse(invalidResult.isValid)
+        assertTrue(invalidResult.promptMessage!!.contains("GitHub Credentials Required"))
+
+        val validResult = manager.checkGitHubCredentials("user/repo", "ghp_123456789")
+        assertTrue(validResult.isValid)
+        assertNull(validResult.promptMessage)
+    }
 }

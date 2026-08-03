@@ -9,11 +9,60 @@ enum class FrameworkType(val displayName: String, val defaultTestCommand: String
     GENERIC("Generic Environment", "echo 'Generic workspace runner'")
 }
 
+data class CredentialsCheckResult(
+    val isValid: Boolean,
+    val promptMessage: String? = null
+)
+
 /**
  * Manages GitHub Actions background workflow dispatch, command.yml updates,
  * framework auto-detection, and terminal execution logging.
  */
 class GitHubCommandWorkflowManager {
+
+    /**
+     * Checks if a command is considered heavy or unsupported on local device
+     * and should be routed to GitHub Actions command.yml
+     */
+    fun isHeavyCommand(command: String): Boolean {
+        val cmdLower = command.trim().lowercase()
+        val heavyKeywords = listOf(
+            "npm", "npx", "yarn", "pnpm", "node", "flutter", "dart",
+            "docker", "cargo", "mvn", "python", "pip", "pytest", "go ",
+            "gradlew", "git push", "git commit", "integration-test",
+            "heavy", "build-apk", "compile"
+        )
+        return heavyKeywords.any { cmdLower.contains(it) }
+    }
+
+    /**
+     * Checks if GitHub Repository Name and GHP Token are configured.
+     * Asks user if credentials are missing.
+     */
+    fun checkGitHubCredentials(repoName: String?, ghpToken: String?): CredentialsCheckResult {
+        val missingRepo = repoName.isNullOrBlank()
+        val missingToken = ghpToken.isNullOrBlank()
+
+        if (missingRepo || missingToken) {
+            val missing = mutableListOf<String>()
+            if (missingRepo) missing.add("GitHub Repository Name (e.g., user/repo)")
+            if (missingToken) missing.add("GitHub Personal Access Token (GHP Token)")
+
+            val msg = """
+                [GitHub Credentials Required]
+                To execute heavy commands ($missing) via GitHub Action command.yml:
+                Please provide your:
+                ${missing.joinToString("\n• ") { "• $it" }}
+                
+                Set them in settings or enter:
+                repo: <username>/<repository>
+                token: ghp_xxxxxxxxxxxxxxxxxxxx
+            """.trimIndent()
+
+            return CredentialsCheckResult(isValid = false, promptMessage = msg)
+        }
+        return CredentialsCheckResult(isValid = true)
+    }
 
     /**
      * Automatically detects workspace framework based on project configuration files.
