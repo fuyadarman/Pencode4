@@ -3287,8 +3287,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                    - Invoke tools ONLY when actual workspace actions (creating/editing files, running commands, searching code) are required.
 
                 2. READ-BEFORE-MODIFY & RESTRICTED TOOL MANDATE:
-                   - 'write_file' (alias 'write') is STRICTLY RESTRICTED. You CANNOT overwrite an existing file unless you have READ it first using 'read_file' or 'read_file_range'! Unread write attempts will be AUTOMATICALLY REJECTED by the system.
-                   - Always use 'edit_file' or 'patch_file' for surgical edits on existing files instead of overwriting whole files.
+                   - 'write_file' (alias 'write') is STRICTLY RESTRICTED. If a file has >30 lines, 'write_file' will be AUTOMATICALLY REJECTED by the system to prevent code loss!
+                   - You MUST ALWAYS use 'edit_file' or 'patch_file' for surgical edits on existing files instead of overwriting whole files.
+                   - 'create_file' is ONLY for NEW files that do not exist yet.
                    - Do NOT re-read files repeatedly after applying edits just to verify changes.
 
                 3. TOOL EXECUTION BUDGET & TASK COMPLETION:
@@ -3984,7 +3985,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     allowed = deferred.await()
                                 }
 
-                                val result = if (targetFile != null && !fileHasBeenRead) {
+                                val result = if (targetFile != null && linesCount > 30) {
+                                    "Error: SYSTEM REJECTION - File '$filePath' has $linesCount lines (more than 30 lines). Overwriting or recreating existing files larger than 30 lines with 'write_file' is STRICTLY FORBIDDEN to prevent code destruction. You MUST use 'edit_file' or 'patch_file' to make precise surgical edits."
+                                } else if (targetFile != null && !fileHasBeenRead) {
                                     "Error: SYSTEM REJECTION - Overwriting/recreating existing file '$filePath' without reading it first is STRICTLY FORBIDDEN! You MUST call 'read_file' or 'read_file_range' on '$filePath' before attempting to modify or overwrite it. Furthermore, 'write_file' is a RESTRICTED tool—prefer using 'edit_file' or 'patch_file' for surgical code edits instead of overwriting full files."
                                 } else if (!allowed) {
                                     "Error: Overwriting '$filePath' (which has $linesCount lines) was denied by the user. You must use 'edit_file' or 'patch_file' instead."
