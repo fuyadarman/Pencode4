@@ -6521,20 +6521,25 @@ fun WorkspaceOperationsTimeline(
                                 val isEditPatchAppend = log.title.startsWith("edit", ignoreCase = true) || 
                                                        log.title.startsWith("patch", ignoreCase = true) || 
                                                        log.title.startsWith("append", ignoreCase = true) ||
-                                                       log.title.contains("Modified file", ignoreCase = true) ||
+                                                       log.title.startsWith("multi", ignoreCase = true) ||
+                                                       log.title.contains("Modified", ignoreCase = true) ||
+                                                       log.title.contains("Multi-edited", ignoreCase = true) ||
                                                        log.title.contains("Appended", ignoreCase = true)
                                                        
-                                val displayText = if (!log.lineRange.isNullOrBlank() && (isEditPatchAppend || log.title.contains("read", ignoreCase = true) || log.title.contains("file", ignoreCase = true))) {
+                                val isRead = log.title.startsWith("read", ignoreCase = true) || log.title.contains("read", ignoreCase = true)
+                                val displayText = if (!log.lineRange.isNullOrBlank() && (isEditPatchAppend || isRead || log.title.contains("file", ignoreCase = true))) {
                                     val cleanFileName = log.details.substringAfterLast("/")
                                     val rawRange = log.lineRange.lowercase().replace("lines ", "").replace("line ", "").trim()
-                                    val formattedRange = if (rawRange.startsWith("line")) rawRange else "line$rawRange"
+                                    val formattedRange = if (rawRange.startsWith("line")) rawRange else "line $rawRange"
                                     if (isEditPatchAppend) {
                                         val actionType = when {
                                             log.title.startsWith("patch", ignoreCase = true) -> "patch"
                                             log.title.startsWith("append", ignoreCase = true) -> "append"
                                             else -> "edit"
                                         }
-                                        "$actionType:$cleanFileName($formattedRange)"
+                                        "$actionType $cleanFileName ($formattedRange)"
+                                    } else if (isRead) {
+                                        "read $cleanFileName ($formattedRange)"
                                     } else {
                                         "${log.details} ($formattedRange)"
                                     }

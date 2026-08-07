@@ -9,6 +9,8 @@ import com.example.BuildConfig
 import com.example.api.AgentFileAction
 import com.example.api.AgentResponse
 import com.example.api.Content
+import com.example.api.EditChunk
+import com.example.api.ReadRangeItem
 import com.example.api.GeminiClient
 import com.example.api.Part
 import com.example.api.ToolCallResponse
@@ -3051,14 +3053,16 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 val cmdB = argsB.command?.trim()?.replace("\\s+".toRegex(), " ") ?: ""
                 cmdA.isNotEmpty() && cmdA == cmdB
             }
-            "edit_file", "patch_file" -> {
-                val pathA = argsA.path?.trim() ?: ""
-                val pathB = argsB.path?.trim() ?: ""
+            "edit_file", "patch_file", "multi_edit_file", "multi_edit", "multi_patch" -> {
+                val pathA = argsA.path?.trim() ?: argsA.targetFile?.trim() ?: ""
+                val pathB = argsB.path?.trim() ?: argsB.targetFile?.trim() ?: ""
                 val searchA = argsA.search?.trim() ?: ""
                 val searchB = argsB.search?.trim() ?: ""
                 val replaceA = argsA.replace?.trim() ?: ""
                 val replaceB = argsB.replace?.trim() ?: ""
-                pathA == pathB && searchA == searchB && replaceA == replaceB
+                val chunksA = argsA.chunks ?: argsA.replacementChunks ?: argsA.edits
+                val chunksB = argsB.chunks ?: argsB.replacementChunks ?: argsB.edits
+                pathA == pathB && searchA == searchB && replaceA == replaceB && chunksA == chunksB
             }
             "create_file", "write_file", "write", "append" -> {
                 val pathA = argsA.path?.trim() ?: ""
@@ -3195,7 +3199,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                             titleLower.contains("read_file") || titleLower.contains("read file") -> {
                                                 fileOperations.add("read:$fileName")
                                             }
-                                            titleLower.contains("edit_file") || titleLower.contains("edit file") || titleLower.contains("modify") -> {
+                                            titleLower.contains("edit_file") || titleLower.contains("edit file") || titleLower.contains("multi_edit") || titleLower.contains("modify") -> {
                                                 fileOperations.add("modified:$fileName")
                                             }
                                             titleLower.contains("patch_file") || titleLower.contains("patch file") || titleLower.contains("patch") -> {
@@ -3325,7 +3329,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 
                 2. READ-BEFORE-MODIFY & RESTRICTED TOOL MANDATE:
                    - 'write_file' (alias 'write') is STRICTLY RESTRICTED. If a file has >30 lines, 'write_file' will be AUTOMATICALLY REJECTED by the system to prevent code loss!
-                   - You MUST ALWAYS use 'edit_file' or 'patch_file' for surgical edits on existing files instead of overwriting whole files.
+                   - You MUST ALWAYS use 'edit_file', 'multi_edit_file', or 'patch_file' for surgical edits on existing files instead of overwriting whole files.
+                   - Use 'multi_edit_file' when modifying MULTIPLE non-adjacent code blocks in the same file at once (e.g., lines 30-45, 80-90, 120-140). Pass 'path' (or 'targetFile') and 'chunks' (or 'replacementChunks') array: [{ "search": "...", "replace": "..." }, ...].
                    - 'create_file' is ONLY for NEW files that do not exist yet.
                    - Do NOT re-read files repeatedly after applying edits just to verify changes.
 
@@ -3353,9 +3358,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 === AVAILABLE TOOLS ===
                 - 'read_file': Read file content (path).
                 - 'read_file_range': Read specific line range (path, startLine, endLine OR lineRange e.g. "10-50").
+                - 'multi_read_file' / 'multi_read': Read multiple non-adjacent line ranges from one file in a single call (path or targetFile, ranges: [{startLine, endLine}] or rangeList: ["10-20", "50-70"] or lineRange: "10-20, 50-70, 80-85").
                 - 'create_file': Create a NEW file (path, content). Fails if file exists.
                 - 'write_file' / 'write': RESTRICTED. Overwrite file (path, content). Requires reading file first.
                 - 'edit_file' / 'edit': Surgical code block replacement (path, search, replace).
+                - 'multi_edit_file' / 'multi_edit': Multiple non-adjacent surgical edits in one file (path or targetFile, chunks or replacementChunks: [{search/targetContent, replace/replacementContent}]).
                 - 'patch_file' / 'patch': Small surgical code snippet replacement (path, search, replace).
                 - 'delete_code': Remove code block (path, search).
                 - 'move_code': Move block to destination file (path, destinationPath, search, destinationSearch).
@@ -3971,6 +3978,112 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'read_file_range': $result"))))
                             }
+                            "multi_read_file", "multi_read" -> {
+                                val filePath = normalizePath(args?.path ?: args?.targetFile ?: "")
+                                val rangePairs = mutableListOf<Pair<Int, Int>>()
+
+                                val rawRanges = args?.ranges
+                                val rawRangeList = args?.rangeList
+                                val rawLineRange = args?.lineRange ?: args?.query ?: args?.search ?: ""
+
+                                if (!rawRanges.isNullOrEmpty()) {
+                                    for (item in rawRanges) {
+                                        val s = item.startLine
+                                        val e = item.endLine ?: item.startLine
+                                        if (s != null) {
+                                            rangePairs.add(Pair(s, e ?: s))
+                                        } else if (!item.range.isNullOrBlank()) {
+                                            val match = """(\d+)\s*[-:to\.]+\s*(\d+)""".toRegex().find(item.range)
+                                            if (match != null) {
+                                                val st = match.groupValues[1].toIntOrNull()
+                                                val en = match.groupValues[2].toIntOrNull()
+                                                if (st != null) rangePairs.add(Pair(st, en ?: st))
+                                            } else {
+                                                val single = """(\d+)""".toRegex().find(item.range)?.groupValues?.get(1)?.toIntOrNull()
+                                                if (single != null) rangePairs.add(Pair(single, single))
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if (rangePairs.isEmpty() && !rawRangeList.isNullOrEmpty()) {
+                                    for (str in rawRangeList) {
+                                        val match = """(\d+)\s*[-:to\.]+\s*(\d+)""".toRegex().find(str)
+                                        if (match != null) {
+                                            val st = match.groupValues[1].toIntOrNull()
+                                            val en = match.groupValues[2].toIntOrNull()
+                                            if (st != null) rangePairs.add(Pair(st, en ?: st))
+                                        } else {
+                                            val single = """(\d+)""".toRegex().find(str)?.groupValues?.get(1)?.toIntOrNull()
+                                            if (single != null) rangePairs.add(Pair(single, single))
+                                        }
+                                    }
+                                }
+
+                                if (rangePairs.isEmpty() && rawLineRange.isNotBlank()) {
+                                    val matches = """(\d+)\s*[-:to\.]+\s*(\d+)""".toRegex().findAll(rawLineRange)
+                                    for (m in matches) {
+                                        val st = m.groupValues[1].toIntOrNull()
+                                        val en = m.groupValues[2].toIntOrNull()
+                                        if (st != null) rangePairs.add(Pair(st, en ?: st))
+                                    }
+                                    if (rangePairs.isEmpty()) {
+                                        val singleMatches = """(\d+)""".toRegex().findAll(rawLineRange)
+                                        for (sm in singleMatches) {
+                                            val num = sm.groupValues[1].toIntOrNull()
+                                            if (num != null) rangePairs.add(Pair(num, num))
+                                        }
+                                    }
+                                }
+
+                                if (rangePairs.isEmpty()) {
+                                    rangePairs.add(Pair(1, 30))
+                                }
+
+                                val formattedRanges = rangePairs.joinToString(", ") { (st, en) ->
+                                    if (st == en) "$st" else "$st-$en"
+                                }
+
+                                val readLog = AiActionLog(
+                                    title = "read :$filePath",
+                                    status = "thinking",
+                                    details = filePath,
+                                    lineRange = "Line $formattedRanges"
+                                )
+                                _aiActionLogs.value = _aiActionLogs.value + readLog
+
+                                val result = if (repository.isBinaryExtension(filePath)) {
+                                    "Error: Cannot read binary files as text."
+                                } else {
+                                    val files = repository.getFilesForProject(project.name)
+                                    val targetFile = files.find { it.path == filePath || normalizePath(it.path) == filePath || it.path.endsWith(filePath) || filePath.endsWith(it.path) }
+                                    if (targetFile != null) {
+                                        readFilesThisSession.add(filePath)
+                                        readFilesThisSession.add(normalizePath(filePath))
+                                        readFilesThisSession.add(targetFile.path)
+                                        readFilesThisSession.add(normalizePath(targetFile.path))
+                                        val lines = targetFile.content.lines()
+
+                                        val blocks = mutableListOf<String>()
+                                        for ((st, en) in rangePairs) {
+                                            val startIdx = (st - 1).coerceAtLeast(0).coerceAtMost(lines.size)
+                                            val endIdx = en.coerceAtLeast(startIdx).coerceAtMost(lines.size)
+                                            val selectedLines = lines.subList(startIdx, endIdx).joinToString("\n")
+                                            blocks.add("--- File: $filePath (Lines ${startIdx + 1}-$endIdx) ---\n$selectedLines")
+                                        }
+                                        blocks.joinToString("\n\n")
+                                    } else {
+                                        "Error: File '$filePath' not found."
+                                    }
+                                }
+
+                                val isSuccess = result.startsWith("--- File:")
+                                val logDetails = if (isSuccess) "Read lines $formattedRanges from $filePath" else result
+                                updateAiLog(readLog.id, if (isSuccess) "success" else "failed", logDetails, lineRange = "Line $formattedRanges")
+
+                                history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
+                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': $result"))))
+                            }
                             "create_file" -> {
                                 val filePath = normalizePath(args?.path ?: "")
                                 val fileContent = args?.content ?: ""
@@ -4187,9 +4300,103 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 updateAiLog(
                                     patchLog.id, 
                                     if (isSuccess) "success" else "failed", 
-                                    if (isSuccess) filePath else result
+                                    if (isSuccess) filePath else result,
+                                    lineRange = range
                                 )
-                                // lineRange skip for now
+
+                                history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
+                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': $result"))))
+                            }
+                            "multi_edit_file", "multi_edit", "multi_patch" -> {
+                                val filePath = normalizePath(args?.path ?: args?.targetFile ?: "")
+                                val rawChunks = args?.chunks ?: args?.replacementChunks ?: args?.edits ?: emptyList()
+                                val chunks = if (rawChunks.isEmpty() && !args?.search.isNullOrEmpty()) {
+                                    listOf(EditChunk(search = args?.search, replace = args?.replace))
+                                } else {
+                                    rawChunks
+                                }
+
+                                val multiLog = createAiLog(
+                                    title = "Multi-edited file",
+                                    status = "thinking",
+                                    details = "$filePath",
+                                    lineRange = args?.lineRange
+                                )
+                                _aiActionLogs.value = _aiActionLogs.value + multiLog
+
+                                var foundRange = ""
+                                val result = if (repository.isBinaryExtension(filePath)) {
+                                    "Error: Reading or editing binary files directly as text is NOT allowed."
+                                } else {
+                                    val files = repository.getFilesForProject(project.name)
+                                    val targetFile = files.find { it.path == filePath }
+                                    if (targetFile != null) {
+                                        var currentContent = targetFile.content
+                                        if (chunks.isEmpty()) {
+                                            "Error: No edit chunks provided for multi_edit_file. Provide 'chunks' or 'replacementChunks' list with search and replace blocks."
+                                        } else {
+                                            var chunkError: String? = null
+                                            val lineRanges = mutableListOf<String>()
+
+                                            for ((index, chunk) in chunks.withIndex()) {
+                                                val searchStr = chunk.search ?: chunk.targetContent ?: ""
+                                                val replaceStr = chunk.replace ?: chunk.replacementContent ?: ""
+
+                                                if (searchStr.isEmpty()) {
+                                                    chunkError = "Error in chunk #${index + 1}: 'search' block cannot be empty."
+                                                    break
+                                                }
+                                                if (!currentContent.contains(searchStr)) {
+                                                    chunkError = "Error in chunk #${index + 1}: Could not find exact search block in $filePath. Please double-check characters, indentation, and spaces."
+                                                    break
+                                                }
+                                                val occurrences = currentContent.split(searchStr).size - 1
+                                                if (occurrences > 1) {
+                                                    chunkError = "Error in chunk #${index + 1}: The search block is not unique. It occurs $occurrences times in the file."
+                                                    break
+                                                }
+
+                                                val startIndex = currentContent.indexOf(searchStr)
+                                                val linesBefore = currentContent.substring(0, startIndex).count { it == '\n' } + 1
+                                                val linesInSearch = searchStr.count { it == '\n' }
+                                                val endLine = linesBefore + linesInSearch
+                                                val chunkRangeStr = if (linesBefore == endLine) "$linesBefore" else "$linesBefore-$endLine"
+                                                lineRanges.add(chunkRangeStr)
+
+                                                currentContent = currentContent.replace(searchStr, replaceStr)
+                                            }
+
+                                            if (chunkError != null) {
+                                                chunkError
+                                            } else {
+                                                foundRange = if (lineRanges.isNotEmpty()) lineRanges.joinToString(", ") else ""
+                                                try {
+                                                    repository.saveFile(project.name, filePath, currentContent)
+                                                    filesModifiedThisPrompt = true
+                                                    _editHistory.value = _editHistory.value + EditRecord(
+                                                        tool = "multi_edit",
+                                                        path = filePath,
+                                                        lines = foundRange
+                                                    )
+                                                    "Successfully multi-edited file '$filePath' ($foundRange)"
+                                                } catch (e: Exception) {
+                                                    "Error writing modified file: ${e.localizedMessage}"
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        "Error: File '$filePath' not found."
+                                    }
+                                }
+
+                                val isSuccess = result.startsWith("Successfully")
+                                val range = if (foundRange.isNotEmpty()) foundRange else args?.lineRange ?: ""
+                                updateAiLog(
+                                    multiLog.id,
+                                    if (isSuccess) "success" else "failed",
+                                    if (isSuccess) filePath else result,
+                                    lineRange = range
+                                )
 
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': $result"))))

@@ -71,8 +71,24 @@ data class AgentResponse(
 )
 
 @JsonClass(generateAdapter = true)
+data class EditChunk(
+    val search: String? = null,
+    val replace: String? = null,
+    val targetContent: String? = null,
+    val replacementContent: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class ReadRangeItem(
+    val startLine: Int? = null,
+    val endLine: Int? = null,
+    val range: String? = null
+)
+
+@JsonClass(generateAdapter = true)
 data class ToolArguments(
     val path: String? = null,
+    val targetFile: String? = null,
     val content: String? = null,
     val oldPath: String? = null,
     val newPath: String? = null,
@@ -89,7 +105,12 @@ data class ToolArguments(
     val prompt: String? = null,
     val width: Int? = null,
     val height: Int? = null,
-    val format: String? = null
+    val format: String? = null,
+    val chunks: List<EditChunk>? = null,
+    val replacementChunks: List<EditChunk>? = null,
+    val edits: List<EditChunk>? = null,
+    val ranges: List<ReadRangeItem>? = null,
+    val rangeList: List<String>? = null
 )
 
 @JsonClass(generateAdapter = true)
