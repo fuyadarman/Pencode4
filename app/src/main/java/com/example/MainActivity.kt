@@ -118,6 +118,13 @@ class MainActivity : ComponentActivity() {
                         val importProgress by viewModel.importProgress.collectAsState()
                         val importProgressMessage by viewModel.importProgressMessage.collectAsState()
                         val backupsList by viewModel.backupsList.collectAsState()
+                        val executionElapsedTimeSeconds by viewModel.executionElapsedTimeSeconds.collectAsState()
+                        val currentRunningModelName by viewModel.currentRunningModelName.collectAsState()
+                        val liveSystemTokens by viewModel.liveSystemTokens.collectAsState()
+                        val liveUserTokens by viewModel.liveUserTokens.collectAsState()
+                        val liveToolTokens by viewModel.liveToolTokens.collectAsState()
+                        val liveTotalInputTokens by viewModel.liveTotalInputTokens.collectAsState()
+                        val liveTotalOutputTokens by viewModel.liveTotalOutputTokens.collectAsState()
 
                         if (currentProject == null) {
                             HomeScreen(
@@ -245,6 +252,13 @@ class MainActivity : ComponentActivity() {
                                 onSaveAllowAutoFix = { viewModel.saveAllowAutoFix(it) },
                                 onSaveAllowBackgroundExecution = { viewModel.saveAllowBackgroundExecution(it) },
                                 onSaveMaxActionSteps = { viewModel.saveMaxActionSteps(it) },
+                                executionElapsedTimeSeconds = executionElapsedTimeSeconds,
+                                currentRunningModelName = currentRunningModelName,
+                                liveSystemTokens = liveSystemTokens,
+                                liveUserTokens = liveUserTokens,
+                                liveToolTokens = liveToolTokens,
+                                liveTotalInputTokens = liveTotalInputTokens,
+                                liveTotalOutputTokens = liveTotalOutputTokens,
                                 onSaveGithubToken = { token ->
                                     viewModel.saveGithubToken(token)
                                 },

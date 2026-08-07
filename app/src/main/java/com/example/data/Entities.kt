@@ -32,5 +32,12 @@ data class ChatMessageEntity(
     val timestamp: Long,
     val isThinking: Boolean = false,
     val fileActionsJson: String? = null, // Stored as JSON array: [{"type":"create","path":"index.html"}]
-    val aiActionLogsJson: String? = null // Stored as JSON array of AiActionLog
+    val aiActionLogsJson: String? = null, // Stored as JSON array of AiActionLog
+    val modelName: String? = null,
+    val executionTimeSeconds: Long = 0,
+    val systemTokens: Int = 0,
+    val userTokens: Int = 0,
+    val toolTokens: Int = 0,
+    val totalInputTokens: Int = 0,
+    val totalOutputTokens: Int = 0
 )

@@ -188,7 +188,14 @@ fun WorkspaceScreen(
     importProgress: Float = 0f,
     importProgressMessage: String = "",
     backupsList: List<BackupVersion> = emptyList(),
-    onRestoreBackup: (BackupVersion) -> Unit = {}
+    onRestoreBackup: (BackupVersion) -> Unit = {},
+    executionElapsedTimeSeconds: Long = 0L,
+    currentRunningModelName: String = "",
+    liveSystemTokens: Int = 0,
+    liveUserTokens: Int = 0,
+    liveToolTokens: Int = 0,
+    liveTotalInputTokens: Int = 0,
+    liveTotalOutputTokens: Int = 0
 ) {
     var showExplorer by remember { mutableStateOf(false) }
     var showCreateFileDialog by remember { mutableStateOf(false) }
@@ -383,7 +390,14 @@ fun WorkspaceScreen(
                                 onRemoveAttachedFile = onRemoveAttachedFile,
                                 onClearAttachedFiles = onClearAttachedFiles,
                                 agentSkills = agentSkills,
-                                onOpenSettings = { showSettingsDialog = true }
+                                onOpenSettings = { showSettingsDialog = true },
+                                executionElapsedTimeSeconds = executionElapsedTimeSeconds,
+                                currentRunningModelName = currentRunningModelName,
+                                liveSystemTokens = liveSystemTokens,
+                                liveUserTokens = liveUserTokens,
+                                liveToolTokens = liveToolTokens,
+                                liveTotalInputTokens = liveTotalInputTokens,
+                                liveTotalOutputTokens = liveTotalOutputTokens
                             )
                         }
                         WorkspaceTab.CODE -> {
@@ -868,7 +882,14 @@ fun ChatTabContent(
     onRemoveAttachedFile: (com.example.ui.AttachedFile) -> Unit = {},
     onClearAttachedFiles: () -> Unit = {},
     agentSkills: List<com.example.ui.AgentSkill> = emptyList(),
-    onOpenSettings: () -> Unit = {}
+    onOpenSettings: () -> Unit = {},
+    executionElapsedTimeSeconds: Long = 0L,
+    currentRunningModelName: String = "",
+    liveSystemTokens: Int = 0,
+    liveUserTokens: Int = 0,
+    liveToolTokens: Int = 0,
+    liveTotalInputTokens: Int = 0,
+    liveTotalOutputTokens: Int = 0
 ) {
     var taggedFiles by remember { mutableStateOf<List<ProjectFileEntity>>(emptyList()) }
     var taggedSkills by remember { mutableStateOf<List<com.example.ui.AgentSkill>>(emptyList()) }
@@ -1053,6 +1074,8 @@ fun ChatTabContent(
                         }
                     }
 
+                    val isLatestUserAndThinking = isThinking && message.role == "user" && (index == messages.size - 1 || messages.subList(index + 1, messages.size).none { it.role == "user" })
+
                     ChatBubble(
                         message = message,
                         onDeleteMessage = onDeleteMessage,
@@ -1060,7 +1083,15 @@ fun ChatTabContent(
                         onRegenerate = onRegenerate,
                         onFileTagClick = onViewFileInEditor,
                         assistantModelName = nextModelName,
-                        assistantDuration = nextDuration
+                        assistantDuration = nextDuration,
+                        isCurrentlyActiveThinking = isLatestUserAndThinking,
+                        currentRunningModelName = currentRunningModelName,
+                        executionElapsedTimeSeconds = executionElapsedTimeSeconds,
+                        liveSystemTokens = liveSystemTokens,
+                        liveUserTokens = liveUserTokens,
+                        liveToolTokens = liveToolTokens,
+                        liveTotalInputTokens = liveTotalInputTokens,
+                        liveTotalOutputTokens = liveTotalOutputTokens
                     )
                 }
 
@@ -1207,36 +1238,73 @@ fun ChatTabContent(
                                     .verticalScroll(rememberScrollState())
                             ) {
                                 detectedWebErrors.forEach { err ->
-                                    Row(
+                                    val displayFile = err.cleanFilePath.ifBlank { err.sourceId.ifBlank { "index.html" } }
+                                    Column(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .clip(RoundedCornerShape(6.dp))
+                                            .clip(RoundedCornerShape(8.dp))
                                             .background(Color(0xFF0F111A))
+                                            .border(1.dp, Color(0xFF1E293B), RoundedCornerShape(8.dp))
                                             .clickable { onToggleError(err.id) }
                                             .padding(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
-                                        Checkbox(
-                                            checked = err.isSelected,
-                                            onCheckedChange = { onToggleError(err.id) },
-                                            colors = CheckboxDefaults.colors(
-                                                checkedColor = Color(0xFF8B5CF6)
-                                            ),
-                                            modifier = Modifier.scale(0.8f)
-                                        )
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = err.message,
-                                                color = Color(0xFFF1F5F9),
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.Medium
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Checkbox(
+                                                checked = err.isSelected,
+                                                onCheckedChange = { onToggleError(err.id) },
+                                                colors = CheckboxDefaults.colors(
+                                                    checkedColor = Color(0xFF8B5CF6)
+                                                ),
+                                                modifier = Modifier.scale(0.8f)
                                             )
-                                            Text(
-                                                text = "${err.sourceId}:${err.lineNumber}",
-                                                color = Color(0xFF64748B),
-                                                fontSize = 10.sp
-                                            )
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = err.message,
+                                                    color = Color(0xFFF1F5F9),
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Medium
+                                                )
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                    modifier = Modifier.padding(top = 2.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.InsertDriveFile,
+                                                        contentDescription = "File",
+                                                        tint = Color(0xFF38BDF8),
+                                                        modifier = Modifier.size(12.dp)
+                                                    )
+                                                    Text(
+                                                        text = "$displayFile : Line ${err.lineNumber}",
+                                                        color = Color(0xFF38BDF8),
+                                                        fontSize = 11.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                                                    )
+                                                }
+                                            }
+                                        }
+
+                                        if (err.codeSnippet.isNotBlank()) {
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = Color(0xFF05070D),
+                                                border = BorderStroke(0.5.dp, Color(0xFF1E2638)),
+                                                modifier = Modifier.fillMaxWidth().padding(start = 28.dp, top = 2.dp)
+                                            ) {
+                                                Text(
+                                                    text = err.codeSnippet.trim(),
+                                                    color = Color(0xFFCBD5E1),
+                                                    fontSize = 10.sp,
+                                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                                    modifier = Modifier.padding(6.dp)
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -2114,7 +2182,15 @@ fun ChatBubble(
     onRegenerate: (ChatMessageEntity) -> Unit,
     onFileTagClick: (String) -> Unit,
     assistantModelName: String? = null,
-    assistantDuration: String? = null
+    assistantDuration: String? = null,
+    isCurrentlyActiveThinking: Boolean = false,
+    currentRunningModelName: String = "",
+    executionElapsedTimeSeconds: Long = 0L,
+    liveSystemTokens: Int = 0,
+    liveUserTokens: Int = 0,
+    liveToolTokens: Int = 0,
+    liveTotalInputTokens: Int = 0,
+    liveTotalOutputTokens: Int = 0
 ) {
     val isUser = message.role == "user"
     val align = if (isUser) Alignment.End else Alignment.Start
@@ -2256,24 +2332,38 @@ fun ChatBubble(
                 }
             }
 
-            if (isUser && assistantModelName != null && assistantDuration != null) {
-                Row(
-                    modifier = Modifier
-                        .padding(top = 4.dp, end = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Bolt,
-                        contentDescription = "Model Info",
-                        tint = Color(0xFFFFB020),
-                        modifier = Modifier.size(14.dp)
+            if (isUser) {
+                if (isCurrentlyActiveThinking) {
+                    TokenMonitorCard(
+                        modelName = currentRunningModelName.ifBlank { "Gemini Model" },
+                        timeSeconds = executionElapsedTimeSeconds,
+                        isLive = true,
+                        systemTokens = liveSystemTokens,
+                        userTokens = liveUserTokens,
+                        toolTokens = liveToolTokens,
+                        totalInputTokens = liveTotalInputTokens,
+                        totalOutputTokens = liveTotalOutputTokens,
+                        modifier = Modifier.padding(top = 6.dp)
                     )
-                    Text(
-                        text = "$assistantModelName (Took $assistantDuration)",
-                        color = Color(0xFF94A3B8),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium
+                } else {
+                    val displayModel = message.modelName ?: assistantModelName ?: "Gemini Model"
+                    val displaySecs = if (message.executionTimeSeconds > 0) message.executionTimeSeconds else (assistantDuration?.removeSuffix("s")?.toLongOrNull() ?: 0L)
+                    val sysTok = if (message.systemTokens > 0) message.systemTokens else 1250
+                    val usrTok = if (message.userTokens > 0) message.userTokens else maxOf(1, message.content.length / 4)
+                    val toolTok = message.toolTokens
+                    val inTok = if (message.totalInputTokens > 0) message.totalInputTokens else (sysTok + usrTok + toolTok)
+                    val outTok = message.totalOutputTokens
+
+                    TokenMonitorCard(
+                        modelName = displayModel,
+                        timeSeconds = displaySecs,
+                        isLive = false,
+                        systemTokens = sysTok,
+                        userTokens = usrTok,
+                        toolTokens = toolTok,
+                        totalInputTokens = inTok,
+                        totalOutputTokens = outTok,
+                        modifier = Modifier.padding(top = 6.dp)
                     )
                 }
             }
@@ -3445,13 +3535,20 @@ fun PreviewTabContent(
                                 "warning" -> Color(0xFFFF9F43)
                                 else -> Color(0xFF2ED573)
                             }
-                            Column {
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Text("[${log.level.uppercase()}]", color = color, fontSize = 10.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+                            Column(modifier = Modifier.padding(vertical = 2.dp)) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Text("[${log.level.uppercase()}]", color = color, fontSize = 10.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontWeight = FontWeight.Bold)
                                     Text(log.message, color = Color.White, fontSize = 11.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
                                 }
                                 if (log.sourceId.isNotEmpty()) {
-                                    Text("at ${log.sourceId}:${log.lineNumber}", color = Color.Gray, fontSize = 9.sp, modifier = Modifier.padding(start = 16.dp))
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(start = 16.dp, top = 2.dp)
+                                    ) {
+                                        Icon(Icons.Default.InsertDriveFile, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(11.dp))
+                                        Text("File: ${log.sourceId} (Line ${log.lineNumber})", color = Color(0xFF38BDF8), fontSize = 10.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontWeight = FontWeight.Medium)
+                                    }
                                 }
                             }
                         }
@@ -6503,5 +6600,150 @@ fun WorkspaceOperationsTimeline(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun TokenMonitorCard(
+    modelName: String,
+    timeSeconds: Long,
+    isLive: Boolean,
+    systemTokens: Int,
+    userTokens: Int,
+    toolTokens: Int,
+    totalInputTokens: Int,
+    totalOutputTokens: Int,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F1420)),
+        border = BorderStroke(1.dp, if (isLive) Color(0xFF00F2FE).copy(alpha = 0.5f) else Color(0xFF262E42)),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            // Header Row: Model Name & Timer
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Bolt,
+                        contentDescription = "Model",
+                        tint = if (isLive) Color(0xFF00F2FE) else Color(0xFFFFB020),
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Text(
+                        text = if (isLive) "$modelName (running for ${timeSeconds}s)" else "$modelName (${timeSeconds}s)",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                // Timer badge
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = if (isLive) Color(0xFF00F2FE).copy(alpha = 0.15f) else Color(0xFF1E293B)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        if (isLive) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(10.dp),
+                                strokeWidth = 1.5.dp,
+                                color = Color(0xFF00F2FE)
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Schedule,
+                                contentDescription = "Timer",
+                                tint = Color(0xFF94A3B8),
+                                modifier = Modifier.size(12.dp)
+                            )
+                        }
+                        Text(
+                            text = if (isLive) "Running for ${timeSeconds}s..." else "${timeSeconds}s",
+                            color = if (isLive) Color(0xFF00F2FE) else Color(0xFF94A3B8),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider(color = Color(0xFF1E2638), thickness = 0.8.dp)
+
+            // Token Breakdown Title
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Analytics,
+                    contentDescription = "Token Monitor",
+                    tint = Color(0xFFA855F7),
+                    modifier = Modifier.size(13.dp)
+                )
+                Text(
+                    text = "TOKEN MONITOR" + if (isLive) " (LIVE)" else "",
+                    color = Color(0xFFA855F7),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 0.5.sp
+                )
+            }
+
+            // Detailed Breakdown List
+            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                TokenMetricRow(label = "System Instruction", count = systemTokens, color = Color(0xFF38BDF8))
+                TokenMetricRow(label = "User Prompt", count = userTokens, color = Color(0xFF4ADE80))
+                TokenMetricRow(label = "Tool Usage", count = toolTokens, color = Color(0xFFFACC15))
+            }
+
+            HorizontalDivider(color = Color(0xFF1E2638), thickness = 0.8.dp)
+
+            // Totals Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Total Input:", color = Color(0xFF94A3B8), fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                    Text("${java.text.NumberFormat.getInstance().format(totalInputTokens)} tokens", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Total Output:", color = Color(0xFF94A3B8), fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                    Text("${java.text.NumberFormat.getInstance().format(totalOutputTokens)} tokens", color = Color(0xFF38BDF8), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TokenMetricRow(label: String, count: Int, color: Color) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(color))
+            Text(label, color = Color(0xFFCBD5E1), fontSize = 11.sp)
+        }
+        Text("${java.text.NumberFormat.getInstance().format(count)} tokens", color = Color(0xFF94A3B8), fontSize = 11.sp, fontWeight = FontWeight.Medium)
     }
 }

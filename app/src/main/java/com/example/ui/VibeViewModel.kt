@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
 import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
@@ -86,7 +87,9 @@ data class WebConsoleError(
     val message: String,
     val sourceId: String,
     val lineNumber: Int,
-    val isSelected: Boolean = true
+    val isSelected: Boolean = true,
+    val cleanFilePath: String = "",
+    val codeSnippet: String = ""
 )
 
 data class AndroidBuildError(
@@ -198,30 +201,33 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     val webArtifactInfo: StateFlow<WebArtifactInfo?> = _webArtifactInfo.asStateFlow()
 
     fun addWebError(message: String, sourceId: String, lineNumber: Int) {
-        val cleanSource = if (sourceId.startsWith("https://virtual-app/")) {
-            sourceId.removePrefix("https://virtual-app/")
-        } else {
-            sourceId
-        }
-        val errorKey = "$cleanSource:$lineNumber:$message"
-        val alreadyExists = _detectedWebErrors.value.any { 
-            it.message == message && it.lineNumber == lineNumber && it.sourceId == cleanSource 
-        }
-        if (!alreadyExists) {
-            _detectedWebErrors.value = _detectedWebErrors.value + WebConsoleError(
-                message = message,
-                sourceId = cleanSource,
-                lineNumber = lineNumber
-            )
-            // Do not auto-fix if this exact error key was already attempted without success
-            val hasAttempted = attemptedWebErrorKeys.contains(errorKey)
-            if (_allowAutoFix.value && !_isThinking.value && !isAutoFixingWebErrors && !hasAttempted) {
-                isAutoFixingWebErrors = true
-                viewModelScope.launch(Dispatchers.Main) {
-                    kotlinx.coroutines.delay(500)
-                    _detectedWebErrors.value = _detectedWebErrors.value.map { it.copy(isSelected = true) }
-                    fixSelectedWebErrors()
-                    isAutoFixingWebErrors = false
+        viewModelScope.launch(Dispatchers.Default) {
+            val files = repository.getFilesForProject(_currentProject.value?.name ?: "")
+            val resolved = WebErrorResolver.resolveError(message, sourceId, lineNumber, files)
+            val cleanSource = resolved.cleanFilePath
+            val errorKey = "$cleanSource:${resolved.lineNumber}:$message"
+            val alreadyExists = _detectedWebErrors.value.any { 
+                it.message == message && it.lineNumber == resolved.lineNumber && (it.sourceId == cleanSource || it.cleanFilePath == cleanSource) 
+            }
+            if (!alreadyExists) {
+                val newError = WebConsoleError(
+                    message = message,
+                    sourceId = cleanSource,
+                    lineNumber = resolved.lineNumber,
+                    cleanFilePath = resolved.cleanFilePath,
+                    codeSnippet = resolved.codeSnippet
+                )
+                _detectedWebErrors.value = _detectedWebErrors.value + newError
+                
+                val hasAttempted = attemptedWebErrorKeys.contains(errorKey)
+                if (_allowAutoFix.value && !_isThinking.value && !isAutoFixingWebErrors && !hasAttempted) {
+                    isAutoFixingWebErrors = true
+                    viewModelScope.launch(Dispatchers.Main) {
+                        kotlinx.coroutines.delay(500)
+                        _detectedWebErrors.value = _detectedWebErrors.value.map { it.copy(isSelected = true) }
+                        fixSelectedWebErrors()
+                        isAutoFixingWebErrors = false
+                    }
                 }
             }
         }
@@ -230,19 +236,23 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     private fun checkAndTriggerAutoFixOnAgentFinish() {
         if (_allowAutoFix.value && !_isThinking.value) {
             viewModelScope.launch(Dispatchers.Main) {
-                // Realtime check: Wait 2500ms for web preview / build runner to reload and verify if errors still exist
+                // Realtime check: Wait 2500ms for web preview to reload and emit fresh errors if the bug persists
                 kotlinx.coroutines.delay(2500)
                 if (_isThinking.value) return@launch
 
+                val currentFiles = repository.getFilesForProject(_currentProject.value?.name ?: "")
+                // Filter detected errors to ensure they still match existing project files and have not been attempted
                 val unattemptedWebErrors = _detectedWebErrors.value.filter { err ->
-                    val key = "${err.sourceId}:${err.lineNumber}:${err.message}"
-                    !attemptedWebErrorKeys.contains(key)
+                    val key = "${err.cleanFilePath.ifBlank { err.sourceId }}:${err.lineNumber}:${err.message}"
+                    val rawKey = "${err.sourceId}:${err.lineNumber}:${err.message}"
+                    val notAttempted = !attemptedWebErrorKeys.contains(key) && !attemptedWebErrorKeys.contains(rawKey)
+                    val matchedFile = WebErrorResolver.findMatchingFile(err.cleanFilePath.ifBlank { err.sourceId }, currentFiles)
+                    notAttempted && matchedFile != null
                 }
                 if (unattemptedWebErrors.isNotEmpty() && !isAutoFixingWebErrors) {
                     isAutoFixingWebErrors = true
-                    _detectedWebErrors.value = _detectedWebErrors.value.map { err ->
-                        val key = "${err.sourceId}:${err.lineNumber}:${err.message}"
-                        err.copy(isSelected = !attemptedWebErrorKeys.contains(key))
+                    _detectedWebErrors.value = unattemptedWebErrors.map { err ->
+                        err.copy(isSelected = true)
                     }
                     fixSelectedWebErrors()
                     isAutoFixingWebErrors = false
@@ -317,27 +327,34 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         val project = _currentProject.value ?: return
         
         for (it in selected) {
-            attemptedWebErrorKeys.add("${it.sourceId}:${it.lineNumber}:${it.message}")
+            val keySource = it.cleanFilePath.ifBlank { it.sourceId }
+            attemptedWebErrorKeys.add("$keySource:${it.lineNumber}:${it.message}")
         }
 
-        viewModelScope.launch {
-            val errorReportBuilder = StringBuilder()
-            for (it in selected) {
-                val snippet = getCodeSnippetForError(project.name, it.sourceId, it.lineNumber)
-                errorReportBuilder.append("- Error: \"${it.message}\" in file \"${it.sourceId}\" at line ${it.lineNumber}$snippet\n")
+        viewModelScope.launch(Dispatchers.Default) {
+            val files = repository.getFilesForProject(project.name)
+            val resolvedList = selected.map { err ->
+                if (err.cleanFilePath.isNotBlank() && err.codeSnippet.isNotBlank()) {
+                    ResolvedWebError(
+                        rawMessage = err.message,
+                        rawSourceId = err.sourceId,
+                        cleanFilePath = err.cleanFilePath,
+                        lineNumber = err.lineNumber,
+                        codeSnippet = err.codeSnippet
+                    )
+                } else {
+                    WebErrorResolver.resolveError(err.message, err.sourceId, err.lineNumber, files)
+                }
             }
-            
-            val errorReport = errorReportBuilder.toString()
+
+            val errorReport = WebErrorResolver.buildPromptReport(resolvedList, files)
             _detectedWebErrors.value = emptyList()
             
-            // Switch tab to Chat to show the ongoing fixing conversation
-            _currentTab.value = WorkspaceTab.CHAT
-            
-            sendPrompt(
-                "I encountered the following console errors in my web preview workspace. " +
-                "Please analyze the workspace, find the root cause, and edit or patch the files to fix them completely. " +
-                "Make sure your changes are robust and fully functional:\n\n$errorReport"
-            )
+            withContext(Dispatchers.Main) {
+                // Switch tab to Chat to show the ongoing fixing conversation
+                _currentTab.value = WorkspaceTab.CHAT
+                sendPrompt(errorReport)
+            }
         }
     }
 
@@ -2309,6 +2326,28 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     private val _isThinking = MutableStateFlow(false)
     val isThinking: StateFlow<Boolean> = _isThinking.asStateFlow()
 
+    // Execution Timer & Live Token Monitor state
+    private val _executionElapsedTimeSeconds = MutableStateFlow(0L)
+    val executionElapsedTimeSeconds: StateFlow<Long> = _executionElapsedTimeSeconds.asStateFlow()
+
+    private val _currentRunningModelName = MutableStateFlow("")
+    val currentRunningModelName: StateFlow<String> = _currentRunningModelName.asStateFlow()
+
+    private val _liveSystemTokens = MutableStateFlow(0)
+    val liveSystemTokens: StateFlow<Int> = _liveSystemTokens.asStateFlow()
+
+    private val _liveUserTokens = MutableStateFlow(0)
+    val liveUserTokens: StateFlow<Int> = _liveUserTokens.asStateFlow()
+
+    private val _liveToolTokens = MutableStateFlow(0)
+    val liveToolTokens: StateFlow<Int> = _liveToolTokens.asStateFlow()
+
+    private val _liveTotalInputTokens = MutableStateFlow(0)
+    val liveTotalInputTokens: StateFlow<Int> = _liveTotalInputTokens.asStateFlow()
+
+    private val _liveTotalOutputTokens = MutableStateFlow(0)
+    val liveTotalOutputTokens: StateFlow<Int> = _liveTotalOutputTokens.asStateFlow()
+
     private val _currentTab = MutableStateFlow(WorkspaceTab.CHAT)
     val currentTab: StateFlow<WorkspaceTab> = _currentTab.asStateFlow()
 
@@ -2450,12 +2489,17 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     )
 
     fun addWebConsoleLog(message: String, level: String, sourceId: String, lineNumber: Int) {
-        val log = WebConsoleLog(message, level, sourceId, lineNumber)
-        _webConsoleLogs.value = _webConsoleLogs.value + log
+        viewModelScope.launch(Dispatchers.Default) {
+            val files = repository.getFilesForProject(_currentProject.value?.name ?: "")
+            val cleanSource = WebErrorResolver.cleanSourceId(sourceId, files)
+            val log = WebConsoleLog(message, level, cleanSource, lineNumber)
+            _webConsoleLogs.value = _webConsoleLogs.value + log
+        }
     }
 
     fun clearWebConsoleLogs() {
         _webConsoleLogs.value = emptyList()
+        _detectedWebErrors.value = emptyList()
     }
 
     fun clearTerminal() {
@@ -3074,6 +3118,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         val scope = if (_allowBackgroundExecution.value) backgroundScope else viewModelScope
         currentAiJob = scope.launch {
             autoSaveActiveFile()
+            _detectedWebErrors.value = emptyList()
             var finalPrompt = userPrompt
             attachments.forEach { file ->
                 if (file.isImage && file.contentAsBase64 != null) {
@@ -3089,14 +3134,15 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             loadBackupsForCurrentProject(project.name)
 
             // 1. Save user prompt to Chat Database
+            var userMsg: ChatMessageEntity? = null
             if (!isRegenerate) {
-                val userMsg = ChatMessageEntity(
+                userMsg = ChatMessageEntity(
                     projectName = project.name,
                     role = "user",
                     content = finalPrompt,
                     timestamp = System.currentTimeMillis()
                 )
-                repository.insertChatMessage(userMsg)
+                repository.insertChatMessage(userMsg!!)
             }
             _chatMessages.value = repository.getChatsForProject(project.name)
 
@@ -3250,19 +3296,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             }
 
             val activeSkills = _agentSkills.value.filter { it.isInstalled && it.isEnabled }
-            val allSkills = _agentSkills.value
             val activeSkillsPrompt = buildString {
-                append("\n\nBACKGROUND AGENT SKILLS LIBRARY & PROMPT ANALYSIS MANDATE:\n")
-                append("You are a professional AI Software Engineer Agent equipped with a background library of Agent Skills.\n")
-                append("ALL SKILLS DEFAULT TO OFF. You MUST analyze the user's prompt to make a professional decision whether any specialized skill should be loaded.\n")
-                append("If a skill matches the user's request or domain (e.g., React composition, Next.js architecture, UI design, AI SDK, state management, Room database, testing, performance, animations, canvas, etc.), you MUST call the 'load_skill' tool first.\n")
-                append("Calling 'load_skill' will log the skill activation directly into the Agent Operation Timeline for the user and unlock the skill instructions.\n\n")
-                append("AVAILABLE BACKGROUND SKILLS:\n")
-                allSkills.forEach { s ->
-                    append("- ID: '${s.id}' | Name: '${s.name}' | Author: '${s.author}'\n  Description: ${s.description}\n")
-                }
                 if (activeSkills.isNotEmpty()) {
-                    append("\nCURRENTLY ACTIVATED SKILLS:\n")
+                    append("\n\nINSTALLED & ACTIVE AGENT SKILLS LIBRARY:\n")
+                    append("The following skills are installed and enabled for this session:\n\n")
                     activeSkills.forEach { skill ->
                         append("--- SKILL: ${skill.name} (${skill.author}) ---\n")
                         append("Description: ${skill.description}\n")
@@ -3298,7 +3335,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                    - Execute actual tool calls for action prompts. Never promise work in text without tool execution. Call 'complete' when finished. Avoid infinite loops.
 
                 4. WORKSPACE EXPLORATION & SEARCH PROTOCOL:
-                   - Use 'scan_dir' with specific subdirectories (e.g. "app", "app/src"). Scanning root "." is forbidden.
+                   - Whenever you see or need to inspect any folder, directory, or path (e.g. "app", "app/src", "app/src/main/java"), ALWAYS use 'scan_dir' with that specific directory path to explore its contents.
+                   - DO NOT run 'scan_dir' on the root directory (using '.', '/', './', or empty path). Scanning the root or full codebase at once is STRICTLY FORBIDDEN and will be automatically rejected. Always pass a specific folder path.
                    - Search hierarchy: 'grep' / 'scan_dir' -> 'global_search' -> 'read_file'.
                    - Stack trace line numbers shift after edits; always read a broader range around reported error lines.
 
@@ -3326,7 +3364,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 - 'delete_file': Delete file (path).
                 - 'move_file': Rename/move file (path, destinationPath).
                 - 'global_search': Search text across workspace (query).
-                - 'scan_dir': Scan subdirectory recursively (path e.g. "app/src").
+                - 'scan_dir': Scan a specific folder or directory path recursively (path e.g. "app", "app/src"). Use whenever exploring any folder. Scanning root '.' is strictly forbidden.
                 - 'generate_image': Generate image (path, prompt, width, height).
                 - 'resize_image': Resize image (path, destinationPath, width, height, format).
                 - 'browser_search': Web/URL search (query).
@@ -3398,6 +3436,27 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             val provider = activeConfig.provider
             val modelId = activeConfig.modelId
             val baseUrl = activeConfig.baseUrl
+
+            val executionStartTime = System.currentTimeMillis()
+            _executionElapsedTimeSeconds.value = 0L
+            _currentRunningModelName.value = if (modelId.isNotBlank()) modelId else activeConfig.alias.ifBlank { "Gemini Model" }
+
+            val estimatedSys = maxOf(10, systemInstruction.length / 4)
+            val estimatedUsr = maxOf(1, finalPrompt.length / 4)
+            val estimatedHist = history.sumOf { content -> content.parts?.sumOf { part -> part.text?.length ?: 0 } ?: 0 } / 4
+
+            _liveSystemTokens.value = estimatedSys
+            _liveUserTokens.value = estimatedUsr
+            _liveToolTokens.value = 0
+            _liveTotalInputTokens.value = estimatedSys + estimatedUsr + estimatedHist
+            _liveTotalOutputTokens.value = 0
+
+            val timerJob = viewModelScope.launch(Dispatchers.Default) {
+                while (isActive && _isThinking.value) {
+                    _executionElapsedTimeSeconds.value = (System.currentTimeMillis() - executionStartTime) / 1000
+                    kotlinx.coroutines.delay(1000)
+                }
+            }
             
             var loopCompleted = false
             var filesModifiedThisPrompt = false
@@ -3445,6 +3504,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                     )
                     
                     val thought = stepResponse?.thought ?: ""
+                    val addedOut = maxOf(1, thought.length / 4)
+                    _liveTotalOutputTokens.value += addedOut
                     if (thought.isNotBlank()) {
                         lastThought = thought
                     }
@@ -4794,19 +4855,14 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                             }
                             "load_skill" -> {
                                 val skillQuery = args?.path ?: args?.query ?: args?.message ?: args?.content ?: ""
-                                val matchedSkill = _agentSkills.value.find { 
+                                val activeSkills = _agentSkills.value.filter { it.isInstalled && it.isEnabled }
+                                val matchedSkill = activeSkills.find { 
                                     it.id.equals(skillQuery, ignoreCase = true) || 
                                     it.name.contains(skillQuery, ignoreCase = true) ||
                                     skillQuery.contains(it.id, ignoreCase = true)
                                 }
 
                                 val result = if (matchedSkill != null) {
-                                    val updatedList = _agentSkills.value.map {
-                                        if (it.id == matchedSkill.id) it.copy(isInstalled = true, isEnabled = true) else it
-                                    }
-                                    _agentSkills.value = updatedList
-                                    saveAgentSkillsInternal()
-
                                     val skillLog = createAiLog(
                                         title = "Loaded Skill: ${matchedSkill.name}",
                                         status = "success",
@@ -4819,12 +4875,12 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     val skillLog = createAiLog(
                                         title = "Load Skill Failed",
                                         status = "failed",
-                                        details = "Skill '$skillQuery' not found."
+                                        details = "Skill '$skillQuery' not active or not installed."
                                     )
                                     _aiActionLogs.value = _aiActionLogs.value + skillLog
 
-                                    val availableList = _agentSkills.value.joinToString(", ") { "${it.id} (${it.name})" }
-                                    "Skill '$skillQuery' not found. Available background skills: $availableList"
+                                    val availableList = activeSkills.joinToString(", ") { "${it.id} (${it.name})" }
+                                    "Skill '$skillQuery' not found or not active. Active installed skills: $availableList"
                                 }
 
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
@@ -4876,6 +4932,30 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             }
             } finally {
                 kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                    timerJob.cancel()
+                    val finalSecs = maxOf(1L, (System.currentTimeMillis() - executionStartTime) / 1000)
+                    _executionElapsedTimeSeconds.value = finalSecs
+
+                    val finalSys = _liveSystemTokens.value
+                    val finalUsr = _liveUserTokens.value
+                    val finalTool = _liveToolTokens.value
+                    val finalIn = _liveTotalInputTokens.value
+                    val finalOut = _liveTotalOutputTokens.value
+                    val activeModelVal = _currentRunningModelName.value
+
+                    if (userMsg != null) {
+                        val updatedUserMsg = userMsg.copy(
+                            modelName = activeModelVal,
+                            executionTimeSeconds = finalSecs,
+                            systemTokens = finalSys,
+                            userTokens = finalUsr,
+                            toolTokens = finalTool,
+                            totalInputTokens = finalIn,
+                            totalOutputTokens = finalOut
+                        )
+                        repository.insertChatMessage(updatedUserMsg)
+                    }
+
                     if (!agentMessageSaved) {
                         val logsJson = try {
                             val listType = Types.newParameterizedType(List::class.java, AiActionLog::class.java)
@@ -4901,7 +4981,14 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                             role = "assistant",
                             content = if (content.isNotBlank()) content else "Task completed successfully!",
                             timestamp = System.currentTimeMillis(),
-                            aiActionLogsJson = logsJson
+                            aiActionLogsJson = logsJson,
+                            modelName = activeModelVal,
+                            executionTimeSeconds = finalSecs,
+                            systemTokens = finalSys,
+                            userTokens = finalUsr,
+                            toolTokens = finalTool,
+                            totalInputTokens = finalIn,
+                            totalOutputTokens = finalOut
                         )
                         repository.insertChatMessage(agentMsg)
                     }
@@ -4909,6 +4996,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                     _isThinking.value = false
                     _chatMessages.value = repository.getChatsForProject(project.name)
                     if (project.templateKey == "vanilla" || project.templateKey == "react" || project.templateKey == "vanilla_three") {
+                        // Clear old detected errors right before reloading preview so newly reloaded preview can report fresh errors if any
+                        _detectedWebErrors.value = emptyList()
+                        _webConsoleLogs.value = emptyList()
                         _webPreviewRefreshTrigger.value += 1
                     }
                     checkAndTriggerAutoFixOnAgentFinish()
