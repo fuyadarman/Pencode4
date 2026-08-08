@@ -110,7 +110,12 @@ data class ToolArguments(
     val replacementChunks: List<EditChunk>? = null,
     val edits: List<EditChunk>? = null,
     val ranges: List<ReadRangeItem>? = null,
-    val rangeList: List<String>? = null
+    val rangeList: List<String>? = null,
+    val mcpServerId: String? = null,
+    val mcpServerName: String? = null,
+    val toolName: String? = null,
+    val mcpArgsJson: String? = null,
+    val resourceUri: String? = null
 )
 
 @JsonClass(generateAdapter = true)

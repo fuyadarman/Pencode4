@@ -20,6 +20,9 @@ import com.example.data.ProjectFileEntity
 import com.example.data.VibeDatabase
 import com.example.data.VibeRepository
 import com.example.data.VibeAgentService
+import com.example.data.McpManager
+import com.example.data.McpServer
+import com.example.data.McpPlatformType
 import com.example.context.ContextOptimizationManager
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
@@ -137,6 +140,9 @@ data class TodoItem(
 )
 
 class VibeViewModel(application: Application) : AndroidViewModel(application) {
+
+    val mcpManager = McpManager(application)
+    val mcpServers: StateFlow<List<McpServer>> = mcpManager.servers
 
     private val _chatInputText = MutableStateFlow("")
     val chatInputText: StateFlow<String> = _chatInputText.asStateFlow()
@@ -3355,6 +3361,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 6. WEB & LINK HANDLING:
                    - Use 'browser_search' for live web information or user-supplied URLs (http/https).
 
+                7. LANGUAGE & RESPONSE STYLE:
+                   - ALWAYS respond in the EXACT SAME language, script, dialect, and tone/style as the user's prompt (e.g., if the user prompts in Bangla, Banglish, English, Hindi, etc., respond in that exact same language and communication style).
+
                 === AVAILABLE TOOLS ===
                 - 'read_file': Read file content (path).
                 - 'read_file_range': Read specific line range (path, startLine, endLine OR lineRange e.g. "10-50").
@@ -3377,6 +3386,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 - 'browser_search': Web/URL search (query).
                 - 'browser_click': Click element (search).
                 - 'browser_read': Read active web page text.
+                - 'mcp_list_tools': List available tools on connected Remote MCP servers (Appwrite, Supabase, Cloudflare, Vercel, Google Stitch, Custom).
+                - 'mcp_call_tool': Execute a tool on connected Remote MCP server (mcpServerId/mcpServerName, toolName, mcpArgsJson).
+                - 'mcp_read_resource': Read resource URI from connected Remote MCP server (mcpServerId, resourceUri).
                 - 'create_todo_list': Create todo checklist (query with '|' separator).
                 - 'complete_todo_task': Check off todo item (query index).
                 - 'load_skill': Load background agent skill (path/query).
@@ -4401,414 +4413,36 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': $result"))))
                             }
-                            "generate_image" -> {
-                                val filePath = normalizePath(args?.path ?: "image.png")
-                                val imagePrompt = args?.prompt ?: "beautiful abstract digital art"
-                                val width = args?.width ?: 1024
-                                val height = args?.height ?: 1024
-                                
-                                val genLog = AiActionLog(
-                                    title = "Generate image",
-                                    status = "thinking",
-                                    details = "Generating: \"$imagePrompt\" ($width x $height)",
-                                    lineRange = "pollinations"
+                            "mcp_call_tool", "mcp_call", "mcp_execute", "mcp_list_tools", "mcp_list", "mcp_read_resource" -> {
+                                val result = McpToolHandler.handleMcpToolCall(
+                                    tool = tool,
+                                    args = args,
+                                    project = project,
+                                    mcpManager = mcpManager,
+                                    createLog = { title, details -> createAiLog(title = title, status = "thinking", details = details) },
+                                    updateLog = { id, status, details -> updateAiLog(id, status, details) },
+                                    addLog = { log -> _aiActionLogs.value = _aiActionLogs.value + log }
                                 )
-                                _aiActionLogs.value = _aiActionLogs.value + genLog
-
-                                _agentStatus.value = "Generating image using Pollinations AI..."
-
-                                val result = try {
-                                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                        val client = okhttp3.OkHttpClient()
-                                        val encodedPrompt = java.net.URLEncoder.encode(imagePrompt, "UTF-8")
-                                        val randomSeed = (1..1000000).random()
-                                        val url = "https://image.pollinations.ai/prompt/$encodedPrompt?width=$width&height=$height&seed=$randomSeed&model=flux&nologo=true"
-                                        
-                                        val request = okhttp3.Request.Builder()
-                                            .url(url)
-                                            .get()
-                                            .build()
-                                            
-                                        val response = client.newCall(request).execute()
-                                        if (response.isSuccessful) {
-                                            val bytes = response.body?.bytes()
-                                            if (bytes != null) {
-                                                val mimeType = when (filePath.substringAfterLast(".", "").lowercase()) {
-                                                    "png" -> "image/png"
-                                                    "jpg", "jpeg" -> "image/jpeg"
-                                                    "webp" -> "image/webp"
-                                                    "gif" -> "image/gif"
-                                                    "ico" -> "image/x-icon"
-                                                    else -> "image/png"
-                                                }
-                                                val base64Content = "data:$mimeType;base64," + android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
-                                                repository.saveFile(project.name, filePath, base64Content)
-                                                "Successfully generated and saved image to '$filePath'"
-                                            } else {
-                                                "Error: Image response body was empty."
-                                            }
-                                        } else {
-                                            "Error: Failed to fetch image from Pollinations (HTTP ${response.code})."
-                                        }
-                                    }
-                                } catch (e: Exception) {
-                                    val errorMsg = e.localizedMessage ?: e.javaClass.simpleName
-                                    "Error generating image: $errorMsg"
-                                }
-
-                                _aiActionLogs.value = _aiActionLogs.value.map { log ->
-                                    if (log.id == genLog.id) {
-                                        val isSuccess = result.startsWith("Successfully")
-                                        log.copy(status = if (isSuccess) "success" else "failed", details = result)
-                                    } else log
-                                }
-
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
-                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'generate_image': $result"))))
+                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': $result"))))
                             }
-                            "resize_image" -> {
-                                val sourcePath = normalizePath(args?.path ?: "")
-                                val destPath = normalizePath(args?.destinationPath ?: "")
-                                val targetWidth = args?.width ?: 512
-                                val targetHeight = args?.height ?: 512
-                                val outputFormatStr = args?.format ?: destPath.substringAfterLast(".", "png")
-
-                                val resizeLog = AiActionLog(
-                                    title = "Resize image",
-                                    status = "thinking",
-                                    details = "Resizing $sourcePath to $destPath ($targetWidth x $targetHeight, format: $outputFormatStr)",
-                                    lineRange = "android-graphics"
+                            "generate_image", "resize_image", "browser_search", "browser_click", "browser_read", "create_todo_list", "complete_todo_task", "delete_file", "rename_file", "move_file" -> {
+                                val result = ExtraToolHandlers.handleExtraToolCall(
+                                    tool = tool,
+                                    args = args,
+                                    project = project,
+                                    repository = repository,
+                                    backgroundBrowser = backgroundBrowser,
+                                    todoList = _todoList.value,
+                                    updateTodoList = { _todoList.value = it },
+                                    createLog = { title, status, details, lineRange -> createAiLog(title = title, status = status, details = details, lineRange = lineRange) },
+                                    addLog = { log -> _aiActionLogs.value = _aiActionLogs.value + log },
+                                    updateLog = { id, status, details -> updateAiLog(id, status, details) },
+                                    setAgentStatus = { status -> _agentStatus.value = status },
+                                    normalizePath = { path -> normalizePath(path) }
                                 )
-                                _aiActionLogs.value = _aiActionLogs.value + resizeLog
-
-                                val files = repository.getFilesForProject(project.name)
-                                val sourceFile = files.find { it.path == sourcePath }
-
-                                val result = if (sourceFile == null) {
-                                    "Error: Source image file '$sourcePath' not found."
-                                } else {
-                                    try {
-                                        val base64String = sourceFile.content
-                                        val isBase64Image = base64String.startsWith("data:") && base64String.contains(";base64,")
-                                        val cleanBase64 = if (isBase64Image) base64String.substringAfter(";base64,") else base64String
-                                        val bytes = android.util.Base64.decode(cleanBase64, android.util.Base64.DEFAULT)
-                                        
-                                        val originalBitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                                        if (originalBitmap != null) {
-                                             val resizedBitmap = android.graphics.Bitmap.createScaledBitmap(originalBitmap, targetWidth, targetHeight, true)
-                                             val stream = java.io.ByteArrayOutputStream()
-                                             val compressFormat = when (outputFormatStr.lowercase()) {
-                                                 "jpg", "jpeg" -> android.graphics.Bitmap.CompressFormat.JPEG
-                                                 "webp" -> android.graphics.Bitmap.CompressFormat.WEBP
-                                                 else -> android.graphics.Bitmap.CompressFormat.PNG
-                                             }
-                                             resizedBitmap.compress(compressFormat, 100, stream)
-                                             val resizedBytes = stream.toByteArray()
-                                             
-                                             val destMimeType = when (destPath.substringAfterLast(".", "").lowercase()) {
-                                                 "png" -> "image/png"
-                                                 "jpg", "jpeg" -> "image/jpeg"
-                                                 "webp" -> "image/webp"
-                                                 "gif" -> "image/gif"
-                                                 "ico" -> "image/x-icon"
-                                                 else -> "image/png"
-                                             }
-                                             val destBase64 = "data:$destMimeType;base64," + android.util.Base64.encodeToString(resizedBytes, android.util.Base64.NO_WRAP)
-                                             repository.saveFile(project.name, destPath, destBase64)
-                                             
-                                             originalBitmap.recycle()
-                                             resizedBitmap.recycle()
-                                             
-                                             "Successfully resized and saved image to '$destPath' ($targetWidth x $targetHeight, format: ${compressFormat.name})"
-                                        } else {
-                                             "Error: Failed to decode image bytes from '$sourcePath'."
-                                        }
-                                    } catch (e: Exception) {
-                                        "Error resizing image: ${e.localizedMessage}"
-                                    }
-                                }
-
-                                _aiActionLogs.value = _aiActionLogs.value.map { log ->
-                                    if (log.id == resizeLog.id) {
-                                        val isSuccess = result.startsWith("Successfully")
-                                        log.copy(status = if (isSuccess) "success" else "failed", details = result)
-                                    } else log
-                                }
-
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
-                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'resize_image': $result"))))
-                            }
-                            "browser_search" -> {
-                                val queryVal = args?.query ?: ""
-                                val searchLog = AiActionLog(
-                                    title = "Browser search/navigate",
-                                    status = "thinking",
-                                    details = "Searching or loading: $queryVal",
-                                    lineRange = "background-browser"
-                                )
-                                _aiActionLogs.value = _aiActionLogs.value + searchLog
-                                _agentStatus.value = "Performing browser search/navigation for: $queryVal..."
-
-                                var lastUrl = ""
-                                var lastTitle = ""
-                                var lastExcerpt = ""
-
-                                val result = if (queryVal.isBlank()) {
-                                    "Error: 'query' argument cannot be empty. Please provide a search term or a URL."
-                                } else {
-                                    val isUrl = queryVal.startsWith("http://") || queryVal.startsWith("https://") || (queryVal.contains(".") && !queryVal.contains(" "))
-                                    val browserResult = if (isUrl) {
-                                        backgroundBrowser.navigate(queryVal)
-                                    } else {
-                                        backgroundBrowser.searchBrave(queryVal)
-                                    }
-                                    when (browserResult) {
-                                        is BrowserResult.Success -> {
-                                            lastUrl = browserResult.url
-                                            lastTitle = browserResult.title
-                                            lastExcerpt = browserResult.content.take(180)
-                                            "Successfully loaded page: ${browserResult.url}\nTitle: ${browserResult.title}\n\nContent Summary:\n${browserResult.content}"
-                                        }
-                                        is BrowserResult.Error -> {
-                                            "Error performing browser action: ${browserResult.message}"
-                                        }
-                                    }
-                                }
-
-                                _aiActionLogs.value = _aiActionLogs.value.map { log ->
-                                    if (log.id == searchLog.id) {
-                                        val isSuccess = !result.startsWith("Error")
-                                        val logDetails = if (isSuccess) {
-                                            "Navigated to: $lastUrl\nTitle: $lastTitle\nArticle Excerpt: $lastExcerpt..."
-                                        } else result
-                                        log.copy(status = if (isSuccess) "success" else "failed", details = logDetails)
-                                    } else log
-                                }
-
-                                history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
-                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'browser_search': $result"))))
-                            }
-                            "browser_click" -> {
-                                val selector = args?.search ?: ""
-                                val clickLog = AiActionLog(
-                                    title = "Browser Click & Switch",
-                                    status = "thinking",
-                                    details = "Clicking button/element '$selector' in browser...",
-                                    lineRange = "background-browser"
-                                )
-                                _aiActionLogs.value = _aiActionLogs.value + clickLog
-                                _agentStatus.value = "Clicking element '$selector' and switching page..."
-
-                                var clickedUrl = ""
-                                var clickedTitle = ""
-
-                                val result = if (selector.isBlank()) {
-                                    "Error: 'search' argument (CSS selector or XPath) cannot be empty."
-                                } else {
-                                    when (val browserResult = backgroundBrowser.clickElement(selector)) {
-                                        is BrowserResult.Success -> {
-                                            clickedUrl = browserResult.url
-                                            clickedTitle = browserResult.title
-                                            browserResult.content
-                                        }
-                                        is BrowserResult.Error -> {
-                                            "Error clicking element: ${browserResult.message}"
-                                        }
-                                    }
-                                }
-
-                                _aiActionLogs.value = _aiActionLogs.value.map { log ->
-                                    if (log.id == clickLog.id) {
-                                        val isSuccess = !result.startsWith("Error")
-                                        val detailsText = if (isSuccess) {
-                                            "Clicked '$selector' -> Switched to: $clickedUrl\nPage Title: $clickedTitle"
-                                        } else result
-                                        log.copy(status = if (isSuccess) "success" else "failed", details = detailsText)
-                                    } else log
-                                }
-
-                                history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
-                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'browser_click': $result"))))
-                            }
-                            "browser_read" -> {
-                                val readLog = AiActionLog(
-                                    title = "Browser Read Site Article",
-                                    status = "thinking",
-                                    details = "Reading current website article & page content...",
-                                    lineRange = "background-browser"
-                                )
-                                _aiActionLogs.value = _aiActionLogs.value + readLog
-                                _agentStatus.value = "Reading article & site content..."
-
-                                var readTitle = ""
-                                var readUrl = ""
-                                var readExcerpt = ""
-
-                                val result = when (val browserResult = backgroundBrowser.readPageContent()) {
-                                    is BrowserResult.Success -> {
-                                        readTitle = browserResult.title
-                                        readUrl = browserResult.url
-                                        readExcerpt = browserResult.content.take(200)
-                                        val dataText = "Current URL: ${browserResult.url}\nTitle: ${browserResult.title}\n\nContent:\n${browserResult.content}"
-                                        try {
-                                            val files = repository.getFilesForProject(project.name)
-                                            val currentMem = files.find { it.path == "browser_memory.md" }?.content ?: ""
-                                            val updatedMem = if (currentMem.isBlank()) {
-                                                "# Browser Memory\n\n## ${browserResult.title}\nURL: ${browserResult.url}\n\n${browserResult.content}"
-                                            } else {
-                                                "$currentMem\n\n---\n\n## ${browserResult.title}\nURL: ${browserResult.url}\n\n${browserResult.content}"
-                                            }
-                                            repository.saveFile(project.name, "browser_memory.md", updatedMem)
-                                        } catch (e: Exception) {
-                                            // Handle silently
-                                        }
-                                        dataText
-                                    }
-                                    is BrowserResult.Error -> {
-                                        "Error reading content: ${browserResult.message}"
-                                    }
-                                }
-
-                                _aiActionLogs.value = _aiActionLogs.value.map { log ->
-                                    if (log.id == readLog.id) {
-                                        val isSuccess = !result.startsWith("Error")
-                                        val logDetails = if (isSuccess) {
-                                            "Read Article: '$readTitle'\nURL: $readUrl\nExcerpt: $readExcerpt..."
-                                        } else result
-                                        log.copy(status = if (isSuccess) "success" else "failed", details = logDetails)
-                                    } else log
-                                }
-
-                                history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
-                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'browser_read': $result"))))
-                            }
-                            "create_todo_list" -> {
-                                val queryVal = args?.query ?: ""
-                                val todoLog = AiActionLog(
-                                    title = "Create TODO List",
-                                    status = "thinking",
-                                    details = "Initializing tasks: $queryVal",
-                                    lineRange = "todo-list"
-                                )
-                                _aiActionLogs.value = _aiActionLogs.value + todoLog
-                                _agentStatus.value = "Creating todo list..."
-
-                                val tasks = queryVal.split("|").map { it.trim() }.filter { it.isNotEmpty() }
-                                _todoList.value = tasks.map { TodoItem(task = it) }
-
-                                val result = if (tasks.isEmpty()) {
-                                    "Error: No tasks provided to create todo list."
-                                } else {
-                                    "Successfully created todo list with ${tasks.size} tasks:\n" + tasks.mapIndexed { idx, t -> "$idx. [ ] $t" }.joinToString("\n")
-                                }
-
-                                _aiActionLogs.value = _aiActionLogs.value.map { log ->
-                                    if (log.id == todoLog.id) {
-                                        val isSuccess = tasks.isNotEmpty()
-                                        log.copy(status = if (isSuccess) "success" else "failed", details = if (isSuccess) "Created todo list with ${tasks.size} items" else result)
-                                    } else log
-                                }
-
-                                history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
-                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'create_todo_list': $result"))))
-                            }
-                            "complete_todo_task" -> {
-                                val queryVal = args?.query ?: ""
-                                _agentStatus.value = "Completing todo task..."
-
-                                val index = queryVal.toIntOrNull()
-                                val currentTodos = _todoList.value
-                                val result = if (index != null && index >= 0 && index < currentTodos.size) {
-                                    val updated = currentTodos.toMutableList()
-                                    val task = updated[index]
-                                    updated[index] = task.copy(isCompleted = true)
-                                    _todoList.value = updated
-                                    "Successfully marked task '$task' as completed."
-                                } else {
-                                    "Error: Invalid task index '$queryVal'. Current todo list size is ${currentTodos.size}."
-                                }
-
-                                history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
-                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'complete_todo_task': $result"))))
-                            }
-                            "delete_file" -> {
-                                val filePath = normalizePath(args?.path ?: "")
-                                val deleteLog = AiActionLog(
-                                    title = "Deleted file",
-                                    status = "thinking",
-                                    details = "$filePath"
-                                )
-                                _aiActionLogs.value = _aiActionLogs.value + deleteLog
-
-                                val result = try {
-                                    repository.deleteFile(project.name, filePath)
-                                    "Successfully deleted file '$filePath'"
-                                } catch (e: Exception) {
-                                    "Error deleting file: ${e.localizedMessage}"
-                                }
-
-                                _aiActionLogs.value = _aiActionLogs.value.map { log ->
-                                    if (log.id == deleteLog.id) log.copy(status = "success", details = result) else log
-                                }
-
-                                history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
-                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'delete_file': $result"))))
-                            }
-                            "rename_file" -> {
-                                val oldPath = normalizePath(if (!args?.oldPath.isNullOrBlank()) args.oldPath else args?.path ?: "")
-                                val newPath = normalizePath(if (!args?.newPath.isNullOrBlank()) args.newPath else args?.destinationPath ?: "")
-                                val renameLog = AiActionLog(
-                                    title = "Renamed file",
-                                    status = "thinking",
-                                    details = "Renaming '$oldPath' to '$newPath'"
-                                )
-                                _aiActionLogs.value = _aiActionLogs.value + renameLog
-
-                                val result = try {
-                                    if (oldPath.isBlank() || newPath.isBlank()) {
-                                        "Error: both old path and new path are required for rename_file."
-                                    } else {
-                                        repository.renameFile(project.name, oldPath, newPath)
-                                        "Successfully renamed '$oldPath' to '$newPath'"
-                                    }
-                                } catch (e: Exception) {
-                                    "Error renaming file: ${e.localizedMessage}"
-                                }
-
-                                _aiActionLogs.value = _aiActionLogs.value.map { log ->
-                                    if (log.id == renameLog.id) log.copy(status = if (result.startsWith("Successfully")) "success" else "failed", details = result) else log
-                                }
-
-                                history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
-                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'rename_file': $result"))))
-                            }
-                            "move_file" -> {
-                                val oldPath = normalizePath(if (!args?.oldPath.isNullOrBlank()) args.oldPath else args?.path ?: "")
-                                val newPath = normalizePath(if (!args?.newPath.isNullOrBlank()) args.newPath else args?.destinationPath ?: "")
-                                val moveLog = AiActionLog(
-                                    title = "Moved file",
-                                    status = "thinking",
-                                    details = "Moving '$oldPath' to '$newPath'"
-                                )
-                                _aiActionLogs.value = _aiActionLogs.value + moveLog
-
-                                val result = try {
-                                    if (oldPath.isBlank() || newPath.isBlank()) {
-                                        "Error: both source path and destination path are required for move_file."
-                                    } else {
-                                        repository.moveFile(project.name, oldPath, newPath)
-                                        "Successfully moved '$oldPath' to '$newPath'"
-                                    }
-                                } catch (e: Exception) {
-                                    "Error moving file: ${e.localizedMessage}"
-                                }
-
-                                _aiActionLogs.value = _aiActionLogs.value.map { log ->
-                                    if (log.id == moveLog.id) log.copy(status = if (result.startsWith("Successfully")) "success" else "failed", details = result) else log
-                                }
-
-                                history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
-                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'move_file': $result"))))
+                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': $result"))))
                             }
                             "delete_code" -> {
                                 val filePath = normalizePath(args?.path ?: "")

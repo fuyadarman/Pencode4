@@ -67,6 +67,11 @@ fun WorkspaceScreen(
     agentStatus: String,
     currentTab: WorkspaceTab,
     aiActionLogs: List<AiActionLog>,
+    mcpServers: List<com.example.data.McpServer> = emptyList(),
+    onAddMcpServer: (String, String, String, String?) -> Unit = { _, _, _, _ -> },
+    onToggleMcpWorkspace: (String, Boolean) -> Unit = { _, _ -> },
+    onTestConnectMcp: suspend (String) -> Unit = {},
+    onDeleteMcpServer: (String) -> Unit = {},
     terminalOutput: String,
     gitProgress: String,
     customProvider: String,
@@ -201,6 +206,7 @@ fun WorkspaceScreen(
     var showCreateFileDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showAgentSkillsDialog by remember { mutableStateOf(false) }
+    var showMcpDialog by remember { mutableStateOf(false) }
     var showPushDialog by remember { mutableStateOf(false) }
     var showSearchDialog by remember { mutableStateOf(false) }
     var showRestoreDialog by remember { mutableStateOf(false) }
@@ -272,6 +278,13 @@ fun WorkspaceScreen(
                             imageVector = Icons.Default.Extension,
                             contentDescription = "Agent Skills",
                             tint = Color(0xFF00F2FE)
+                        )
+                    }
+                    IconButton(onClick = { showMcpDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Dns,
+                            contentDescription = "Remote MCP Servers",
+                            tint = Color(0xFFFF9800)
                         )
                     }
                     IconButton(onClick = { showSettingsDialog = true }) {
@@ -668,6 +681,19 @@ fun WorkspaceScreen(
             onUpdateSkillContent = onUpdateSkillContent,
             onFetchSkillFileContent = onFetchSkillFileContent,
             onDismiss = { showAgentSkillsDialog = false }
+        )
+    }
+
+    if (showMcpDialog) {
+        McpManagementDialog(
+            workspaceId = project.name,
+            workspaceName = project.name,
+            servers = mcpServers,
+            onAddServer = onAddMcpServer,
+            onToggleWorkspace = onToggleMcpWorkspace,
+            onTestConnect = onTestConnectMcp,
+            onDeleteServer = onDeleteMcpServer,
+            onDismiss = { showMcpDialog = false }
         )
     }
 
@@ -6497,6 +6523,38 @@ fun WorkspaceOperationsTimeline(
                                     color = Color(0xFFF3F4F6),
                                     fontWeight = FontWeight.SemiBold
                                 )
+
+                                if (log.title.contains("Appwrite", ignoreCase = true) ||
+                                    log.title.contains("Supabase", ignoreCase = true) ||
+                                    log.title.contains("Cloudflare", ignoreCase = true) ||
+                                    log.title.contains("Vercel", ignoreCase = true) ||
+                                    log.title.contains("Stitch", ignoreCase = true) ||
+                                    log.title.contains("MCP", ignoreCase = true)
+                                ) {
+                                    val platformName = when {
+                                        log.title.contains("Appwrite", ignoreCase = true) -> "Appwrite"
+                                        log.title.contains("Supabase", ignoreCase = true) -> "Supabase"
+                                        log.title.contains("Cloudflare", ignoreCase = true) -> "Cloudflare"
+                                        log.title.contains("Vercel", ignoreCase = true) -> "Vercel"
+                                        log.title.contains("Stitch", ignoreCase = true) -> "Google Stitch"
+                                        else -> "MCP"
+                                    }
+                                    val badgeColor = when (platformName) {
+                                        "Appwrite" -> Color(0xFFFD366E)
+                                        "Supabase" -> Color(0xFF3ECF8E)
+                                        "Cloudflare" -> Color(0xFFF38020)
+                                        "Vercel" -> Color(0xFFE0E0E0)
+                                        "Google Stitch" -> Color(0xFF4285F4)
+                                        else -> Color(0xFF7C4DFF)
+                                    }
+                                    androidx.compose.foundation.layout.Box(
+                                        modifier = Modifier
+                                            .background(badgeColor.copy(alpha = 0.2f), RoundedCornerShape(4.dp))
+                                            .padding(horizontal = 5.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(platformName, color = badgeColor, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
                                 
                                 if (isSuccess) {
                                     androidx.compose.foundation.layout.Box(

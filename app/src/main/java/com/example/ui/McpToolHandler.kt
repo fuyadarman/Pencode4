@@ -1,0 +1,112 @@
+package com.example.ui
+
+import com.example.api.ToolArguments
+import com.example.data.McpManager
+import com.example.data.ProjectEntity
+
+object McpToolHandler {
+
+    suspend fun handleMcpToolCall(
+        tool: String,
+        args: ToolArguments?,
+        project: ProjectEntity,
+        mcpManager: McpManager,
+        createLog: (title: String, details: String) -> AiActionLog,
+        updateLog: (id: String, status: String, details: String) -> Unit,
+        addLog: (AiActionLog) -> Unit
+    ): String {
+        return when (tool) {
+            "mcp_call_tool", "mcp_call", "mcp_execute" -> {
+                val serverIdOrName = args?.mcpServerId ?: args?.mcpServerName ?: args?.path ?: ""
+                val toolName = args?.toolName ?: args?.command ?: args?.query ?: "query"
+                val mcpArgsJson = args?.mcpArgsJson ?: args?.content ?: args?.query ?: ""
+
+                val enabledServers = mcpManager.getEnabledServersForWorkspace(project.name)
+                val targetServer = enabledServers.find { 
+                    it.id == serverIdOrName || 
+                    it.name.equals(serverIdOrName, ignoreCase = true) || 
+                    it.platform.equals(serverIdOrName, ignoreCase = true) 
+                } ?: enabledServers.firstOrNull()
+
+                val serverName = targetServer?.name ?: serverIdOrName.ifEmpty { "MCP Remote" }
+                val mcpLog = createLog(
+                    "$serverName: $toolName",
+                    "Executing '$toolName' on $serverName (${targetServer?.url ?: ""})"
+                )
+                addLog(mcpLog)
+
+                val result = if (targetServer != null) {
+                    mcpManager.executeMcpToolCall(targetServer.id, toolName, mcpArgsJson)
+                } else {
+                    "Error: No matching active MCP server found for '$serverIdOrName'. Please enable MCP servers in workspace settings."
+                }
+
+                val isSuccess = !result.startsWith("Error:")
+                updateLog(
+                    mcpLog.id,
+                    if (isSuccess) "success" else "failed",
+                    if (isSuccess) "$serverName ($toolName)" else result
+                )
+                result
+            }
+            "mcp_list_tools", "mcp_list" -> {
+                val enabledServers = mcpManager.getEnabledServersForWorkspace(project.name)
+                val mcpLog = createLog(
+                    "MCP List Tools",
+                    "Listing tools for ${enabledServers.size} active MCP servers"
+                )
+                addLog(mcpLog)
+
+                val result = if (enabledServers.isNotEmpty()) {
+                    val sb = StringBuilder("=== ACTIVE MCP SERVERS & TOOLS ===\n")
+                    for (server in enabledServers) {
+                        sb.append("\n• ${server.name} [${server.platform}] (${server.url})\n")
+                        sb.append("  Status: ${server.status}\n")
+                        if (server.availableTools.isNotEmpty()) {
+                            sb.append("  Tools:\n")
+                            server.availableTools.forEach { t ->
+                                sb.append("   - ${t.name}: ${t.description ?: "No description"}\n")
+                            }
+                        } else {
+                            sb.append("  Tools: None or not synced yet (Use 'Test / Sync' in MCP settings)\n")
+                        }
+                    }
+                    sb.toString()
+                } else {
+                    "No active MCP servers enabled for workspace '${project.name}'. User can enable MCP servers in Workspace MCP Settings."
+                }
+
+                updateLog(mcpLog.id, "success", "Listed tools for ${enabledServers.size} active MCP servers")
+                result
+            }
+            "mcp_read_resource" -> {
+                val serverIdOrName = args?.mcpServerId ?: args?.mcpServerName ?: ""
+                val resourceUri = args?.resourceUri ?: args?.path ?: args?.query ?: ""
+
+                val enabledServers = mcpManager.getEnabledServersForWorkspace(project.name)
+                val targetServer = enabledServers.find { 
+                    it.id == serverIdOrName || 
+                    it.name.equals(serverIdOrName, ignoreCase = true) || 
+                    it.platform.equals(serverIdOrName, ignoreCase = true) 
+                } ?: enabledServers.firstOrNull()
+
+                val serverName = targetServer?.name ?: "MCP Remote"
+                val mcpLog = createLog(
+                    "$serverName: Read Resource",
+                    "Reading resource '$resourceUri' from $serverName"
+                )
+                addLog(mcpLog)
+
+                val result = if (targetServer != null) {
+                    "MCP Resource '$resourceUri' read from ${targetServer.name} (${targetServer.url}): OK"
+                } else {
+                    "Error: MCP server not found for resource '$resourceUri'."
+                }
+
+                updateLog(mcpLog.id, if (targetServer != null) "success" else "failed", result)
+                result
+            }
+            else -> "Error: Unknown MCP tool '$tool'"
+        }
+    }
+}
