@@ -53,7 +53,7 @@ interface VibeDao {
 
 @Database(
     entities = [ProjectEntity::class, ProjectFileEntity::class, ChatMessageEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class VibeDatabase : RoomDatabase() {

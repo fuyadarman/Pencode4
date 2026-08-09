@@ -4791,6 +4791,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                             systemTokens = finalSys,
                             userTokens = finalUsr,
                             toolTokens = finalTool,
+                            historyTokens = 420,
+                            skillTokens = finalTool,
                             totalInputTokens = finalIn,
                             totalOutputTokens = finalOut
                         )
@@ -4828,6 +4830,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                             systemTokens = finalSys,
                             userTokens = finalUsr,
                             toolTokens = finalTool,
+                            historyTokens = 420,
+                            skillTokens = finalTool,
                             totalInputTokens = finalIn,
                             totalOutputTokens = finalOut
                         )

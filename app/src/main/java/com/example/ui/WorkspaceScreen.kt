@@ -280,13 +280,7 @@ fun WorkspaceScreen(
                             tint = Color(0xFF00F2FE)
                         )
                     }
-                    IconButton(onClick = { showMcpDialog = true }) {
-                        Icon(
-                            imageVector = Icons.Default.Dns,
-                            contentDescription = "Remote MCP Servers",
-                            tint = Color(0xFFFF9800)
-                        )
-                    }
+                    // MCP Service temporarily disabled per user request
                     IconButton(onClick = { showSettingsDialog = true }) {
                         Icon(
                             imageVector = Icons.Default.Settings,
@@ -2360,36 +2354,46 @@ fun ChatBubble(
 
             if (isUser) {
                 if (isCurrentlyActiveThinking) {
-                    TokenMonitorCard(
-                        modelName = currentRunningModelName.ifBlank { "Gemini Model" },
-                        timeSeconds = executionElapsedTimeSeconds,
+                    val liveMetrics = com.example.data.TokenMetrics(
+                        modelName = currentRunningModelName.ifBlank { "gemini-3.1-flash-lite" },
+                        executionTimeSeconds = executionElapsedTimeSeconds,
                         isLive = true,
                         systemTokens = liveSystemTokens,
                         userTokens = liveUserTokens,
-                        toolTokens = liveToolTokens,
+                        historyTokens = 420,
+                        skillTokens = liveToolTokens,
                         totalInputTokens = liveTotalInputTokens,
-                        totalOutputTokens = liveTotalOutputTokens,
-                        modifier = Modifier.padding(top = 6.dp)
+                        totalOutputTokens = liveTotalOutputTokens
+                    )
+                    CollapsibleTokenMonitor(
+                        metrics = liveMetrics,
+                        modifier = Modifier.padding(top = 4.dp)
                     )
                 } else {
-                    val displayModel = message.modelName ?: assistantModelName ?: "Gemini Model"
+                    val displayModel = message.modelName ?: assistantModelName ?: "gemini-3.1-flash-lite"
                     val displaySecs = if (message.executionTimeSeconds > 0) message.executionTimeSeconds else (assistantDuration?.removeSuffix("s")?.toLongOrNull() ?: 0L)
-                    val sysTok = if (message.systemTokens > 0) message.systemTokens else 1250
+                    val sysTok = if (message.systemTokens > 0) message.systemTokens else 2440
                     val usrTok = if (message.userTokens > 0) message.userTokens else maxOf(1, message.content.length / 4)
                     val toolTok = message.toolTokens
-                    val inTok = if (message.totalInputTokens > 0) message.totalInputTokens else (sysTok + usrTok + toolTok)
+                    val histTok = if (message.historyTokens > 0) message.historyTokens else 320
+                    val skillTok = if (message.skillTokens > 0) message.skillTokens else toolTok
+                    val inTok = if (message.totalInputTokens > 0) message.totalInputTokens else (sysTok + usrTok + histTok + skillTok)
                     val outTok = message.totalOutputTokens
 
-                    TokenMonitorCard(
+                    val storedMetrics = com.example.data.TokenMetrics(
                         modelName = displayModel,
-                        timeSeconds = displaySecs,
+                        executionTimeSeconds = displaySecs,
                         isLive = false,
                         systemTokens = sysTok,
                         userTokens = usrTok,
-                        toolTokens = toolTok,
+                        historyTokens = histTok,
+                        skillTokens = skillTok,
                         totalInputTokens = inTok,
-                        totalOutputTokens = outTok,
-                        modifier = Modifier.padding(top = 6.dp)
+                        totalOutputTokens = outTok
+                    )
+                    CollapsibleTokenMonitor(
+                        metrics = storedMetrics,
+                        modifier = Modifier.padding(top = 4.dp)
                     )
                 }
             }

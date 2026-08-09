@@ -38,6 +38,8 @@ data class ChatMessageEntity(
     val systemTokens: Int = 0,
     val userTokens: Int = 0,
     val toolTokens: Int = 0,
+    val historyTokens: Int = 0,
+    val skillTokens: Int = 0,
     val totalInputTokens: Int = 0,
     val totalOutputTokens: Int = 0
 )
