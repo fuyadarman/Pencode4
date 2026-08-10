@@ -7,11 +7,12 @@ import com.example.api.Part
 object ReadLoopSafetyManager {
 
     val SYSTEM_READ_WARNING = """
-        STRICT FILE READING RULES & ANTI-READ-LOOP DIRECTIVE:
-        - DO NOT repeatedly or redundantly call 'read_file', 'read_file_range', or 'multi_read_file' on the same file if you have already received its content in context!
-        - Inspect existing tool outputs in the conversation history before calling read tools. Re-reading the same file without making edits or taking new actions is STRICTLY FORBIDDEN.
-        - Once you have inspected a file, IMMEDIATELY proceed to 'edit_file', 'patch_file', 'create_file', or 'complete'. Do NOT re-read unnecessarily.
-        - If you get stuck in a read loop, the system will automatically complete the task and report short details.
+        STRICT FILE READING RULES & ANTI-READ-LOOP DIRECTIVES:
+        - MANDATORY READ BEFORE EDIT/WRITE: You MUST ALWAYS read and inspect an existing file FIRST using 'read_file', 'read_file_range', or 'multi_read_file' BEFORE calling 'edit_file', 'multi_edit_file', 'patch_file', or 'write_file'. Editing or modifying a file without inspecting/reading it first is STRICTLY FORBIDDEN!
+        - NO RE-READING AFTER EDIT, CREATE, OR OVERWRITE: After calling 'edit_file', 'multi_edit_file', 'patch_file', 'create_file', or 'write_file', DO NOT re-read or inspect the same file again immediately! Re-reading a file right after editing, creating, or overwriting it creates redundant read loops and is STRICTLY FORBIDDEN.
+        - NO REDUNDANT READ LOOPS: Always inspect existing tool outputs in the conversation history before calling read tools. DO NOT repeatedly call read tools on the same file if you already have its contents in context.
+        - Once you have inspected and edited a file, IMMEDIATELY proceed to 'complete' or your next constructive action.
+        - If stuck in a read loop, the system will automatically complete the task and report short details.
     """.trimIndent()
 
     fun isReadTool(toolName: String): Boolean {

@@ -3468,7 +3468,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                    - You MUST ALWAYS use 'edit_file', 'multi_edit_file', or 'patch_file' for surgical edits on existing files instead of overwriting whole files.
                    - Use 'multi_edit_file' when modifying MULTIPLE non-adjacent code blocks in the same file at once (e.g., lines 30-45, 80-90, 120-140). Pass 'path' (or 'targetFile') and 'chunks' (or 'replacementChunks') array: [{ "search": "...", "replace": "..." }, ...].
                    - 'create_file' is ONLY for NEW files that do not exist yet.
-                   - Do NOT re-read files repeatedly after applying edits just to verify changes.
+                   - MANDATORY READ BEFORE EDIT/WRITE: You MUST ALWAYS read and inspect an existing file FIRST using 'read_file', 'read_file_range', or 'multi_read_file' BEFORE calling 'edit_file', 'multi_edit_file', 'patch_file', or 'write_file'. Editing or modifying a file without inspecting/reading it first is STRICTLY FORBIDDEN!
+                   - NO RE-READING AFTER EDIT, CREATE, OR OVERWRITE: After calling 'edit_file', 'multi_edit_file', 'patch_file', 'create_file', or 'write_file', DO NOT re-read or inspect the same file again immediately! Re-reading a file right after editing, creating, or overwriting it creates redundant read loops and is STRICTLY FORBIDDEN.
 
                 3. TOOL EXECUTION BUDGET & TASK COMPLETION:
                    - Execution limit: $maxActionSteps steps for this task. Plan efficiently.
