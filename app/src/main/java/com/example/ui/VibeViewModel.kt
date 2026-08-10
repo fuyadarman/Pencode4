@@ -3740,7 +3740,19 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 
                                             if (k == 1) {
                                                 if (com.example.agent.ReadLoopSafetyManager.isReadTool(tool) && cycles >= 2) {
-                                                    val autoSummary = com.example.agent.ReadLoopSafetyManager.generateReadLoopAutoCompleteSummary(tool, args?.path ?: args?.targetFile)
+                                                    _agentStatus.value = "Generating AI task completion summary..."
+                                                    val autoSummary = com.example.agent.ReadLoopSafetyManager.generateAiCompletionSummary(
+                                                        userPrompt = userPrompt,
+                                                        activeApiKey = activeApiKey,
+                                                        systemInstruction = systemInstruction,
+                                                        history = history,
+                                                        provider = provider,
+                                                        modelId = modelId,
+                                                        baseUrl = baseUrl,
+                                                        useCustom = useCustom,
+                                                        lastTool = tool,
+                                                        path = args?.path ?: args?.targetFile
+                                                    )
                                                     val loopLog = createAiLog(
                                                         title = "AI finished task execution",
                                                         status = "success",
@@ -3807,7 +3819,19 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                             } else {
                                                 val isAllReadToolsInSeq = (0 until k).all { idx -> com.example.agent.ReadLoopSafetyManager.isReadTool(recentToolCallsHistory[size - k + idx].tool) }
                                                 if (isAllReadToolsInSeq && cycles >= 2) {
-                                                    val autoSummary = com.example.agent.ReadLoopSafetyManager.generateReadLoopAutoCompleteSummary(tool, args?.path ?: args?.targetFile)
+                                                    _agentStatus.value = "Generating AI task completion summary..."
+                                                    val autoSummary = com.example.agent.ReadLoopSafetyManager.generateAiCompletionSummary(
+                                                        userPrompt = userPrompt,
+                                                        activeApiKey = activeApiKey,
+                                                        systemInstruction = systemInstruction,
+                                                        history = history,
+                                                        provider = provider,
+                                                        modelId = modelId,
+                                                        baseUrl = baseUrl,
+                                                        useCustom = useCustom,
+                                                        lastTool = tool,
+                                                        path = args?.path ?: args?.targetFile
+                                                    )
                                                     val loopLog = createAiLog(
                                                         title = "AI finished task execution",
                                                         status = "success",
