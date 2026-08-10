@@ -96,52 +96,186 @@ class GitHubCommandWorkflowManager {
 
         val workflowFile = File(workflowDir, "command.yml")
         val activeCommand = customCommand ?: framework.defaultTestCommand
+        val sanitizedCmd = activeCommand.replace("'", "''")
 
-        val yamlContent = """
-            name: Command & Test Execution Workflow
+        val yamlContent = when (framework) {
+            FrameworkType.ANDROID_KOTLIN -> """
+name: Command Execution Workflow (Android)
 
-            on:
-              push:
-                branches: [ main, master, dev ]
-              workflow_dispatch:
-                inputs:
-                  custom_command:
-                    description: 'Custom command or test to execute'
-                    required: false
-                    default: '${activeCommand.replace("'", "''")}'
-                  framework_target:
-                    description: 'Detected framework'
-                    required: false
-                    default: '${framework.displayName}'
+on:
+  workflow_dispatch:
+    inputs:
+      custom_command:
+        description: 'Custom command or test to execute'
+        required: false
+        default: '$sanitizedCmd'
 
-            jobs:
-              execute-command:
-                runs-on: ubuntu-latest
-                steps:
-                  - name: Checkout Codebase
-                    uses: actions/checkout@v4
-                    with:
-                      fetch-depth: 0
+jobs:
+  execute-command:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Codebase
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-                  - name: Framework Environment Setup
-                    run: |
-                      echo "Detected Framework: ${framework.displayName}"
-                      echo "Executing Command: ${activeCommand.replace("'", "''")}"
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
 
-                  - name: Run Background Command & Tests
-                    run: |
-                      echo "=== Starting Terminal Command Output Log ==="
-                      ${activeCommand}
-                      echo "=== Terminal Command Executed Successfully ==="
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
 
-                  - name: Force Sync & Overwrite Push
-                    if: always()
-                    run: |
-                      git config --global user.name "github-actions[bot]"
-                      git config --global user.email "github-actions[bot]@users.noreply.github.com"
-                      git add -A
-                      git diff-index --quiet HEAD || (git commit -m "auto: sync codebase state & heavy task logs [ci skip]" && git push --force)
-        """.trimIndent()
+      - name: Make Gradle Wrapper Executable
+        run: |
+          if [ -f gradlew ]; then chmod +x gradlew; fi
+
+      - name: Run Command in Android Kotlin Environment
+        run: |
+          echo "=== Starting Terminal Command Execution ==="
+          $activeCommand
+          echo "=== Command Execution Finished Successfully ==="
+
+      - name: Sync & Commit Changes
+        if: always()
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff-index --quiet HEAD || (git commit -m "auto: sync terminal command outputs [ci skip]" && git push --force)
+""".trimIndent()
+
+            FrameworkType.REACT_VITE -> """
+name: Command Execution Workflow (React Vite)
+
+on:
+  workflow_dispatch:
+    inputs:
+      custom_command:
+        description: 'Custom command or test to execute'
+        required: false
+        default: '$sanitizedCmd'
+
+jobs:
+  execute-command:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Codebase
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Node Dependencies
+        run: |
+          if [ -f package-lock.json ]; then npm ci; elif [ -f package.json ]; then npm install; fi
+
+      - name: Run Command in React Vite Environment
+        run: |
+          echo "=== Starting Terminal Command Execution ==="
+          $activeCommand
+          echo "=== Command Execution Finished Successfully ==="
+
+      - name: Sync & Commit Changes
+        if: always()
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff-index --quiet HEAD || (git commit -m "auto: sync terminal command outputs [ci skip]" && git push --force)
+""".trimIndent()
+
+            FrameworkType.FLUTTER -> """
+name: Command Execution Workflow (Flutter)
+
+on:
+  workflow_dispatch:
+    inputs:
+      custom_command:
+        description: 'Custom command or test to execute'
+        required: false
+        default: '$sanitizedCmd'
+
+jobs:
+  execute-command:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Codebase
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Get Flutter Packages
+        run: |
+          if [ -f pubspec.yaml ]; then flutter pub get; fi
+
+      - name: Run Command in Flutter Environment
+        run: |
+          echo "=== Starting Terminal Command Execution ==="
+          $activeCommand
+          echo "=== Command Execution Finished Successfully ==="
+
+      - name: Sync & Commit Changes
+        if: always()
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff-index --quiet HEAD || (git commit -m "auto: sync terminal command outputs [ci skip]" && git push --force)
+""".trimIndent()
+
+            FrameworkType.GENERIC -> """
+name: Command Execution Workflow (Generic)
+
+on:
+  workflow_dispatch:
+    inputs:
+      custom_command:
+        description: 'Custom command or test to execute'
+        required: false
+        default: '$sanitizedCmd'
+
+jobs:
+  execute-command:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Codebase
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Command in Generic Environment
+        run: |
+          echo "=== Starting Terminal Command Execution ==="
+          $activeCommand
+          echo "=== Command Execution Finished Successfully ==="
+
+      - name: Sync & Commit Changes
+        if: always()
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff-index --quiet HEAD || (git commit -m "auto: sync terminal command outputs [ci skip]" && git push --force)
+""".trimIndent()
+        }
 
         workflowFile.writeText(yamlContent)
         return workflowFile

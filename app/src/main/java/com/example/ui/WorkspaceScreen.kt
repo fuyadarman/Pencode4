@@ -2807,23 +2807,33 @@ fun CodeTabContent(
     }
 
     if (showDeleteConfirmDialog != null) {
+        val isProtectedAndroidYml = showDeleteConfirmDialog?.lowercase()?.trim()?.let {
+            it == "android.yml" || it.endsWith("/android.yml") || it.endsWith("\\android.yml")
+        } ?: false
         AlertDialog(
             onDismissRequest = { showDeleteConfirmDialog = null },
-            title = { Text("Delete File") },
-            text = { Text("Are you sure you want to delete ${showDeleteConfirmDialog}?") },
+            title = { Text(if (isProtectedAndroidYml) "Protected File" else "Delete File") },
+            text = { 
+                Text(
+                    if (isProtectedAndroidYml) "The 'android.yml' file is protected and cannot be deleted."
+                    else "Are you sure you want to delete ${showDeleteConfirmDialog}?"
+                ) 
+            },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        onDeleteFile(showDeleteConfirmDialog!!)
-                        showDeleteConfirmDialog = null
+                if (!isProtectedAndroidYml) {
+                    TextButton(
+                        onClick = {
+                            onDeleteFile(showDeleteConfirmDialog!!)
+                            showDeleteConfirmDialog = null
+                        }
+                    ) {
+                        Text("Delete", color = Color(0xFFEE5253))
                     }
-                ) {
-                    Text("Delete", color = Color(0xFFEE5253))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirmDialog = null }) {
-                    Text("Cancel")
+                    Text(if (isProtectedAndroidYml) "OK" else "Cancel")
                 }
             }
         )
@@ -4704,24 +4714,35 @@ fun ExplorerPanel(
             )
         }
         if (fileToDeleteConfirm != null) {
+            val isProtectedYml = fileToDeleteConfirm?.lowercase()?.trim()?.let {
+                it == "android.yml" || it.endsWith("/android.yml") || it.endsWith("\\android.yml")
+            } ?: false
             AlertDialog(
                 onDismissRequest = { fileToDeleteConfirm = null },
-                title = { Text("Delete File", color = Color.White, fontWeight = FontWeight.Bold) },
-                text = { Text("Are you sure you want to delete '${fileToDeleteConfirm}'? This action cannot be undone.", color = Color(0xFF80809B)) },
+                title = { Text(if (isProtectedYml) "Protected File" else "Delete File", color = Color.White, fontWeight = FontWeight.Bold) },
+                text = { 
+                    Text(
+                        if (isProtectedYml) "The 'android.yml' file is protected and cannot be deleted."
+                        else "Are you sure you want to delete '${fileToDeleteConfirm}'? This action cannot be undone.", 
+                        color = Color(0xFF80809B)
+                    ) 
+                },
                 confirmButton = {
-                    Button(
-                        onClick = {
-                            onDeleteFile(fileToDeleteConfirm!!)
-                            fileToDeleteConfirm = null
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEE5253))
-                    ) {
-                        Text("Delete", color = Color.White, fontWeight = FontWeight.Bold)
+                    if (!isProtectedYml) {
+                        Button(
+                            onClick = {
+                                onDeleteFile(fileToDeleteConfirm!!)
+                                fileToDeleteConfirm = null
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEE5253))
+                        ) {
+                            Text("Delete", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { fileToDeleteConfirm = null }) {
-                        Text("Cancel", color = Color.Gray)
+                        Text(if (isProtectedYml) "OK" else "Cancel", color = Color.Gray)
                     }
                 },
                 containerColor = Color(0xFF12131A),
@@ -4760,46 +4781,57 @@ fun FileNodeItem(
     onDelete: (String) -> Unit,
     onDecompileApk: (String) -> Unit = {}
 ) {
+    var showMenu by remember { mutableStateOf(false) }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(32.dp)
             .background(if (isActive) Color(0xFF1E2130) else Color.Transparent)
-            .clickable {
-                if (node.isFile) {
-                    node.fileEntity?.let { onSelectFile(it) }
-                } else {
-                    onToggleFolder(node.path)
-                }
-            }
             .padding(start = (node.level * 12 + 8).dp, end = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        if (!node.isFile) {
-            Icon(
-                imageVector = if (node.isExpanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowRight,
-                contentDescription = null,
-                tint = Color(0xFF8B949E),
-                modifier = Modifier.size(14.dp)
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .clickable {
+                    if (node.isFile) {
+                        node.fileEntity?.let { onSelectFile(it) }
+                    } else {
+                        onToggleFolder(node.path)
+                    }
+                },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (!node.isFile) {
+                Icon(
+                    imageVector = if (node.isExpanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = Color(0xFF8B949E),
+                    modifier = Modifier.size(14.dp)
+                )
+            } else {
+                Spacer(modifier = Modifier.size(14.dp))
+            }
+
+            FileIcon(name = node.name, isFile = node.isFile, isExpanded = node.isExpanded)
+
+            Text(
+                text = node.name,
+                color = if (isActive) Color.White else Color(0xFFE6EDF3),
+                fontSize = 13.sp,
+                maxLines = 1,
+                fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+                modifier = Modifier.weight(1f)
             )
-        } else {
-            Spacer(modifier = Modifier.size(14.dp))
         }
 
-        FileIcon(name = node.name, isFile = node.isFile, isExpanded = node.isExpanded)
-
-        Text(
-            text = node.name,
-            color = if (isActive) Color.White else Color(0xFFE6EDF3),
-            fontSize = 13.sp,
-            maxLines = 1,
-            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-            modifier = Modifier.weight(1f)
-        )
-
-        var showMenu by remember { mutableStateOf(false) }
-        Box {
+        Box(
+            modifier = Modifier.fillMaxHeight(),
+            contentAlignment = Alignment.Center
+        ) {
             IconButton(
                 onClick = { showMenu = true },
                 modifier = Modifier.size(24.dp)

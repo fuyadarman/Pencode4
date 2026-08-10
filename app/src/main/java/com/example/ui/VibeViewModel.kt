@@ -1263,16 +1263,19 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                                         }
                                     }
                                     
-                                    parsedWorkflows.add(
-                                        GitHubWorkflow(
-                                            id = wfId,
-                                            name = wfName,
-                                            path = wfPath,
-                                            state = wfState,
-                                            latestRunStatus = runStatus,
-                                            latestRunConclusion = runConclusion
+                                    val isCommandWf = wfPath.lowercase().endsWith("command.yml") || wfName.contains("Command", ignoreCase = true)
+                                    if (!isCommandWf) {
+                                        parsedWorkflows.add(
+                                            GitHubWorkflow(
+                                                id = wfId,
+                                                name = wfName,
+                                                path = wfPath,
+                                                state = wfState,
+                                                latestRunStatus = runStatus,
+                                                latestRunConclusion = runConclusion
+                                            )
                                         )
-                                    )
+                                    }
                                 }
                                 
                                 val currentList = _gitHubWorkflows.value
@@ -2900,9 +2903,18 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 
     fun deleteCurrentFile(path: String) {
         val project = _currentProject.value ?: return
+        val lowerPath = path.lowercase().trim()
+        if (lowerPath == "android.yml" || lowerPath.endsWith("/android.yml") || lowerPath.endsWith("\\android.yml")) {
+            _terminalOutput.value += "[PROTECTED FILE] The 'android.yml' file is protected and cannot be deleted.\n\n$"
+            return
+        }
         viewModelScope.launch {
-            repository.deleteFile(project.name, path)
-            loadProjectDetails(project.name)
+            try {
+                repository.deleteFile(project.name, path)
+                loadProjectDetails(project.name)
+            } catch (e: Exception) {
+                _terminalOutput.value += "[DELETE ERROR] ${e.localizedMessage ?: "Failed to delete file"}\n\n$"
+            }
         }
     }
 
@@ -2949,54 +2961,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                     _terminalOutput.value += "\n${credCheck.promptMessage}\n\n$"
                     return@launch
                 }
-
-                _terminalOutput.value += "[Detected Heavy Command] Routing to GitHub Action command.yml...\n"
-                _terminalOutput.value += "[1/3] Updating .github/workflows/command.yml with custom command...\n"
-
-                try {
-                    gitHubCommandWorkflowManager.updateCommandWorkflow(projectDir, command)
-                    repository.saveFile(
-                        project.name,
-                        ".github/workflows/command.yml",
-                        java.io.File(projectDir, ".github/workflows/command.yml").readText()
-                    )
-                } catch (e: Exception) {
-                    Log.e("VibeViewModel", "Error creating workflow file: ${e.message}")
-                }
-
-                _terminalOutput.value += "[2/3] Force pushing codebase & file explorer state to GitHub repository...\n"
-                var pushSuccess = false
-                var pushErrorMsg = ""
-
-                val latch = kotlinx.coroutines.CompletableDeferred<Boolean>()
-                pushGitRepo(project.name, repo, token, branch, force = true) { res ->
-                    if (res.isSuccess) {
-                        pushSuccess = true
-                        latch.complete(true)
-                    } else {
-                        pushErrorMsg = res.exceptionOrNull()?.localizedMessage ?: "Git push failed"
-                        latch.complete(false)
-                    }
-                }
-                latch.await()
-
-                if (!pushSuccess) {
-                    _terminalOutput.value += "[PUSH ERROR] $pushErrorMsg\n\n$"
-                    return@launch
-                }
-
-                _terminalOutput.value += "[3/3] Triggering command.yml workflow on GitHub Actions...\n"
-                triggerAllWorkflows()
-
-                val framework = gitHubCommandWorkflowManager.detectFramework(projectDir)
-                val formattedLog = gitHubCommandWorkflowManager.formatCommandExecutionLog(
-                    command = command,
-                    framework = framework,
-                    isSuccess = true,
-                    output = "Command queued and executing on GitHub Actions runner.\nCodebase & all files forcefully pushed and synchronized."
-                )
-
-                _terminalOutput.value += "\n$formattedLog\n\n$"
+                executeAndTrackCommandWorkflow(projectDir, command, repo, token, branch)
             } else {
                 val result = repository.executeCommand(project.name, command)
                 if (result.contains("inaccessible or not found") || result.contains("not found")) {
@@ -3006,39 +2971,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                         _terminalOutput.value += "\n${credCheck.promptMessage}\n\n$"
                         return@launch
                     }
-                    try {
-                        gitHubCommandWorkflowManager.updateCommandWorkflow(projectDir, command)
-                        val wfFile = java.io.File(projectDir, ".github/workflows/command.yml")
-                        if (wfFile.exists()) {
-                            repository.saveFile(
-                                project.name,
-                                ".github/workflows/command.yml",
-                                wfFile.readText()
-                            )
-                        }
-                    } catch (e: Exception) {
-                        Log.e("VibeViewModel", "Error updating workflow: ${e.message}")
-                    }
-
-                    _terminalOutput.value += "Force pushing codebase & dispatching command.yml workflow...\n"
-                    val fallbackLatch = kotlinx.coroutines.CompletableDeferred<Boolean>()
-                    pushGitRepo(project.name, repo, token, branch, force = true) { res ->
-                        fallbackLatch.complete(res.isSuccess)
-                    }
-                    val pushed = fallbackLatch.await()
-                    if (pushed) {
-                        triggerAllWorkflows()
-                        val framework = gitHubCommandWorkflowManager.detectFramework(projectDir)
-                        val formattedLog = gitHubCommandWorkflowManager.formatCommandExecutionLog(
-                            command = command,
-                            framework = framework,
-                            isSuccess = true,
-                            output = "Fallback execution started on GitHub Actions runner.\nCodebase & all files forcefully pushed and synchronized."
-                        )
-                        _terminalOutput.value += "\n$formattedLog\n\n$"
-                    } else {
-                        _terminalOutput.value += "[PUSH ERROR] Failed to push codebase to GitHub. Check repository URL and GHP Token.\n\n$"
-                    }
+                    executeAndTrackCommandWorkflow(projectDir, command, repo, token, branch)
                 } else {
                     val resultStr = if (result.isEmpty()) "(no output)" else result
                     _terminalOutput.value += "$resultStr\n\n$"
@@ -3046,6 +2979,195 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             }
             loadProjectDetails(project.name)
         }
+    }
+
+    private suspend fun executeAndTrackCommandWorkflow(
+        projectDir: java.io.File,
+        command: String,
+        repo: String,
+        token: String,
+        branch: String
+    ) {
+        val framework = gitHubCommandWorkflowManager.detectFramework(projectDir)
+        val parts = repo.split("/")
+        if (parts.size != 2) {
+            _terminalOutput.value += "[ERROR] Invalid repository format '$repo'. Must be 'owner/repo'.\n\n$"
+            return
+        }
+        val owner = parts[0].trim()
+        val repoName = parts[1].trim()
+
+        _terminalOutput.value += "[Detected Command] Framework: ${framework.displayName}\n"
+        _terminalOutput.value += "[1/3] Updating .github/workflows/command.yml...\n"
+        try {
+            gitHubCommandWorkflowManager.updateCommandWorkflow(projectDir, command)
+            val wfFile = java.io.File(projectDir, ".github/workflows/command.yml")
+            if (wfFile.exists()) {
+                repository.saveFile(
+                    _currentProject.value?.name ?: "",
+                    ".github/workflows/command.yml",
+                    wfFile.readText()
+                )
+            }
+        } catch (e: Exception) {
+            Log.e("VibeViewModel", "Error creating workflow file: ${e.message}")
+        }
+
+        _terminalOutput.value += "[2/3] Force pushing codebase to GitHub repository...\n"
+        var pushSuccess = false
+        var pushErrorMsg = ""
+
+        val latch = kotlinx.coroutines.CompletableDeferred<Boolean>()
+        pushGitRepo(_currentProject.value?.name ?: "", repo, token, branch, force = true) { res ->
+            if (res.isSuccess) {
+                pushSuccess = true
+                latch.complete(true)
+            } else {
+                pushErrorMsg = res.exceptionOrNull()?.localizedMessage ?: "Git push failed"
+                latch.complete(false)
+            }
+        }
+        latch.await()
+
+        if (!pushSuccess) {
+            _terminalOutput.value += "[PUSH ERROR] $pushErrorMsg\n\n$"
+            return
+        }
+
+        _terminalOutput.value += "[3/3] Triggering command.yml workflow on GitHub Actions...\n"
+
+        val client = OkHttpClient()
+        val mediaType = "application/json; charset=utf-8".toMediaTypeOrNull()
+        val dispatchUrl = "https://api.github.com/repos/$owner/$repoName/actions/workflows/command.yml/dispatches"
+        val dispatchBody = okhttp3.RequestBody.create(mediaType, "{\"ref\":\"$branch\"}")
+        val dispatchReq = Request.Builder()
+            .url(dispatchUrl)
+            .header("Authorization", "token $token")
+            .header("Accept", "application/vnd.github.v3+json")
+            .post(dispatchBody)
+            .build()
+
+        var dispatched = false
+        try {
+            val resp = client.newCall(dispatchReq).execute()
+            if (resp.isSuccessful || resp.code == 204) {
+                dispatched = true
+            }
+        } catch (e: Exception) {
+            Log.e("VibeViewModel", "Dispatch error: ${e.message}")
+        }
+
+        if (!dispatched) {
+            triggerAllWorkflows()
+        }
+
+        _terminalOutput.value += "\ncommand running....\n"
+
+        val startTime = System.currentTimeMillis()
+        val timeoutMs = 180_000L
+        var runCompleted = false
+        var finalOutput = ""
+        var isSuccess = false
+
+        delay(3000)
+
+        while (System.currentTimeMillis() - startTime < timeoutMs && !runCompleted) {
+            try {
+                val runsUrl = "https://api.github.com/repos/$owner/$repoName/actions/runs?per_page=5"
+                val runsReq = Request.Builder()
+                    .url(runsUrl)
+                    .header("Authorization", "token $token")
+                    .header("Accept", "application/vnd.github.v3+json")
+                    .build()
+
+                val runsResp = client.newCall(runsReq).execute()
+                if (runsResp.isSuccessful) {
+                    val bodyStr = runsResp.body?.string() ?: ""
+                    val rootObj = JSONObject(bodyStr)
+                    val workflowRuns = rootObj.optJSONArray("workflow_runs")
+
+                    var targetRun: JSONObject? = null
+                    if (workflowRuns != null) {
+                        for (i in 0 until workflowRuns.length()) {
+                            val run = workflowRuns.optJSONObject(i) ?: continue
+                            val path = run.optString("path", "")
+                            if (path.endsWith("command.yml")) {
+                                targetRun = run
+                                break
+                            }
+                        }
+                    }
+
+                    if (targetRun != null) {
+                        val status = targetRun.optString("status", "queued")
+                        val conclusion = targetRun.optString("conclusion", "")
+                        val runId = targetRun.optLong("id", -1L)
+
+                        if (status == "completed") {
+                            runCompleted = true
+                            isSuccess = conclusion == "success"
+
+                            if (runId != -1L) {
+                                val jobsUrl = "https://api.github.com/repos/$owner/$repoName/actions/runs/$runId/jobs"
+                                val jobsReq = Request.Builder()
+                                    .url(jobsUrl)
+                                    .header("Authorization", "token $token")
+                                    .header("Accept", "application/vnd.github.v3+json")
+                                    .build()
+                                val jobsResp = client.newCall(jobsReq).execute()
+                                if (jobsResp.isSuccessful) {
+                                    val jobsBody = jobsResp.body?.string() ?: ""
+                                    val jobsObj = JSONObject(jobsBody)
+                                    val jobsList = jobsObj.optJSONArray("jobs")
+                                    val firstJob = jobsList?.optJSONObject(0)
+                                    val jobId = firstJob?.optLong("id", -1L) ?: -1L
+
+                                    if (jobId != -1L) {
+                                        val logsUrl = "https://api.github.com/repos/$owner/$repoName/actions/jobs/$jobId/logs"
+                                        val logsReq = Request.Builder()
+                                            .url(logsUrl)
+                                            .header("Authorization", "token $token")
+                                            .header("Accept", "application/vnd.github.v3+json")
+                                            .build()
+                                        val logsResp = client.newCall(logsReq).execute()
+                                        if (logsResp.isSuccessful) {
+                                            val rawLogs = logsResp.body?.string() ?: ""
+                                            finalOutput = rawLogs.replace(Regex("\u001B\\[[;\\d]*m"), "")
+                                        }
+                                    }
+                                }
+                            }
+                            if (finalOutput.isBlank()) {
+                                finalOutput = "Execution finished with status: $conclusion"
+                            }
+                        } else {
+                            _terminalOutput.value += "command running....\n"
+                        }
+                    } else {
+                        _terminalOutput.value += "command running....\n"
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("VibeViewModel", "Error polling command run: ${e.message}")
+            }
+
+            if (!runCompleted) {
+                delay(4000)
+            }
+        }
+
+        if (!runCompleted) {
+            finalOutput = "Command execution timed out after 3 minutes. Check GitHub Actions for details."
+        }
+
+        val formattedLog = gitHubCommandWorkflowManager.formatCommandExecutionLog(
+            command = command,
+            framework = framework,
+            isSuccess = isSuccess,
+            output = finalOutput
+        )
+
+        _terminalOutput.value += "\n$formattedLog\n\n$"
     }
 
     private fun isSameWork(a: com.example.api.ToolCallItem, b: com.example.api.ToolCallItem): Boolean {
@@ -3364,6 +3486,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 7. LANGUAGE & RESPONSE STYLE:
                    - ALWAYS respond in the EXACT SAME language, script, dialect, and tone/style as the user's prompt (e.g., if the user prompts in Bangla, Banglish, English, Hindi, etc., respond in that exact same language and communication style).
 
+                8. NEW FEATURE, DATABASE SCHEMA & COMPLETION SUMMARY MANDATES:
+                   - NEW FEATURE / FUNCTION / SYSTEM SEPARATION: Whenever the user asks to add any new feature, function, or system, you MUST use 'create_file' to create new, dedicated file(s) for that feature, function, or system and write the code in those new files.
+                   - DATABASE SCHEMAS & QUERIES IN SEPARATE FILES: Whenever creating or defining database schemas, entities, DAOs, or queries, always create dedicated separate files (using 'create_file') and place the database schema and query definitions inside those files.
+                   - COMPLETION SUMMARY WITH QUERIES & SCHEMAS: Whenever database schemas or queries are created, updated, or modified in any files, upon completing the task (when calling 'complete' or providing the completion message/details), you MUST explicitly include and list the updated/created database schemas and queries in the completion summary details.
+
                 === AVAILABLE TOOLS ===
                 - 'read_file': Read file content (path).
                 - 'read_file_range': Read specific line range (path, startLine, endLine OR lineRange e.g. "10-50").
@@ -3416,7 +3543,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 AI THINKING & RESPONSE RULES:
                 - MANDATORY 'ai_think': When receiving any prompt, before starting operations, or before debugging/error fixing/problem solving, you MUST invoke 'ai_think' first to analyze the prompt, plan architecture, discuss problem, and define solution steps.
                 - Call 'ai_response' after operation steps to document reasoning if needed.
-                - When calling 'complete', provide a concise, structured Markdown summary of all completed actions in the 'message' parameter.
+                - When calling 'complete', provide a concise, structured Markdown summary of all completed actions in the 'message' parameter. If any database schemas or queries were created, updated, or modified, you MUST explicitly list and include those updated database queries and schemas in the summary message.
             """.trimIndent()
 
             val useCustom = _useCustomModel.value

@@ -281,6 +281,10 @@ class VibeRepository(private val dao: VibeDao, private val context: Context) {
     }
 
     suspend fun deleteFile(projectName: String, path: String) = withContext(Dispatchers.IO) {
+        val lowerPath = path.lowercase().trim()
+        if (lowerPath == "android.yml" || lowerPath.endsWith("/android.yml") || lowerPath.endsWith("\\android.yml")) {
+            throw IllegalArgumentException("The 'android.yml' workflow file is protected and cannot be deleted.")
+        }
         dao.deleteFile(projectName, path)
         
         // Delete from physical storage
