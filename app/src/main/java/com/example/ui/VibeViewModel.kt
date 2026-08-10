@@ -3268,13 +3268,19 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             // 1. Save user prompt to Chat Database
             var userMsg: ChatMessageEntity? = null
             if (!isRegenerate) {
-                userMsg = ChatMessageEntity(
+                val activeConfig = _customModels.value.find { it.id == _selectedModelId.value }
+                val activeModel = _currentRunningModelName.value.ifBlank {
+                    activeConfig?.let { if (it.modelId.isNotBlank()) it.modelId else it.alias } ?: ""
+                }
+                val initialUserMsg = ChatMessageEntity(
                     projectName = project.name,
                     role = "user",
                     content = finalPrompt,
-                    timestamp = System.currentTimeMillis()
+                    timestamp = System.currentTimeMillis(),
+                    modelName = activeModel
                 )
-                repository.insertChatMessage(userMsg!!)
+                val insertedId = repository.insertChatMessage(initialUserMsg)
+                userMsg = initialUserMsg.copy(id = insertedId.toInt())
             }
             _chatMessages.value = repository.getChatsForProject(project.name)
 

@@ -42,7 +42,7 @@ interface VibeDao {
     suspend fun getChatsForProject(projectName: String): List<ChatMessageEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertChatMessage(message: ChatMessageEntity)
+    suspend fun insertChatMessage(message: ChatMessageEntity): Long
 
     @Delete
     suspend fun deleteChatMessage(message: ChatMessageEntity)

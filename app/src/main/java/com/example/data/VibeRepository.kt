@@ -858,10 +858,29 @@ class VibeRepository(private val dao: VibeDao, private val context: Context) {
     }
 
     suspend fun getChatsForProject(projectName: String): List<ChatMessageEntity> = withContext(Dispatchers.IO) {
-        dao.getChatsForProject(projectName)
+        val chats = dao.getChatsForProject(projectName)
+        val cleaned = mutableListOf<ChatMessageEntity>()
+        var i = 0
+        while (i < chats.size) {
+            val curr = chats[i]
+            if (curr.role == "user" && i + 1 < chats.size) {
+                val next = chats[i + 1]
+                if (next.role == "user" && next.content == curr.content && Math.abs(next.timestamp - curr.timestamp) < 300000) {
+                    val stale = if (curr.modelName.isNullOrEmpty() && !next.modelName.isNullOrEmpty()) curr else next
+                    val keep = if (stale == curr) next else curr
+                    try { dao.deleteChatMessage(stale) } catch (_: Exception) {}
+                    cleaned.add(keep)
+                    i += 2
+                    continue
+                }
+            }
+            cleaned.add(curr)
+            i++
+        }
+        cleaned
     }
 
-    suspend fun insertChatMessage(message: ChatMessageEntity) = withContext(Dispatchers.IO) {
+    suspend fun insertChatMessage(message: ChatMessageEntity): Long = withContext(Dispatchers.IO) {
         dao.insertChatMessage(message)
     }
 
