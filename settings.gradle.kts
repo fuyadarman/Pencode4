@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "Pen Code AI"
+rootProject.name = "pencode"
 
 include(":app")

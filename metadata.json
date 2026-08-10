@@ -1,5 +1,5 @@
 {
-  "name": "Pen Code AI",
+  "name": "pencode",
   "description": "An interactive AI coding workspace like Cursor, where your agent reads, creates, edits, and patches files instantly with direct local controls.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
