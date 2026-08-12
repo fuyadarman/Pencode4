@@ -40,6 +40,7 @@ jobs:
           echo "Generating Pencode release keystore..."
           keytool -genkey -v -keystore my-upload-key.jks -storepass fuyadheart6524 -alias upload -keypass fuyadheart6524 -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Mustasim Fuyad, OU=Pencode, O=pencode, L=Dinajpur, ST=rangpur, C=BD"
         fi
+        cp my-upload-key.jks app/my-upload-key.jks 2>/dev/null || true
 
     - name: Create Placeholder Google Services JSON if missing
       run: |
@@ -61,7 +62,7 @@ jobs:
       env:
         STORE_PASSWORD: fuyadheart6524
         KEY_PASSWORD: fuyadheart6524
-        KEYSTORE_PATH: my-upload-key.jks
+        KEYSTORE_PATH: ${{ github.workspace }}/my-upload-key.jks
       run: ./gradlew assembleRelease assembleDebug --no-daemon
 
     - name: Upload Signed Release APK Artifact
