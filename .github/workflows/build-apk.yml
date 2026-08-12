@@ -23,7 +23,7 @@ jobs:
         java-version: '17'
         cache: 'gradle'
 
-    - name: Restore or Generate Debug Keystore
+    - name: Restore or Generate Debug & Release Keystores
       run: |
         if [ -f debug.keystore.base64 ] && [ -s debug.keystore.base64 ]; then
           echo "Restoring debug.keystore from debug.keystore.base64..."
@@ -31,6 +31,14 @@ jobs:
         else
           echo "No debug.keystore.base64 found. Generating a default debug keystore..."
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+        fi
+
+        if [ -f my-upload-key.jks.base64 ] && [ -s my-upload-key.jks.base64 ]; then
+          echo "Restoring my-upload-key.jks from my-upload-key.jks.base64..."
+          base64 -d my-upload-key.jks.base64 > my-upload-key.jks
+        else
+          echo "Generating Pencode release keystore..."
+          keytool -genkey -v -keystore my-upload-key.jks -storepass fuyadheart6524 -alias upload -keypass fuyadheart6524 -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Mustasim Fuyad, OU=Pencode, O=pencode, L=Dinajpur, ST=rangpur, C=BD"
         fi
 
     - name: Create Placeholder Google Services JSON if missing
@@ -49,13 +57,25 @@ jobs:
     - name: Grant Execute Permission to Gradle
       run: chmod +x gradlew
 
-    - name: Build Debug APK
-      run: ./gradlew assembleDebug --no-daemon
+    - name: Build Signed Release APK & Debug APK
+      env:
+        STORE_PASSWORD: fuyadheart6524
+        KEY_PASSWORD: fuyadheart6524
+        KEYSTORE_PATH: my-upload-key.jks
+      run: ./gradlew assembleRelease assembleDebug --no-daemon
+
+    - name: Upload Signed Release APK Artifact
+      uses: actions/upload-artifact@v4
+      continue-on-error: true
+      with:
+        name: pencode-release-apk
+        path: app/build/outputs/apk/release/app-release.apk
+        retention-days: 7
 
     - name: Upload Debug APK Artifact
       uses: actions/upload-artifact@v4
       continue-on-error: true
       with:
-        name: pen-code-ai-debug-apk
+        name: pencode-debug-apk
         path: app/build/outputs/apk/debug/app-debug.apk
-        retention-days: 1
+        retention-days: 7
