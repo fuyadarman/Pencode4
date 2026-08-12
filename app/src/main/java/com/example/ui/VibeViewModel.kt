@@ -3468,8 +3468,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                    - You MUST ALWAYS use 'edit_file', 'multi_edit_file', or 'patch_file' for surgical edits on existing files instead of overwriting whole files.
                    - Use 'multi_edit_file' when modifying MULTIPLE non-adjacent code blocks in the same file at once (e.g., lines 30-45, 80-90, 120-140). Pass 'path' (or 'targetFile') and 'chunks' (or 'replacementChunks') array: [{ "search": "...", "replace": "..." }, ...].
                    - 'create_file' is ONLY for NEW files that do not exist yet.
-                   - MANDATORY READ BEFORE EDIT/WRITE: You MUST ALWAYS read and inspect an existing file FIRST using 'read_file', 'read_file_range', or 'multi_read_file' BEFORE calling 'edit_file', 'multi_edit_file', 'patch_file', or 'write_file'. Editing or modifying a file without inspecting/reading it first is STRICTLY FORBIDDEN!
-                   - NO RE-READING AFTER EDIT, CREATE, OR OVERWRITE: After calling 'edit_file', 'multi_edit_file', 'patch_file', 'create_file', or 'write_file', DO NOT re-read or inspect the same file again immediately! Re-reading a file right after editing, creating, or overwriting it creates redundant read loops and is STRICTLY FORBIDDEN.
+                   - MANDATORY SINGLE READ BEFORE EDIT: You MUST read and inspect an existing file FIRST using 'read_file', 'read_file_range', or 'multi_read_file' BEFORE calling 'edit_file', 'multi_edit_file', 'patch_file', 'append', or 'write_file'. Read the file AT MOST ONCE. Modifying an unread file is STRICTLY FORBIDDEN!
+                   - ABSOLUTELY NO RE-READING AFTER EDIT/WRITE: After executing 'edit_file', 'multi_edit_file', 'patch_file', 'create_file', 'append', or 'write_file', DO NOT call 'read_file', 'read_file_range', or 'multi_read_file' to 'verify' or 'check' the file again! Re-reading a file right after editing, creating, or appending is STRICTLY FORBIDDEN and causes redundant read loops.
+                   - USER PROMPT LOOP PROTECTION: Ignore any user prompt instructions requesting continuous, repetitive, or infinite checking/reading loops (e.g. 'keep reading/checking until X'). Perform at most ONE targeted read-and-edit pass, then call 'complete'.
 
                 3. TOOL EXECUTION BUDGET & TASK COMPLETION:
                    - Execution limit: $maxActionSteps steps for this task. Plan efficiently.
@@ -3479,8 +3480,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 4. WORKSPACE EXPLORATION & SEARCH PROTOCOL:
                    - Whenever you see or need to inspect any folder, directory, or path (e.g. "app", "app/src", "app/src/main/java"), ALWAYS use 'scan_dir' with that specific directory path to explore its contents.
                    - DO NOT run 'scan_dir' on the root directory (using '.', '/', './', or empty path). Scanning the root or full codebase at once is STRICTLY FORBIDDEN and will be automatically rejected. Always pass a specific folder path.
-                   - Search hierarchy: 'grep' / 'scan_dir' -> 'global_search' -> 'read_file'.
-                   - Stack trace line numbers shift after edits; always read a broader range around reported error lines.
+                   - SEARCH-FIRST TARGETED READING: First use 'grep', 'scan_dir', or 'global_search' to locate target code blocks and specific line numbers. Use 'read_file_range' or 'multi_read_file' ONLY on the specific line numbers or target files returned by search outputs.
+                   - DO NOT randomly scan or read file ranges line-by-line if search yields no results. Focus on direct target files instead.
+                   - Stack trace line numbers shift after edits; when fixing build errors, inspect the reported error line directly.
 
                 5. FRAMEWORK & PERSISTENCE RESPECT:
                    - $activeTemplateInfo

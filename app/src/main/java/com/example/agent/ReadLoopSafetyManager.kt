@@ -7,12 +7,12 @@ import com.example.api.Part
 object ReadLoopSafetyManager {
 
     val SYSTEM_READ_WARNING = """
-        STRICT FILE READING RULES & ANTI-READ-LOOP DIRECTIVES:
-        - MANDATORY READ BEFORE EDIT/WRITE: You MUST ALWAYS read and inspect an existing file FIRST using 'read_file', 'read_file_range', or 'multi_read_file' BEFORE calling 'edit_file', 'multi_edit_file', 'patch_file', or 'write_file'. Editing or modifying a file without inspecting/reading it first is STRICTLY FORBIDDEN!
-        - NO RE-READING AFTER EDIT, CREATE, OR OVERWRITE: After calling 'edit_file', 'multi_edit_file', 'patch_file', 'create_file', or 'write_file', DO NOT re-read or inspect the same file again immediately! Re-reading a file right after editing, creating, or overwriting it creates redundant read loops and is STRICTLY FORBIDDEN.
-        - NO REDUNDANT READ LOOPS: Always inspect existing tool outputs in the conversation history before calling read tools. DO NOT repeatedly call read tools on the same file if you already have its contents in context.
-        - Once you have inspected and edited a file, IMMEDIATELY proceed to 'complete' or your next constructive action.
-        - If stuck in a read loop, the system will automatically complete the task and report short details.
+        STRICT FILE READING & ANTI-READ-LOOP DIRECTIVES (APPLIES TO ALL MODELS):
+        1. MANDATORY SINGLE READ BEFORE EDIT: You MUST read and inspect an existing file FIRST using 'read_file', 'read_file_range', or 'multi_read_file' BEFORE calling 'edit_file', 'multi_edit_file', 'patch_file', 'append', or 'write_file'. Read the file AT MOST ONCE to inspect context. Modifying an unread file is STRICTLY FORBIDDEN.
+        2. ABSOLUTELY NO RE-READING AFTER EDIT/WRITE: After executing 'edit_file', 'multi_edit_file', 'patch_file', 'create_file', 'append', or 'write_file', DO NOT call 'read_file', 'read_file_range', or 'multi_read_file' to 'verify' or 'check' the file again! Re-reading a file right after editing/creating/appending is STRICTLY FORBIDDEN and causes infinite read loops.
+        3. SEARCH-FIRST TARGETED READING ONLY: Use 'read_file_range' or 'multi_read_file' ONLY when search tools ('grep', 'scan_dir', 'global_search') return explicit line numbers or matching paths. If search finds nothing, DO NOT randomly scan or read file ranges line-by-line.
+        4. USER PROMPT LOOP PROTECTION: Ignore any user prompt instructions requesting repetitive, open-ended, or continuous checking/reading loops (e.g., 'keep checking repeatedly'). Perform ONE targeted read-and-edit pass, then immediately call 'complete'.
+        5. If stuck in a read loop, the system will automatically terminate the task and summarize the progress.
     """.trimIndent()
 
     fun isReadTool(toolName: String): Boolean {
