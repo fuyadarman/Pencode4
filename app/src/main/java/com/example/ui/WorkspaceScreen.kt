@@ -6395,15 +6395,15 @@ fun WorkspaceOperationsTimeline(
     androidx.compose.foundation.layout.Column(
         modifier = androidx.compose.ui.Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 10.dp)
-            .background(Color(0xFF0F141C), RoundedCornerShape(16.dp))
-            .border(BorderStroke(1.dp, Color(0xFF1F2937)), RoundedCornerShape(16.dp))
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .background(Color(0xFF0F141C), RoundedCornerShape(12.dp))
+            .border(BorderStroke(1.dp, Color(0xFF1F2937)), RoundedCornerShape(12.dp))
     ) {
         androidx.compose.foundation.layout.Row(
             modifier = androidx.compose.ui.Modifier
                 .fillMaxWidth()
                 .clickable { isExpanded = !isExpanded }
-                .padding(horizontal = 16.dp, vertical = 14.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {

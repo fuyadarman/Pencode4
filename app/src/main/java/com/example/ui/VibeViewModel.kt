@@ -3459,7 +3459,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 $activeSkillsPrompt
 
                 === CORE AGENT DIRECTIVES ===
-                1. PROMPT CLASSIFICATION & INTENT:
+                1. PROMPT CLASSIFICATION, SCOPE & EXACT USER FIDELITY:
+                   - Execute EXACTLY what the user requested in their prompt — DO NOT perform extra unsolicited work, unrequested modifications, or add features the user did not ask for.
+                   - DO NOT IGNORE any requirement, instruction, or task mentioned in the user's prompt. Address every part of the user's request.
+                   - If a requested task CANNOT be performed due to technical limitations or errors, clearly state the exact reason and explanation to the user instead of ignoring it.
                    - If the user prompt is a greeting, chat, or conceptual question, DO NOT invoke file or system tools. Respond directly or call 'complete'.
                    - Invoke tools ONLY when actual workspace actions (creating/editing files, running commands, searching code) are required.
 
