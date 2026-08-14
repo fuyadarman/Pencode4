@@ -144,6 +144,18 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     val mcpManager = McpManager(application)
     val mcpServers: StateFlow<List<McpServer>> = mcpManager.servers
 
+    fun handleMcpOAuthCallback(uri: android.net.Uri?) {
+        if (uri == null) return
+        val serverId = uri.getQueryParameter("server_id")
+            ?: mcpServers.value.find { it.status.contains("Browser", ignoreCase = true) || it.status.contains("Discovering", ignoreCase = true) || it.status.contains("Connecting", ignoreCase = true) }?.id
+            ?: mcpServers.value.firstOrNull()?.id
+            ?: return
+
+        viewModelScope.launch {
+            mcpManager.handleOAuthCallback(serverId, uri)
+        }
+    }
+
     private val _chatInputText = MutableStateFlow("")
     val chatInputText: StateFlow<String> = _chatInputText.asStateFlow()
 

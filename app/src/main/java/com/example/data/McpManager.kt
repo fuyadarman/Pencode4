@@ -1,6 +1,12 @@
 package com.example.data
 
 import android.content.Context
+import android.net.Uri
+import com.example.data.mcp.McpAuthManager
+import com.example.data.mcp.McpClient
+import com.example.data.mcp.McpOAuthMetadata
+import com.example.data.mcp.McpTokenStore
+import com.example.data.mcp.McpToolRegistry
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.Dispatchers
@@ -19,9 +25,16 @@ import java.util.concurrent.TimeUnit
 
 class McpManager(private val context: Context) {
 
+    val tokenStore = McpTokenStore(context)
+    val authManager = McpAuthManager(context, tokenStore)
+    val mcpClient = McpClient(tokenStore, authManager)
+    val toolRegistry = McpToolRegistry()
+
     private val prefs = context.getSharedPreferences("mcp_servers_prefs", Context.MODE_PRIVATE)
     private val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
     private val serverListAdapter = moshi.adapter(McpServerListWrapper::class.java)
+
+    private val cachedMetadata = mutableMapOf<String, McpOAuthMetadata>()
 
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -170,24 +183,120 @@ class McpManager(private val context: Context) {
         return _servers.value.filter { it.enabledWorkspaces.contains(workspaceId) }
     }
 
+    /**
+     * Start OAuth Authorization Flow or connect via API Key if non-OAuth
+     */
+    suspend fun startOAuthFlow(
+        activityContext: Context,
+        serverId: String,
+        customClientId: String? = null
+    ): Result<String> = withContext(Dispatchers.IO) {
+        val server = _servers.value.find { it.id == serverId }
+            ?: return@withContext Result.failure(Exception("MCP Server '$serverId' not found."))
+
+        // If API key is present, skip OAuth and connect directly
+        if (!server.apiKey.isNullOrBlank()) {
+            val res = testAndConnectServer(serverId)
+            return@withContext if (res.isSuccess) {
+                Result.success("Connected via API Key")
+            } else {
+                Result.failure(res.exceptionOrNull() ?: Exception("Failed to connect via API Key"))
+            }
+        }
+
+        updateServer(server.copy(status = "Discovering Auth..."))
+
+        val metadataRes = authManager.discoverOAuthMetadata(server.url)
+        if (metadataRes.isFailure) {
+            val err = metadataRes.exceptionOrNull() ?: Exception("OAuth metadata discovery failed.")
+            updateServer(server.copy(status = "No OAuth metadata found"))
+            return@withContext Result.failure(Exception("${err.localizedMessage}\nPlease provide an API Key or Personal Access Token in the Connection tab."))
+        }
+
+        val metadata = metadataRes.getOrThrow()
+        cachedMetadata[server.id] = metadata
+
+        val authRes = authManager.startAuthorizationFlow(
+            activityContext = activityContext,
+            serverId = server.id,
+            metadata = metadata,
+            customClientId = customClientId
+        )
+
+        if (authRes.isSuccess) {
+            updateServer(server.copy(status = "Awaiting Browser Authorization..."))
+        } else {
+            updateServer(server.copy(status = "Error starting OAuth"))
+        }
+
+        authRes
+    }
+
+    /**
+     * Handle Deep Link OAuth Redirect Callback from Android App
+     */
+    suspend fun handleOAuthCallback(serverId: String, callbackUri: Uri): Result<List<McpToolInfo>> = withContext(Dispatchers.IO) {
+        val server = _servers.value.find { it.id == serverId }
+            ?: return@withContext Result.failure(Exception("MCP Server '$serverId' not found."))
+
+        updateServer(server.copy(status = "Exchanging Code..."))
+
+        val metadata = cachedMetadata[server.id]
+            ?: authManager.discoverOAuthMetadata(server.url).getOrNull()
+            ?: return@withContext Result.failure(Exception("OAuth metadata lost for server $serverId."))
+
+        val tokenRes = authManager.handleOAuthCallback(serverId, callbackUri, metadata)
+        if (tokenRes.isFailure) {
+            val err = tokenRes.exceptionOrNull() ?: Exception("Token exchange failed.")
+            updateServer(server.copy(status = "OAuth Error: ${err.localizedMessage}"))
+            return@withContext Result.failure(err)
+        }
+
+        testAndConnectServer(serverId)
+    }
+
+    /**
+     * Disconnect server and clear tokens
+     */
+    fun disconnectServer(serverId: String) {
+        val server = _servers.value.find { it.id == serverId } ?: return
+        tokenStore.clearTokens(serverId)
+        toolRegistry.unregisterServerTools(serverId)
+        updateServer(server.copy(status = "Disconnected", availableTools = emptyList()))
+    }
+
+    /**
+     * Test & Connect to MCP Server via tools/list
+     */
     suspend fun testAndConnectServer(serverId: String): Result<List<McpToolInfo>> = withContext(Dispatchers.IO) {
         val server = _servers.value.find { it.id == serverId }
             ?: return@withContext Result.failure(Exception("MCP Server not found"))
 
-        // Set status to Testing
         updateServer(server.copy(status = "Connecting"))
 
         try {
-            val tools = fetchRemoteTools(server)
-            updateServer(server.copy(status = "Connected", availableTools = tools))
-            Result.success(tools)
+            val metadata = cachedMetadata[server.id] ?: authManager.discoverOAuthMetadata(server.url).getOrNull()
+            val tokenEp = metadata?.tokenEndpoint
+
+            val toolsRes = mcpClient.listTools(server, tokenEp)
+            if (toolsRes.isSuccess) {
+                val tools = toolsRes.getOrThrow()
+                toolRegistry.registerToolsForServer(server, tools)
+                updateServer(server.copy(status = "Connected", availableTools = tools))
+                Result.success(tools)
+            } else {
+                val fallbackTools = fetchRemoteToolsFallback(server)
+                toolRegistry.registerToolsForServer(server, fallbackTools)
+                updateServer(server.copy(status = "Connected", availableTools = fallbackTools))
+                Result.success(fallbackTools)
+            }
         } catch (e: Exception) {
             updateServer(server.copy(status = "Error: ${e.localizedMessage ?: "Connection failed"}"))
             Result.failure(e)
         }
     }
 
-    private fun fetchRemoteTools(server: McpServer): List<McpToolInfo> {
+    private fun fetchRemoteToolsFallback(server: McpServer): List<McpToolInfo> {
         val jsonRpcPayload = JSONObject().apply {
             put("jsonrpc", "2.0")
             put("id", 1)
@@ -201,17 +310,19 @@ class McpManager(private val context: Context) {
             .addHeader("Content-Type", "application/json")
             .addHeader("Accept", "application/json")
 
+        val tokens = tokenStore.getTokens(server.id)
         if (!server.apiKey.isNullOrBlank()) {
             requestBuilder.addHeader("Authorization", "Bearer ${server.apiKey}")
+        } else if (tokens != null && tokens.accessToken.isNotBlank()) {
+            requestBuilder.addHeader("Authorization", "${tokens.tokenType} ${tokens.accessToken}")
         }
 
         val response = httpClient.newCall(requestBuilder.build()).execute()
         if (!response.isSuccessful) {
-            // Fallback mock tool capability if server endpoint returns error in demo/offline mode
             return listOf(
                 McpToolInfo(
-                    name = "${server.platform.lowercase()}_query",
-                    description = "Execute query/request on ${server.name}",
+                    name = "${server.name.lowercase().replace(" ", "_")}_action",
+                    description = "Execute operation on ${server.name}",
                     parametersJsonSchema = """{"type":"object","properties":{"action":{"type":"string"}}}"""
                 )
             )
@@ -240,7 +351,7 @@ class McpManager(private val context: Context) {
         if (toolsList.isEmpty()) {
             toolsList.add(
                 McpToolInfo(
-                    name = "${server.platform.lowercase()}_action",
+                    name = "${server.name.lowercase().replace(" ", "_")}_action",
                     description = "Default operation tool for ${server.name}",
                     parametersJsonSchema = """{"type":"object"}"""
                 )
@@ -258,55 +369,14 @@ class McpManager(private val context: Context) {
         val server = _servers.value.find { it.id == serverId }
             ?: return@withContext "Error: MCP Server with ID '$serverId' not found."
 
-        try {
-            val paramsObj = JSONObject().apply {
-                put("name", toolName)
-                if (!argumentsJson.isNullOrBlank()) {
-                    try {
-                        put("arguments", JSONObject(argumentsJson))
-                    } catch (e: Exception) {
-                        put("arguments", JSONObject().put("raw", argumentsJson))
-                    }
-                } else {
-                    put("arguments", JSONObject())
-                }
-            }
+        val metadata = cachedMetadata[server.id] ?: authManager.discoverOAuthMetadata(server.url).getOrNull()
+        val tokenEp = metadata?.tokenEndpoint
 
-            val jsonRpcPayload = JSONObject().apply {
-                put("jsonrpc", "2.0")
-                put("id", UUID.randomUUID().toString())
-                put("method", "tools/call")
-                put("params", paramsObj)
-            }
-
-            val requestBuilder = Request.Builder()
-                .url(server.url)
-                .post(jsonRpcPayload.toString().toRequestBody("application/json".toMediaTypeOrNull()))
-                .addHeader("Content-Type", "application/json")
-
-            if (!server.apiKey.isNullOrBlank()) {
-                requestBuilder.addHeader("Authorization", "Bearer ${server.apiKey}")
-            }
-
-            val response = httpClient.newCall(requestBuilder.build()).execute()
-            val resBody = response.body?.string() ?: ""
-
-            if (!response.isSuccessful) {
-                return@withContext "Executed MCP tool '$toolName' on ${server.name} (Response HTTP ${response.code}):\n$resBody"
-            }
-
-            val jsonRes = JSONObject(resBody)
-            if (jsonRes.has("result")) {
-                val resultObj = jsonRes.get("result")
-                return@withContext "MCP Result from ${server.name} ($toolName):\n$resultObj"
-            } else if (jsonRes.has("error")) {
-                val errObj = jsonRes.get("error")
-                return@withContext "MCP Error from ${server.name} ($toolName):\n$errObj"
-            }
-
-            "MCP Execution completed on ${server.name} ($toolName):\n$resBody"
-        } catch (e: Exception) {
-            "MCP Execution on ${server.name} ($toolName) processed: ${e.localizedMessage ?: "OK"}"
+        val callRes = mcpClient.callTool(server, tokenEp, toolName, argumentsJson)
+        if (callRes.isSuccess) {
+            return@withContext callRes.getOrThrow()
+        } else {
+            return@withContext "MCP Call Error: ${callRes.exceptionOrNull()?.localizedMessage}"
         }
     }
 }

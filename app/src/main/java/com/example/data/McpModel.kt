@@ -46,15 +46,7 @@ enum class McpPlatformType(
     );
 
     fun buildAuthUrl(clientId: String? = null): String {
-        val cid = clientId?.trim()
-        if (cid.isNullOrEmpty()) return defaultConsoleUrl
-        return when (this) {
-            SUPABASE -> "https://api.supabase.com/v1/oauth/authorize?client_id=$cid&response_type=code"
-            CLOUDFLARE -> "https://dash.cloudflare.com/oauth2/auth?client_id=$cid&response_type=code"
-            VERCEL -> "https://vercel.com/oauth/authorize?client_id=$cid"
-            GOOGLE_STITCH -> "https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id=$cid&redirect_uri=http://localhost&scope=https://www.googleapis.com/auth/cloud-platform"
-            CUSTOM -> defaultConsoleUrl
-        }
+        return defaultConsoleUrl
     }
 
     companion object {

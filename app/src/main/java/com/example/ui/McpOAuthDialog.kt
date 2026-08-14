@@ -28,6 +28,7 @@ import com.example.data.McpServer
 @Composable
 fun McpOAuthConnectDialog(
     server: McpServer,
+    onStartOAuth: (clientId: String?) -> Unit,
     onConfirmConnect: (tokenOrApiKey: String) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -182,6 +183,24 @@ fun McpOAuthConnectDialog(
                     )
                 } else {
                     // Personal Access Token
+                    OutlinedButton(
+                        onClick = {
+                            try {
+                                uriHandler.openUri(platformType.defaultConsoleUrl)
+                            } catch (e: Exception) {
+                                // Ignore
+                            }
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(imageVector = Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Get ${platformType.displayName} API Token / Key", fontSize = 11.sp)
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
                     OutlinedTextField(
                         value = tokenValue,
                         onValueChange = { tokenValue = it },
@@ -216,16 +235,15 @@ fun McpOAuthConnectDialog(
 
                     Button(
                         onClick = {
-                            isAuthorizing = true
-                            if (authMode == 0) {
-                                try {
-                                    uriHandler.openUri(platformType.buildAuthUrl(oauthClientId))
-                                } catch (e: Exception) {
-                                    // Ignore
-                                }
+                            if (tokenValue.isNotBlank()) {
+                                // If token/key is provided in either tab, connect directly!
+                                onConfirmConnect(tokenValue.trim())
+                            } else if (authMode == 0) {
+                                isAuthorizing = true
+                                onStartOAuth(oauthClientId.ifBlank { null })
+                            } else {
+                                onConfirmConnect(tokenValue.trim())
                             }
-                            val finalToken = if (tokenValue.isBlank()) "oauth_token_${platformType.name.lowercase()}_${System.currentTimeMillis().toString().takeLast(6)}" else tokenValue.trim()
-                            onConfirmConnect(finalToken)
                         },
                         shape = RoundedCornerShape(12.dp)
                     ) {
@@ -240,7 +258,13 @@ fun McpOAuthConnectDialog(
                             Icon(imageVector = Icons.Default.Link, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
                         }
-                        Text(if (authMode == 0) "Authorize & Connect" else "Save & Connect")
+                        Text(
+                            when {
+                                tokenValue.isNotBlank() -> "Connect with Token"
+                                authMode == 0 -> "Authorize via Browser"
+                                else -> "Save & Connect"
+                            }
+                        )
                     }
                 }
             }

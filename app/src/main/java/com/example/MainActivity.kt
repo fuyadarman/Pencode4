@@ -31,8 +31,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 class MainActivity : ComponentActivity() {
+
+    private var mainViewModel: VibeViewModel? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Handle initial intent if launched via deep link
+        intent?.data?.let { uri ->
+            mainViewModel?.handleMcpOAuthCallback(uri)
+        }
         
         // Pre-create WebView HTTP Code Cache directories to prevent Chromium folder-not-found errors
         try {
@@ -59,6 +67,7 @@ class MainActivity : ComponentActivity() {
                 ) {
                     SelectionContainer {
                         val viewModel: VibeViewModel = viewModel()
+                        mainViewModel = viewModel
                         
                         val currentProject by viewModel.currentProject.collectAsState()
                         val projectsList by viewModel.projectsList.collectAsState()
@@ -383,6 +392,14 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        intent.data?.let { uri ->
+            mainViewModel?.handleMcpOAuthCallback(uri)
         }
     }
 

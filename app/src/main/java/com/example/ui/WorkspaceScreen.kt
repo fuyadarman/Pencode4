@@ -280,7 +280,13 @@ fun WorkspaceScreen(
                             tint = Color(0xFF00F2FE)
                         )
                     }
-                    // MCP Service temporarily disabled per user request
+                    IconButton(onClick = { showMcpDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Hub,
+                            contentDescription = "MCP Servers",
+                            tint = Color(0xFF7C4DFF)
+                        )
+                    }
                     IconButton(onClick = { showSettingsDialog = true }) {
                         Icon(
                             imageVector = Icons.Default.Settings,

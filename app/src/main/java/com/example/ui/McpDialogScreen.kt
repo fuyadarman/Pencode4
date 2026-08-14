@@ -48,10 +48,22 @@ fun McpManagementDialog(
     var selectedOAuthServer by remember { mutableStateOf<McpServer?>(null) }
     val scope = rememberCoroutineScope()
 
+    val context = androidx.compose.ui.platform.LocalContext.current
+
     if (selectedOAuthServer != null) {
         val target = selectedOAuthServer!!
         McpOAuthConnectDialog(
             server = target,
+            onStartOAuth = { clientId ->
+                selectedOAuthServer = null
+                onAddServer(target.name, target.url, target.platform, null)
+                val activeServerId = servers.find { it.platform == target.platform || it.id == target.id }?.id ?: target.id
+                scope.launch {
+                    val activity = context as? android.app.Activity ?: (context as? android.content.ContextWrapper)?.baseContext as? android.app.Activity ?: context
+                    val mcpMgr = com.example.data.McpManager(context)
+                    mcpMgr.startOAuthFlow(activity, activeServerId, clientId)
+                }
+            },
             onConfirmConnect = { token ->
                 selectedOAuthServer = null
                 onAddServer(target.name, target.url, target.platform, token)
