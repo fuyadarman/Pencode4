@@ -506,9 +506,10 @@ object GeminiClient {
                 }
             }
 
-            useCustom && (provider == "mistral" || provider == "openai" || provider == "custom" || provider == "groq" || provider == "cohere" || provider == "ollama_cloud" || provider == "ollama" || provider == "openrouter") -> {
+            useCustom && (provider == "mistral" || provider == "openai" || provider == "custom" || provider == "groq" || provider == "cohere" || provider == "ollama_cloud" || provider == "ollama" || provider == "openrouter" || provider == "opencode_zen" || provider == "opencode") -> {
                 val baseUrl = when {
                     !customBaseUrl.isNullOrBlank() -> customBaseUrl.trimEnd('/')
+                    provider == "opencode_zen" || provider == "opencode" -> "https://opencode.ai/zen/v1"
                     provider == "mistral" -> "https://api.mistral.ai"
                     provider == "openai" -> "https://api.openai.com"
                     provider == "groq" -> "https://api.groq.com/openai"

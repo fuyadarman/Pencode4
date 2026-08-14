@@ -2065,6 +2065,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                     "mistral" -> if (baseUrl.isNotBlank()) "${baseUrl.trimEnd('/')}/models" else "https://api.mistral.ai/v1/models"
                     "openrouter" -> if (baseUrl.isNotBlank()) "${baseUrl.trimEnd('/')}/models" else "https://openrouter.ai/api/v1/models"
                     "groq" -> if (baseUrl.isNotBlank()) "${baseUrl.trimEnd('/')}/models" else "https://api.groq.com/openai/v1/models"
+                    "opencode_zen", "opencode" -> if (baseUrl.isNotBlank()) "${baseUrl.trimEnd('/')}/models" else "https://opencode.ai/zen/v1/models"
                     "ollama_cloud" -> if (baseUrl.isNotBlank()) "${baseUrl.trimEnd('/')}/v1/models" else "https://api.ollama.com/v1/models"
                     else -> {
                         if (baseUrl.isNotBlank()) {

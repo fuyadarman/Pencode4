@@ -5197,6 +5197,7 @@ fun CustomSettingsDialog(
 
     var showAddNewForm by remember { mutableStateOf(false) }
     var modelSearchQuery by remember { mutableStateOf("") }
+    val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -5489,7 +5490,7 @@ fun CustomSettingsDialog(
                         )
 
                         // Provider Picker
-                        val providers = listOf("gemini", "openai", "claude", "mistral", "groq", "cohere", "openrouter", "ollama_cloud", "cloudflare", "custom")
+                        val providers = listOf("opencode_zen", "gemini", "openai", "claude", "mistral", "groq", "cohere", "openrouter", "ollama_cloud", "cloudflare", "custom")
                         Text("Provider", color = Color(0xFF80809B), fontSize = 11.sp)
                         Row(
                             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -5506,6 +5507,7 @@ fun CustomSettingsDialog(
                                             pInput = p 
                                             // Set defaults based on provider but let user customize freely
                                             modelInput = when(p) {
+                                                "opencode_zen" -> "opencode-zen"
                                                 "gemini" -> "gemini-2.0-flash"
                                                 "openai" -> "gpt-4o"
                                                 "mistral" -> "mistral-large-latest"
@@ -5517,6 +5519,7 @@ fun CustomSettingsDialog(
                                                 else -> ""
                                             }
                                             baseInput = when(p) {
+                                                "opencode_zen" -> "https://opencode.ai/zen/v1"
                                                 "groq" -> "https://api.groq.com/openai"
                                                 "cohere" -> "https://api.cohere.com"
                                                 "openrouter" -> "https://openrouter.ai/api/v1"
@@ -5530,6 +5533,7 @@ fun CustomSettingsDialog(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     val displayName = when(p) {
+                                        "opencode_zen" -> "OpenCode Zen"
                                         "ollama_cloud" -> "Ollama Cloud"
                                         "cloudflare" -> "Cloudflare"
                                         "cohere" -> "Cohere"
@@ -5547,12 +5551,12 @@ fun CustomSettingsDialog(
                             }
                         }
 
-                        if (pInput == "custom" || pInput == "groq" || pInput == "cohere" || pInput == "openrouter" || pInput == "ollama_cloud" || pInput == "cloudflare") {
+                        if (pInput == "custom" || pInput == "opencode_zen" || pInput == "groq" || pInput == "cohere" || pInput == "openrouter" || pInput == "ollama_cloud" || pInput == "cloudflare") {
                             OutlinedTextField(
                                 value = baseInput,
                                 onValueChange = { baseInput = it },
                                 label = { Text("API Base URL") },
-                                placeholder = { Text("e.g. https://api.groq.com/openai/v1") },
+                                placeholder = { Text(if (pInput == "opencode_zen") "https://opencode.ai/zen/v1" else "e.g. https://api.groq.com/openai/v1") },
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedTextColor = Color.White,
                                     unfocusedTextColor = Color.White,
@@ -5568,7 +5572,7 @@ fun CustomSettingsDialog(
                             value = modelInput,
                             onValueChange = { modelInput = it },
                             label = { Text("Model ID") },
-                            placeholder = { Text("e.g. gpt-4o or claude-3-opus") },
+                            placeholder = { Text("e.g. opencode-zen or gpt-4o") },
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedTextColor = Color.White,
                                 unfocusedTextColor = Color.White,
@@ -5593,6 +5597,60 @@ fun CustomSettingsDialog(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp)
                         )
+
+                        // Create API Key Button / Link
+                        val createKeyUrl = when (pInput) {
+                            "opencode_zen" -> "https://opencode.ai/zen"
+                            "gemini" -> "https://aistudio.google.com/app/apikey"
+                            "openai" -> "https://platform.openai.com/api-keys"
+                            "claude" -> "https://console.anthropic.com/settings/keys"
+                            "mistral" -> "https://console.mistral.ai/api-keys/"
+                            "groq" -> "https://console.groq.com/keys"
+                            "cohere" -> "https://dashboard.cohere.com/api-keys"
+                            "openrouter" -> "https://openrouter.ai/keys"
+                            "cloudflare" -> "https://dash.cloudflare.com/profile/api-tokens"
+                            "ollama_cloud" -> "https://ollama.com"
+                            else -> "https://opencode.ai/zen"
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = if (keyInput.isBlank()) "No API key? Create one here:" else "Key added. Generate new key:",
+                                color = Color(0xFF80809B),
+                                fontSize = 11.sp
+                            )
+                            OutlinedButton(
+                                onClick = {
+                                    try {
+                                        uriHandler.openUri(createKeyUrl)
+                                    } catch (e: Exception) {
+                                        // Ignore
+                                    }
+                                },
+                                border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.6f)),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.OpenInNew,
+                                    contentDescription = null,
+                                    tint = Color(0xFF38BDF8),
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Create API Key",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF38BDF8)
+                                )
+                            }
+                        }
 
                         // Scan Models UI Section
                         Row(

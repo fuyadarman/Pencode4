@@ -36,7 +36,11 @@ fun McpOAuthConnectDialog(
     val platformType = McpPlatformType.fromString(server.platform)
     var authMode by remember { mutableStateOf(0) } // 0: OAuth 2.0 Flow, 1: Personal Access Token
     var tokenValue by remember { mutableStateOf(server.apiKey ?: "") }
-    var oauthClientId by remember { mutableStateOf("") }
+    var oauthClientId by remember { 
+        val envClientId = com.example.BuildConfig.SUPABASE_CLIENT_ID
+        val defaultId = if (envClientId.isNotBlank() && envClientId != "null") envClientId else "0191848f-8044-4d51-b69a-296f32c4d900"
+        mutableStateOf(if (platformType == com.example.data.McpPlatformType.SUPABASE) defaultId else "") 
+    }
     var showToken by remember { mutableStateOf(false) }
     var isAuthorizing by remember { mutableStateOf(false) }
 
@@ -157,7 +161,14 @@ fun McpOAuthConnectDialog(
                         value = oauthClientId,
                         onValueChange = { oauthClientId = it },
                         label = { Text("OAuth Client ID / App ID (Optional)", fontSize = 11.sp) },
-                        placeholder = { Text("e.g. mcp_app_${platformType.name.lowercase()}") },
+                        placeholder = { 
+                            Text(
+                                if (platformType == com.example.data.McpPlatformType.SUPABASE) 
+                                    "e.g. 123e4567-e89b-12d3-a456-426614174000 (UUID)"
+                                else 
+                                    "e.g. mcp_app_${platformType.name.lowercase()}"
+                            ) 
+                        },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )

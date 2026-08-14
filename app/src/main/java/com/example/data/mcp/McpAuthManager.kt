@@ -199,6 +199,12 @@ class McpAuthManager(
             return cimdUrl
         }
 
+        // Supabase requires a UUID format for client_id
+        if (metadata.authorizationEndpoint.contains("supabase") || serverId.contains("supabase", ignoreCase = true)) {
+            val envClientId = com.example.BuildConfig.SUPABASE_CLIENT_ID
+            return if (envClientId.isNotBlank() && envClientId != "null") envClientId else "0191848f-8044-4d51-b69a-296f32c4d900"
+        }
+
         return DEFAULT_CIMD_CLIENT_ID
     }
 
@@ -361,6 +367,10 @@ class McpAuthManager(
 
             if (!tokenData.clientSecret.isNullOrBlank()) {
                 formBuilder.add("client_secret", tokenData.clientSecret)
+            } else if (metadata.tokenEndpoint.contains("supabase") || serverId.contains("supabase", ignoreCase = true)) {
+                val envSecret = com.example.BuildConfig.SUPABASE_CLIENT_SECRET
+                val secretToUse = if (envSecret.isNotBlank() && envSecret != "null") envSecret else "sba_f542cf0850dc25032d53447bbb5b6c8cde1ae950"
+                formBuilder.add("client_secret", secretToUse)
             }
 
             val request = Request.Builder()
