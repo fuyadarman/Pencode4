@@ -42,7 +42,7 @@ class McpAuthManager(
     companion object {
         const val DEFAULT_REDIRECT_URI = "https://pencode.vercel.app/oauth/callback"
         const val CUSTOM_SCHEME_REDIRECT_URI = "pencode://mcp/oauth/callback"
-        const val DEFAULT_CIMD_CLIENT_ID = "https://pencode.vercel.app/.well-known/mcp-client-metadata.json"
+        const val DEFAULT_CLIENT_ID = "pencode-mcp-client"
     }
 
     /**
@@ -175,8 +175,8 @@ class McpAuthManager(
     /**
      * Resolve Client ID using order:
      * 1. User provided Client ID
-     * 2. CIMD URL (if validated as publicly accessible HTTPS metadata document)
-     * 3. Dynamic Client Registration (DCR)
+     * 2. Dynamic Client Registration (DCR) if registration endpoint is available
+     * 3. CIMD URL (if validated as publicly accessible HTTPS metadata document)
      * 4. Pre-registered fallback
      */
     suspend fun resolveClientId(metadata: McpOAuthMetadata, serverId: String, customClientId: String?): String {
@@ -184,12 +184,14 @@ class McpAuthManager(
         if (!cid.isNullOrBlank()) return cid
 
         val existing = tokenStore.getTokens(serverId)?.clientId
-        if (!existing.isNullOrBlank()) return existing
+        if (!existing.isNullOrBlank() && existing != DEFAULT_CLIENT_ID && existing != "cloudflare-mcp") {
+            return existing
+        }
 
         val dcrEndpoint = metadata.registrationEndpoint
         if (!dcrEndpoint.isNullOrBlank()) {
             val dcrClientId = registerClientIfNeeded(metadata, serverId)
-            if (dcrClientId != DEFAULT_CIMD_CLIENT_ID) {
+            if (dcrClientId != DEFAULT_CLIENT_ID) {
                 return dcrClientId
             }
         }
@@ -205,7 +207,12 @@ class McpAuthManager(
             return if (envClientId.isNotBlank() && envClientId != "null") envClientId else "0191848f-8044-4d51-b69a-296f32c4d900"
         }
 
-        return DEFAULT_CIMD_CLIENT_ID
+        // Vercel OAuth client ID
+        if (metadata.authorizationEndpoint.contains("vercel") || serverId.contains("vercel", ignoreCase = true)) {
+            return "vercel-mcp-client"
+        }
+
+        return DEFAULT_CLIENT_ID
     }
 
     /**
@@ -213,8 +220,8 @@ class McpAuthManager(
      */
     suspend fun registerClientIfNeeded(metadata: McpOAuthMetadata, serverId: String): String = withContext(Dispatchers.IO) {
         val existing = tokenStore.getTokens(serverId)
-        if (!existing?.clientId.isNullOrBlank()) {
-            return@withContext existing!!.clientId!!
+        if (!existing?.clientId.isNullOrBlank() && existing!!.clientId != DEFAULT_CLIENT_ID && existing.clientId != "cloudflare-mcp") {
+            return@withContext existing.clientId!!
         }
 
         val regEndpoint = metadata.registrationEndpoint
@@ -223,10 +230,20 @@ class McpAuthManager(
                 val dcrBody = JSONObject().apply {
                     put("client_name", "Pencode AI Agent")
                     put("client_uri", "https://pencode.vercel.app")
-                    put("logo_uri", "https://pencode.vercel.app/logo.png")
-                    put("redirect_uris", listOf(CUSTOM_SCHEME_REDIRECT_URI, DEFAULT_REDIRECT_URI))
-                    put("grant_types", listOf("authorization_code", "refresh_token"))
-                    put("response_types", listOf("code"))
+                    val urisArray = org.json.JSONArray().apply {
+                        put(DEFAULT_REDIRECT_URI)
+                        put(CUSTOM_SCHEME_REDIRECT_URI)
+                    }
+                    put("redirect_uris", urisArray)
+                    val grantArray = org.json.JSONArray().apply {
+                        put("authorization_code")
+                        put("refresh_token")
+                    }
+                    put("grant_types", grantArray)
+                    val respArray = org.json.JSONArray().apply {
+                        put("code")
+                    }
+                    put("response_types", respArray)
                     put("token_endpoint_auth_method", "none")
                 }
 
@@ -251,7 +268,7 @@ class McpAuthManager(
             }
         }
 
-        DEFAULT_CIMD_CLIENT_ID
+        DEFAULT_CLIENT_ID
     }
 
     /**
@@ -357,7 +374,7 @@ class McpAuthManager(
             val verifier = tokenData.codeVerifier
                 ?: return@withContext Result.failure(Exception("PKCE verifier missing."))
 
-            val clientId = tokenData.clientId ?: DEFAULT_CIMD_CLIENT_ID
+            val clientId = tokenData.clientId ?: DEFAULT_CLIENT_ID
 
             val formBuilder = FormBody.Builder()
                 .add("grant_type", "authorization_code")

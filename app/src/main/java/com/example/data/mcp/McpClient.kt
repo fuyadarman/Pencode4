@@ -16,6 +16,8 @@ class McpClient(
     private val tokenStore: McpTokenStore,
     private val authManager: McpAuthManager
 ) {
+    private val sessionIds = java.util.concurrent.ConcurrentHashMap<String, String>()
+
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
@@ -77,6 +79,12 @@ class McpClient(
                     .addHeader("Content-Type", "application/json")
                     .addHeader("Accept", "application/json")
 
+                val sessionId = sessionIds[server.id]
+                if (!sessionId.isNullOrBlank()) {
+                    b.addHeader("Mcp-Session-Id", sessionId)
+                    b.addHeader("mcp-session-id", sessionId)
+                }
+
                 if (!server.apiKey.isNullOrBlank()) {
                     val key = server.apiKey.trim()
                     b.addHeader("Authorization", "Bearer $key")
@@ -102,12 +110,33 @@ class McpClient(
                 }
             }
 
+            // Capture session id from response headers
+            val respSessionId = response.header("Mcp-Session-Id")
+                ?: response.header("mcp-session-id")
+                ?: response.header("X-Mcp-Session-Id")
+                ?: response.header("x-mcp-session-id")
+
+            if (!respSessionId.isNullOrBlank()) {
+                sessionIds[server.id] = respSessionId
+            }
+
             val respBody = response.body?.string() ?: ""
             if (!response.isSuccessful) {
                 return@withContext Result.failure(Exception("MCP HTTP ${response.code}: $respBody"))
             }
 
             val jsonRes = JSONObject(respBody)
+
+            // Also check if result contains sessionId
+            if (jsonRes.has("result")) {
+                val resObj = jsonRes.optJSONObject("result")
+                val inResultSessionId = resObj?.optString("sessionId")?.takeIf { it.isNotBlank() }
+                    ?: resObj?.optString("session_id")?.takeIf { it.isNotBlank() }
+                if (!inResultSessionId.isNullOrBlank()) {
+                    sessionIds[server.id] = inResultSessionId
+                }
+            }
+
             Result.success(jsonRes)
         } catch (e: Exception) {
             Result.failure(e)
