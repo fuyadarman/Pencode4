@@ -2545,11 +2545,33 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
 
         com.example.api.GeminiClient.onRetryListener = { provider, attempt, maxAttempts, error ->
             viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
-                _agentStatus.value = "Retrying API ($attempt/$maxAttempts) due to: $error"
+                val activeConfig = _customModels.value.find { it.id == _selectedModelId.value }
+                val modelDisplay = if (!activeConfig?.alias.isNullOrBlank()) {
+                    activeConfig?.alias
+                } else if (!activeConfig?.modelId.isNullOrBlank()) {
+                    activeConfig?.modelId
+                } else if (_currentRunningModelName.value.isNotBlank() && _currentRunningModelName.value != "Gemini Model") {
+                    _currentRunningModelName.value
+                } else {
+                    when (provider.lowercase()) {
+                        "opencode_zen", "opencode" -> "OpenCode Zen"
+                        "ollama_cloud", "ollama" -> "Ollama"
+                        "gemini", "direct gemini" -> "Gemini"
+                        "openai" -> "OpenAI"
+                        "claude" -> "Claude"
+                        "groq" -> "Groq"
+                        "mistral" -> "Mistral"
+                        "cohere" -> "Cohere"
+                        "openrouter" -> "OpenRouter"
+                        "cloudflare" -> "Cloudflare"
+                        else -> provider
+                    }
+                }
+                _agentStatus.value = "Retrying API ($attempt/$maxAttempts) for $modelDisplay: $error"
                 val retryLog = createAiLog(
                     title = "API Retry ($attempt/$maxAttempts)",
                     status = "thinking",
-                    details = "Automatic retry for $provider: $error"
+                    details = "Automatic retry for $modelDisplay: $error"
                 )
                 _aiActionLogs.value = _aiActionLogs.value + retryLog
             }
@@ -4504,9 +4526,25 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 _aiActionLogs.value = _aiActionLogs.value + appendLog
 
                                 val files = repository.getFilesForProject(project.name)
-                                val targetFile = files.find { it.path == filePath }
+                                val targetFile = files.find { it.path == filePath || normalizePath(it.path) == filePath || it.path.endsWith(filePath) || filePath.endsWith(it.path) }
+                                val fileHasBeenRead = if (targetFile != null) {
+                                    readFilesThisSession.contains(filePath) ||
+                                    readFilesThisSession.contains(normalizePath(filePath)) ||
+                                    readFilesThisSession.contains(targetFile.path) ||
+                                    readFilesThisSession.contains(normalizePath(targetFile.path)) ||
+                                    history.any { content ->
+                                        content.parts.any { part ->
+                                            val t = part.text ?: ""
+                                            (t.contains("System/Tool Output for 'read_file'") || t.contains("System/Tool Output for 'read_file_range'") || t.contains("System/Tool Output for 'view_file'")) &&
+                                            (t.contains(filePath) || t.contains(normalizePath(filePath)) || t.contains(targetFile.path) || t.contains(normalizePath(targetFile.path)))
+                                        }
+                                    }
+                                } else true
+
                                 val result = if (repository.isBinaryExtension(filePath)) {
                                     "Error: Reading, editing, patching, or appending to binary image or 3D files directly as text is NOT allowed. You can only view their existence via 'list_directory' or perform operations like rename, delete, move, resize, or format change."
+                                } else if (targetFile != null && !fileHasBeenRead) {
+                                    "Error: SYSTEM REJECTION - You cannot append to existing file '$filePath' without reading it first! You MUST call 'read_file' or 'read_file_range' on '$filePath' to inspect its current content before appending. Please read the file first."
                                 } else if (targetFile != null) {
                                     try {
                                         val newContent = targetFile.content + "\n" + fileContent
@@ -4555,47 +4593,61 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 )
                                 _aiActionLogs.value = _aiActionLogs.value + patchLog
 
+                                val files = repository.getFilesForProject(project.name)
+                                val targetFile = files.find { it.path == filePath || normalizePath(it.path) == filePath || it.path.endsWith(filePath) || filePath.endsWith(it.path) }
+                                val fileHasBeenRead = if (targetFile != null) {
+                                    readFilesThisSession.contains(filePath) ||
+                                    readFilesThisSession.contains(normalizePath(filePath)) ||
+                                    readFilesThisSession.contains(targetFile.path) ||
+                                    readFilesThisSession.contains(normalizePath(targetFile.path)) ||
+                                    history.any { content ->
+                                        content.parts.any { part ->
+                                            val t = part.text ?: ""
+                                            (t.contains("System/Tool Output for 'read_file'") || t.contains("System/Tool Output for 'read_file_range'") || t.contains("System/Tool Output for 'view_file'")) &&
+                                            (t.contains(filePath) || t.contains(normalizePath(filePath)) || t.contains(targetFile.path) || t.contains(normalizePath(targetFile.path)))
+                                        }
+                                    }
+                                } else true
+
                                 val result = if (repository.isBinaryExtension(filePath)) {
                                     "Error: Reading, editing, patching, or appending to binary image or 3D files directly as text is NOT allowed. You can only view their existence via 'list_directory' or perform operations like rename, delete, move, resize, or format change."
-                                } else {
-                                    val files = repository.getFilesForProject(project.name)
-                                    val targetFile = files.find { it.path == filePath }
-                                    if (targetFile != null) {
-                                        val originalContent = targetFile.content
-                                        if (searchStr.isEmpty()) {
-                                            "Error: 'search' block cannot be empty. You must specify the exact, unique block of code to search and replace. Do not use write_file/create to overwrite an existing file for small edits."
-                                        } else if (!originalContent.contains(searchStr)) {
-                                            "Error: Could not find exact search block in $filePath. Please double-check characters, indentation, and spaces."
+                                } else if (targetFile != null && !fileHasBeenRead) {
+                                    "Error: SYSTEM REJECTION - You cannot edit or patch file '$filePath' without reading it first! You MUST call 'read_file' or 'read_file_range' on '$filePath' to inspect its exact and current contents before making any changes. Please read the file first."
+                                } else if (targetFile != null) {
+                                    val originalContent = targetFile.content
+                                    if (searchStr.isEmpty()) {
+                                        "Error: 'search' block cannot be empty. You must specify the exact, unique block of code to search and replace. Do not use write_file/create to overwrite an existing file for small edits."
+                                    } else if (!originalContent.contains(searchStr)) {
+                                        "Error: Could not find exact search block in $filePath. Please double-check characters, indentation, and spaces."
+                                    } else {
+                                        val occurrences = originalContent.split(searchStr).size - 1
+                                        if (occurrences > 1) {
+                                            "Error: The search block is not unique. It occurs $occurrences times in the file. Please provide a larger unique block of context code."
                                         } else {
-                                            val occurrences = originalContent.split(searchStr).size - 1
-                                            if (occurrences > 1) {
-                                                "Error: The search block is not unique. It occurs $occurrences times in the file. Please provide a larger unique block of context code."
-                                            } else {
-                                                val startIndex = originalContent.indexOf(searchStr)
-                                                val linesBefore = originalContent.substring(0, startIndex).count { it == '\n' } + 1
-                                                val linesInSearch = searchStr.count { it == '\n' }
-                                                val endLine = linesBefore + linesInSearch
-                                                foundRange = if (linesBefore == endLine) "line $linesBefore" else "lines $linesBefore-$endLine"
-                                                
-                                                val updatedContent = originalContent.replace(searchStr, replaceStr)
-                                                try {
-                                                    repository.saveFile(project.name, filePath, updatedContent)
-                                                    filesModifiedThisPrompt = true
-                                                    val toolType = if (tool.contains("patch")) "patch" else "edit"
-                                                    _editHistory.value = _editHistory.value + EditRecord(
-                                                        tool = toolType,
-                                                        path = filePath,
-                                                        lines = foundRange
-                                                    )
-                                                    "Successfully modified file '$filePath'"
-                                                } catch (e: Exception) {
-                                                    "Error writing modified file: ${e.localizedMessage}"
-                                                }
+                                            val startIndex = originalContent.indexOf(searchStr)
+                                            val linesBefore = originalContent.substring(0, startIndex).count { it == '\n' } + 1
+                                            val linesInSearch = searchStr.count { it == '\n' }
+                                            val endLine = linesBefore + linesInSearch
+                                            foundRange = if (linesBefore == endLine) "line $linesBefore" else "lines $linesBefore-$endLine"
+                                            
+                                            val updatedContent = originalContent.replace(searchStr, replaceStr)
+                                            try {
+                                                repository.saveFile(project.name, filePath, updatedContent)
+                                                filesModifiedThisPrompt = true
+                                                val toolType = if (tool.contains("patch")) "patch" else "edit"
+                                                _editHistory.value = _editHistory.value + EditRecord(
+                                                    tool = toolType,
+                                                    path = filePath,
+                                                    lines = foundRange
+                                                )
+                                                "Successfully modified file '$filePath'"
+                                            } catch (e: Exception) {
+                                                "Error writing modified file: ${e.localizedMessage}"
                                             }
                                         }
-                                    } else {
-                                        "Error: File '$filePath' not found."
                                     }
+                                } else {
+                                    "Error: File '$filePath' not found."
                                 }
 
                                 val isSuccess = result.startsWith("Successfully")
@@ -4628,68 +4680,82 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 _aiActionLogs.value = _aiActionLogs.value + multiLog
 
                                 var foundRange = ""
+                                val files = repository.getFilesForProject(project.name)
+                                val targetFile = files.find { it.path == filePath || normalizePath(it.path) == filePath || it.path.endsWith(filePath) || filePath.endsWith(it.path) }
+                                val fileHasBeenRead = if (targetFile != null) {
+                                    readFilesThisSession.contains(filePath) ||
+                                    readFilesThisSession.contains(normalizePath(filePath)) ||
+                                    readFilesThisSession.contains(targetFile.path) ||
+                                    readFilesThisSession.contains(normalizePath(targetFile.path)) ||
+                                    history.any { content ->
+                                        content.parts.any { part ->
+                                            val t = part.text ?: ""
+                                            (t.contains("System/Tool Output for 'read_file'") || t.contains("System/Tool Output for 'read_file_range'") || t.contains("System/Tool Output for 'view_file'")) &&
+                                            (t.contains(filePath) || t.contains(normalizePath(filePath)) || t.contains(targetFile.path) || t.contains(normalizePath(targetFile.path)))
+                                        }
+                                    }
+                                } else true
+
                                 val result = if (repository.isBinaryExtension(filePath)) {
                                     "Error: Reading or editing binary files directly as text is NOT allowed."
-                                } else {
-                                    val files = repository.getFilesForProject(project.name)
-                                    val targetFile = files.find { it.path == filePath }
-                                    if (targetFile != null) {
-                                        var currentContent = targetFile.content
-                                        if (chunks.isEmpty()) {
-                                            "Error: No edit chunks provided for multi_edit_file. Provide 'chunks' or 'replacementChunks' list with search and replace blocks."
-                                        } else {
-                                            var chunkError: String? = null
-                                            val lineRanges = mutableListOf<String>()
+                                } else if (targetFile != null && !fileHasBeenRead) {
+                                    "Error: SYSTEM REJECTION - You cannot multi-edit file '$filePath' without reading it first! You MUST call 'read_file' or 'read_file_range' on '$filePath' to inspect its exact and current contents before making any changes. Please read the file first."
+                                } else if (targetFile != null) {
+                                    var currentContent = targetFile.content
+                                    if (chunks.isEmpty()) {
+                                        "Error: No edit chunks provided for multi_edit_file. Provide 'chunks' or 'replacementChunks' list with search and replace blocks."
+                                    } else {
+                                        var chunkError: String? = null
+                                        val lineRanges = mutableListOf<String>()
 
-                                            for ((index, chunk) in chunks.withIndex()) {
-                                                val searchStr = chunk.search ?: chunk.targetContent ?: ""
-                                                val replaceStr = chunk.replace ?: chunk.replacementContent ?: ""
+                                        for ((index, chunk) in chunks.withIndex()) {
+                                            val searchStr = chunk.search ?: chunk.targetContent ?: ""
+                                            val replaceStr = chunk.replace ?: chunk.replacementContent ?: ""
 
-                                                if (searchStr.isEmpty()) {
-                                                    chunkError = "Error in chunk #${index + 1}: 'search' block cannot be empty."
-                                                    break
-                                                }
-                                                if (!currentContent.contains(searchStr)) {
-                                                    chunkError = "Error in chunk #${index + 1}: Could not find exact search block in $filePath. Please double-check characters, indentation, and spaces."
-                                                    break
-                                                }
-                                                val occurrences = currentContent.split(searchStr).size - 1
-                                                if (occurrences > 1) {
-                                                    chunkError = "Error in chunk #${index + 1}: The search block is not unique. It occurs $occurrences times in the file."
-                                                    break
-                                                }
-
-                                                val startIndex = currentContent.indexOf(searchStr)
-                                                val linesBefore = currentContent.substring(0, startIndex).count { it == '\n' } + 1
-                                                val linesInSearch = searchStr.count { it == '\n' }
-                                                val endLine = linesBefore + linesInSearch
-                                                val chunkRangeStr = if (linesBefore == endLine) "$linesBefore" else "$linesBefore-$endLine"
-                                                lineRanges.add(chunkRangeStr)
-
-                                                currentContent = currentContent.replace(searchStr, replaceStr)
+                                            if (searchStr.isEmpty()) {
+                                                chunkError = "Error in chunk #${index + 1}: 'search' block cannot be empty."
+                                                break
+                                            }
+                                            if (!currentContent.contains(searchStr)) {
+                                                chunkError = "Error in chunk #${index + 1}: Could not find exact search block in $filePath. Please double-check characters, indentation, and spaces."
+                                                break
+                                            }
+                                            val occurrences = currentContent.split(searchStr).size - 1
+                                            if (occurrences > 1) {
+                                                chunkError = "Error in chunk #${index + 1}: The search block is not unique. It occurs $occurrences times in the file."
+                                                break
                                             }
 
-                                            if (chunkError != null) {
-                                                chunkError
-                                            } else {
-                                                foundRange = if (lineRanges.isNotEmpty()) lineRanges.joinToString(", ") else ""
-                                                try {
-                                                    repository.saveFile(project.name, filePath, currentContent)
-                                                    filesModifiedThisPrompt = true
-                                                    _editHistory.value = _editHistory.value + EditRecord(
-                                                        tool = "multi_edit",
-                                                        path = filePath,
-                                                        lines = foundRange
-                                                    )
-                                                    "Successfully multi-edited file '$filePath' ($foundRange)"
-                                                } catch (e: Exception) {
-                                                    "Error writing modified file: ${e.localizedMessage}"
-                                                }
+                                            val startIndex = currentContent.indexOf(searchStr)
+                                            val linesBefore = currentContent.substring(0, startIndex).count { it == '\n' } + 1
+                                            val linesInSearch = searchStr.count { it == '\n' }
+                                            val endLine = linesBefore + linesInSearch
+                                            val chunkRangeStr = if (linesBefore == endLine) "$linesBefore" else "$linesBefore-$endLine"
+                                            lineRanges.add(chunkRangeStr)
+
+                                            currentContent = currentContent.replace(searchStr, replaceStr)
+                                        }
+
+                                        if (chunkError != null) {
+                                            chunkError
+                                        } else {
+                                            foundRange = if (lineRanges.isNotEmpty()) lineRanges.joinToString(", ") else ""
+                                            try {
+                                                repository.saveFile(project.name, filePath, currentContent)
+                                                filesModifiedThisPrompt = true
+                                                _editHistory.value = _editHistory.value + EditRecord(
+                                                    tool = "multi_edit",
+                                                    path = filePath,
+                                                    lines = foundRange
+                                                )
+                                                "Successfully multi-edited file '$filePath' ($foundRange)"
+                                            } catch (e: Exception) {
+                                                "Error writing modified file: ${e.localizedMessage}"
                                             }
                                         }
-                                    } else {
-                                        "Error: File '$filePath' not found."
                                     }
+                                } else {
+                                    "Error: File '$filePath' not found."
                                 }
 
                                 val isSuccess = result.startsWith("Successfully")

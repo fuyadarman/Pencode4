@@ -579,6 +579,18 @@ object GeminiClient {
 
                 val request = requestBuilder.build()
 
+                val modelDisplayName = if (modelId.isNotBlank()) modelId else when (provider.lowercase()) {
+                    "opencode_zen", "opencode" -> "OpenCode Zen"
+                    "ollama_cloud", "ollama" -> "Ollama"
+                    "openai" -> "OpenAI"
+                    "mistral" -> "Mistral"
+                    "groq" -> "Groq"
+                    "cohere" -> "Cohere"
+                    "openrouter" -> "OpenRouter"
+                    "cloudflare" -> "Cloudflare"
+                    else -> provider
+                }
+
                 try {
                     var attempt = 0
                     val maxAttempts = 10
@@ -611,7 +623,7 @@ object GeminiClient {
                                         1000L * attempt
                                     }
                                     val errStr = if (isRateLimit) "Rate Limit (429)" else "API Error $lastCode"
-                                    onRetryListener?.invoke(provider, attempt, maxAttempts, errStr)
+                                    onRetryListener?.invoke(modelDisplayName, attempt, maxAttempts, errStr)
                                     Log.w(TAG, "$provider API Error $lastCode. Retrying in ${backoff}ms (Attempt $attempt of $maxAttempts)...")
                                     Thread.sleep(backoff)
                                     continue
@@ -637,7 +649,7 @@ object GeminiClient {
                                     1000L * attempt
                                 }
                                 val errStr = e.message ?: "Network Exception"
-                                onRetryListener?.invoke(provider, attempt, maxAttempts, errStr)
+                                onRetryListener?.invoke(modelDisplayName, attempt, maxAttempts, errStr)
                                 Log.w(TAG, "$provider API call threw exception. Retrying in ${backoff}ms (Attempt $attempt of $maxAttempts)...")
                                 Thread.sleep(backoff)
                                 continue
