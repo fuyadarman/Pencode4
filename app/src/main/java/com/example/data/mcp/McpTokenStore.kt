@@ -51,6 +51,22 @@ class McpTokenStore(context: Context) {
         saveTokens(current.copy(codeVerifier = verifier, authState = state))
     }
 
+    fun findServerIdByState(state: String): String? {
+        if (state.isBlank()) return null
+        val all = prefs.all
+        for ((key, value) in all) {
+            if (key.startsWith("token_") && value is String) {
+                try {
+                    val tokenData = adapter.fromJson(value)
+                    if (tokenData?.authState == state || (tokenData?.authState != null && state.contains(tokenData.authState))) {
+                        return tokenData.serverId
+                    }
+                } catch (_: Exception) {}
+            }
+        }
+        return null
+    }
+
     fun clearTokens(serverId: String) {
         prefs.edit().remove("token_${serverId}").apply()
     }

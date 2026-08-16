@@ -71,6 +71,7 @@ fun WorkspaceScreen(
     onAddMcpServer: (String, String, String, String?) -> Unit = { _, _, _, _ -> },
     onToggleMcpWorkspace: (String, Boolean) -> Unit = { _, _ -> },
     onTestConnectMcp: suspend (String) -> Unit = {},
+    onStartMcpOAuthFlow: (android.content.Context, String, String?) -> Unit = { _, _, _ -> },
     onDeleteMcpServer: (String) -> Unit = {},
     terminalOutput: String,
     gitProgress: String,
@@ -733,6 +734,7 @@ fun WorkspaceScreen(
             onAddServer = onAddMcpServer,
             onToggleWorkspace = onToggleMcpWorkspace,
             onTestConnect = onTestConnectMcp,
+            onStartOAuthFlow = onStartMcpOAuthFlow,
             onDeleteServer = onDeleteMcpServer,
             onDismiss = { showMcpDialog = false }
         )

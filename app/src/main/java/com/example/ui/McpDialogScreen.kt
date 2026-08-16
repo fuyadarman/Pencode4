@@ -40,6 +40,7 @@ fun McpManagementDialog(
     onAddServer: (name: String, url: String, platform: String, apiKey: String?) -> Unit,
     onToggleWorkspace: (serverId: String, enabled: Boolean) -> Unit,
     onTestConnect: suspend (serverId: String) -> Unit,
+    onStartOAuthFlow: (android.content.Context, String, String?) -> Unit = { _, _, _ -> },
     onDeleteServer: (serverId: String) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -58,11 +59,8 @@ fun McpManagementDialog(
                 selectedOAuthServer = null
                 onAddServer(target.name, target.url, target.platform, null)
                 val activeServerId = servers.find { it.platform == target.platform || it.id == target.id }?.id ?: target.id
-                scope.launch {
-                    val activity = context as? android.app.Activity ?: (context as? android.content.ContextWrapper)?.baseContext as? android.app.Activity ?: context
-                    val mcpMgr = com.example.data.McpManager(context)
-                    mcpMgr.startOAuthFlow(activity, activeServerId, clientId)
-                }
+                val activity = context as? android.app.Activity ?: (context as? android.content.ContextWrapper)?.baseContext as? android.app.Activity ?: context
+                onStartOAuthFlow(activity, activeServerId, clientId)
             },
             onConfirmConnect = { token ->
                 selectedOAuthServer = null
@@ -80,10 +78,11 @@ fun McpManagementDialog(
     ) {
         Surface(
             modifier = Modifier
-                .fillMaxWidth(0.95f)
-                .fillMaxHeight(0.88f)
-                .clip(RoundedCornerShape(20.dp)),
-            color = MaterialTheme.colorScheme.surface,
+                .fillMaxWidth(0.96f)
+                .fillMaxHeight(0.90f)
+                .clip(RoundedCornerShape(18.dp))
+                .border(1.dp, Color(0xFF262C40), RoundedCornerShape(18.dp)),
+            color = Color(0xFF0F1117),
             tonalElevation = 8.dp
         ) {
             Column(
@@ -97,55 +96,124 @@ fun McpManagementDialog(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Box(
                             modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primaryContainer),
+                                .size(38.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color(0xFF6366F1).copy(alpha = 0.16f))
+                                .border(1.dp, Color(0xFF6366F1).copy(alpha = 0.35f), RoundedCornerShape(10.dp)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Extension,
                                 contentDescription = "MCP Integration",
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = Color(0xFF818CF8),
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "Model Context Protocol (MCP)",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFF1F5F9),
+                                    fontSize = 15.sp
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Surface(
+                                    color = Color(0xFF6366F1).copy(alpha = 0.18f),
+                                    shape = RoundedCornerShape(4.dp)
+                                ) {
+                                    Text(
+                                        text = "PRO",
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF818CF8),
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "Remote MCP Servers",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "Manage Appwrite, Supabase, Cloudflare, Vercel & Custom MCPs for $workspaceName",
+                                text = "Integrate remote database, auth & serverless tools into AI workflows",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = Color(0xFF94A3B8),
                                 fontSize = 11.sp
                             )
                         }
                     }
 
-                    IconButton(onClick = onDismiss) {
-                        Icon(imageVector = Icons.Default.Close, contentDescription = "Close")
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = Color(0xFF94A3B8),
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
-                // Tabs
-                TabRow(selectedTabIndex = selectedTab) {
-                    Tab(
-                        selected = selectedTab == 0,
-                        onClick = { selectedTab = 0 },
-                        text = { Text("Active in $workspaceName", fontSize = 13.sp, fontWeight = FontWeight.Medium) }
-                    )
-                    Tab(
-                        selected = selectedTab == 1,
-                        onClick = { selectedTab = 1 },
-                        text = { Text("All MCP Servers (${servers.size})", fontSize = 13.sp, fontWeight = FontWeight.Medium) }
-                    )
+                // Custom Segmented Pill Tab Row
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    color = Color(0xFF161A26),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF23293D))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(3.dp)
+                    ) {
+                        val tab0Active = selectedTab == 0
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { selectedTab = 0 },
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (tab0Active) Color(0xFF262E45) else Color.Transparent
+                        ) {
+                            Text(
+                                text = "Active in $workspaceName",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = if (tab0Active) FontWeight.Bold else FontWeight.Medium,
+                                color = if (tab0Active) Color(0xFFF1F5F9) else Color(0xFF94A3B8),
+                                modifier = Modifier.padding(vertical = 8.dp),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                fontSize = 12.sp
+                            )
+                        }
+
+                        val tab1Active = selectedTab == 1
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { selectedTab = 1 },
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (tab1Active) Color(0xFF262E45) else Color.Transparent
+                        ) {
+                            Text(
+                                text = "All MCP Servers (${servers.size})",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = if (tab1Active) FontWeight.Bold else FontWeight.Medium,
+                                color = if (tab1Active) Color(0xFFF1F5F9) else Color(0xFF94A3B8),
+                                modifier = Modifier.padding(vertical = 8.dp),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -157,28 +225,34 @@ fun McpManagementDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (selectedTab == 0) "Toggle MCPs on/off for AI in this workspace:" else "Remote MCP Server Connections:",
+                        text = if (selectedTab == 0) "Workspace active integrations:" else "Registered MCP endpoints:",
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold
+                        color = Color(0xFF94A3B8),
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 12.sp
                     )
 
                     Button(
                         onClick = { showAddForm = !showAddForm },
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                        shape = RoundedCornerShape(12.dp)
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (showAddForm) Color(0xFF262E45) else Color(0xFF6366F1),
+                            contentColor = Color.White
+                        ),
+                        modifier = Modifier.height(34.dp)
                     ) {
                         Icon(
                             imageVector = if (showAddForm) Icons.Default.ExpandLess else Icons.Default.Add,
                             contentDescription = "Add MCP",
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(15.dp)
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(text = if (showAddForm) "Close Form" else "Add Remote MCP", fontSize = 12.sp)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(text = if (showAddForm) "Close" else "Add Remote MCP", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 // Add MCP Server Form
                 AnimatedVisibility(visible = showAddForm) {
@@ -206,18 +280,38 @@ fun McpManagementDialog(
                             .weight(1f),
                         contentAlignment = Alignment.Center
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                imageVector = Icons.Default.Dns,
-                                contentDescription = null,
-                                modifier = Modifier.size(48.dp),
-                                tint = MaterialTheme.colorScheme.outline
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(24.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(52.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF1E2333)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Dns,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(24.dp),
+                                    tint = Color(0xFF64748B)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
                             Text(
-                                text = if (selectedTab == 0) "No MCP servers enabled for this workspace.\nSwitch tab or enable servers below." else "No MCP servers added yet.",
+                                text = if (selectedTab == 0) "No MCP servers enabled for $workspaceName" else "No MCP servers added yet",
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = Color(0xFFCBD5E1),
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = if (selectedTab == 0) "Switch to 'All MCP Servers' to toggle or click 'Add Remote MCP'" else "Click 'Add Remote MCP' above to register your first endpoint",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF64748B),
+                                fontSize = 11.sp,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
                             )
                         }
                     }
@@ -226,7 +320,7 @@ fun McpManagementDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         items(displayServers, key = { it.id }) { server ->
                             McpServerItemCard(
@@ -263,121 +357,172 @@ fun AddMcpServerCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f), RoundedCornerShape(12.dp)),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            .border(1.dp, Color(0xFF262E45), RoundedCornerShape(12.dp)),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF131724))
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(
-                text = "Add Remote MCP Server URL",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AddCircleOutline,
+                    contentDescription = null,
+                    tint = Color(0xFF818CF8),
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "Register Remote MCP Server",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFFF1F5F9),
+                    fontSize = 13.sp
+                )
+            }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             // Platform Preset selector
-            Text("Platform Preset:", style = MaterialTheme.typography.labelSmall, fontSize = 11.sp)
-            Spacer(modifier = Modifier.height(4.dp))
+            Text("Select Platform Preset:", style = MaterialTheme.typography.labelSmall, fontSize = 11.sp, color = Color(0xFF94A3B8))
+            Spacer(modifier = Modifier.height(6.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                McpPlatformType.entries.take(4).forEach { plat ->
-                    FilterChip(
-                        selected = selectedPlatform == plat,
-                        onClick = {
-                            selectedPlatform = plat
-                            if (name.isEmpty() || McpPlatformType.entries.any { it.displayName == name }) {
-                                name = "${plat.displayName} MCP"
-                            }
-                            if (url.isEmpty() || McpPlatformType.entries.any { it.defaultUrlPlaceholder == url }) {
-                                url = plat.defaultUrlPlaceholder
-                            }
-                        },
-                        label = { Text(plat.displayName, fontSize = 10.sp) },
-                        modifier = Modifier.height(28.dp)
-                    )
+                McpPlatformType.entries.take(3).forEach { plat ->
+                    val isSelected = selectedPlatform == plat
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable {
+                                selectedPlatform = plat
+                                if (name.isEmpty() || McpPlatformType.entries.any { it.displayName == name || name.startsWith(it.displayName) }) {
+                                    name = "${plat.displayName} MCP"
+                                }
+                                if (url.isEmpty() || McpPlatformType.entries.any { it.defaultUrlPlaceholder == url }) {
+                                    url = plat.defaultUrlPlaceholder
+                                }
+                            },
+                        shape = RoundedCornerShape(6.dp),
+                        color = if (isSelected) Color(0xFF6366F1).copy(alpha = 0.25f) else Color(0xFF1A2030),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, if (isSelected) Color(0xFF6366F1) else Color(0xFF262C40))
+                    ) {
+                        Text(
+                            text = plat.displayName,
+                            fontSize = 11.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isSelected) Color(0xFF818CF8) else Color(0xFF94A3B8),
+                            modifier = Modifier.padding(vertical = 6.dp),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
                 }
             }
+            Spacer(modifier = Modifier.height(6.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                McpPlatformType.entries.drop(4).forEach { plat ->
-                    FilterChip(
-                        selected = selectedPlatform == plat,
-                        onClick = {
-                            selectedPlatform = plat
-                            if (name.isEmpty() || McpPlatformType.entries.any { it.displayName == name }) {
-                                name = "${plat.displayName} MCP"
-                            }
-                            if (url.isEmpty() || McpPlatformType.entries.any { it.defaultUrlPlaceholder == url }) {
-                                url = plat.defaultUrlPlaceholder
-                            }
-                        },
-                        label = { Text(plat.displayName, fontSize = 10.sp) },
-                        modifier = Modifier.height(28.dp)
-                    )
+                McpPlatformType.entries.drop(3).forEach { plat ->
+                    val isSelected = selectedPlatform == plat
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable {
+                                selectedPlatform = plat
+                                if (name.isEmpty() || McpPlatformType.entries.any { it.displayName == name || name.startsWith(it.displayName) }) {
+                                    name = "${plat.displayName} MCP"
+                                }
+                                if (url.isEmpty() || McpPlatformType.entries.any { it.defaultUrlPlaceholder == url }) {
+                                    url = plat.defaultUrlPlaceholder
+                                }
+                            },
+                        shape = RoundedCornerShape(6.dp),
+                        color = if (isSelected) Color(0xFF6366F1).copy(alpha = 0.25f) else Color(0xFF1A2030),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, if (isSelected) Color(0xFF6366F1) else Color(0xFF262C40))
+                    ) {
+                        Text(
+                            text = plat.displayName,
+                            fontSize = 11.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isSelected) Color(0xFF818CF8) else Color(0xFF94A3B8),
+                            modifier = Modifier.padding(vertical = 6.dp),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
                 label = { Text("Server Name", fontSize = 11.sp) },
-                placeholder = { Text("e.g. Appwrite Cloud MCP") },
+                placeholder = { Text("e.g. Supabase Production MCP", fontSize = 12.sp, color = Color(0xFF64748B)) },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp)
             )
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             OutlinedTextField(
                 value = url,
                 onValueChange = { url = it },
                 label = { Text("Remote MCP Server URL", fontSize = 11.sp) },
-                placeholder = { Text(selectedPlatform.defaultUrlPlaceholder) },
+                placeholder = { Text(selectedPlatform.defaultUrlPlaceholder, fontSize = 12.sp, color = Color(0xFF64748B)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                shape = RoundedCornerShape(8.dp)
             )
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             OutlinedTextField(
                 value = apiKey,
                 onValueChange = { apiKey = it },
                 label = { Text("API Key / Bearer Token (Optional)", fontSize = 11.sp) },
+                placeholder = { Text("Leave blank if using OAuth browser flow", fontSize = 12.sp, color = Color(0xFF64748B)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
                 visualTransformation = if (showApiKey) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon = {
                     IconButton(onClick = { showApiKey = !showApiKey }) {
                         Icon(
                             imageVector = if (showApiKey) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                            contentDescription = "Toggle API Key"
+                            contentDescription = "Toggle API Key",
+                            tint = Color(0xFF94A3B8),
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
             )
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            Button(
-                onClick = {
-                    if (name.isNotBlank() && url.isNotBlank()) {
-                        onSave(name.trim(), url.trim(), selectedPlatform.name, apiKey.trim().ifEmpty { null })
-                    }
-                },
-                enabled = name.isNotBlank() && url.isNotBlank(),
-                modifier = Modifier.align(Alignment.End)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
             ) {
-                Icon(imageVector = Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Save & Connect")
+                Button(
+                    onClick = {
+                        if (name.isNotBlank() && url.isNotBlank()) {
+                            onSave(name.trim(), url.trim(), selectedPlatform.name, apiKey.trim().ifEmpty { null })
+                        }
+                    },
+                    enabled = name.isNotBlank() && url.isNotBlank(),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1), contentColor = Color.White),
+                    modifier = Modifier.height(36.dp)
+                ) {
+                    Icon(imageVector = Icons.Default.Check, contentDescription = null, modifier = Modifier.size(15.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Save MCP Server", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                }
             }
         }
     }
@@ -396,14 +541,16 @@ fun McpServerItemCard(
     val platformBadgeColor = when (platformType) {
         McpPlatformType.SUPABASE -> Color(0xFF3ECF8E)
         McpPlatformType.CLOUDFLARE -> Color(0xFFF38020)
-        McpPlatformType.VERCEL -> Color(0xFF000000)
-        McpPlatformType.GOOGLE_STITCH -> Color(0xFF4285F4)
-        McpPlatformType.CUSTOM -> Color(0xFF7C4DFF)
+        McpPlatformType.VERCEL -> Color(0xFFE2E8F0)
+        McpPlatformType.GOOGLE_STITCH -> Color(0xFF60A5FA)
+        McpPlatformType.CUSTOM -> Color(0xFFA78BFA)
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, Color(0xFF22283A), RoundedCornerShape(12.dp)),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF131722))
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(
@@ -415,7 +562,7 @@ fun McpServerItemCard(
                     modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    McpPlatformLogo(platformType = platformType, size = 38.dp)
+                    McpPlatformLogo(platformType = platformType, size = 36.dp)
 
                     Spacer(modifier = Modifier.width(10.dp))
 
@@ -424,36 +571,32 @@ fun McpServerItemCard(
                             Text(
                                 text = server.name,
                                 style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFF1F5F9),
+                                fontSize = 13.sp
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Surface(
-                                color = platformBadgeColor.copy(alpha = 0.2f),
-                                shape = RoundedCornerShape(4.dp)
+                                color = platformBadgeColor.copy(alpha = 0.15f),
+                                shape = RoundedCornerShape(4.dp),
+                                border = androidx.compose.foundation.BorderStroke(0.5.dp, platformBadgeColor.copy(alpha = 0.4f))
                             ) {
                                 Text(
-                                    text = platformType.displayName,
-                                    fontSize = 9.sp,
+                                    text = platformType.displayName.uppercase(),
+                                    fontSize = 8.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = platformBadgeColor,
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
                                 )
                             }
                         }
 
                         Text(
-                            text = platformType.description,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Medium,
-                            fontSize = 11.sp
-                        )
-
-                        Text(
                             text = server.url,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 10.sp
+                            color = Color(0xFF64748B),
+                            fontSize = 11.sp,
+                            maxLines = 1
                         )
                     }
                 }
@@ -466,22 +609,34 @@ fun McpServerItemCard(
 
             Spacer(modifier = Modifier.height(10.dp))
 
+            // Divider line
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(Color(0xFF1E2333))
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Status indicator
+                val isConnected = server.status.startsWith("Connected")
+                val isPending = server.status.startsWith("Connecting") || server.status.startsWith("Discovering") || server.status.startsWith("Awaiting") || server.status.startsWith("Authorizing")
                 val statusColor = when {
-                    server.status.startsWith("Connected") -> Color(0xFF4CAF50)
-                    server.status.startsWith("Connecting") -> Color(0xFFFF9800)
-                    else -> MaterialTheme.colorScheme.error
+                    isConnected -> Color(0xFF10B981)
+                    isPending -> Color(0xFFF59E0B)
+                    else -> Color(0xFFEF4444)
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
-                            .size(8.dp)
+                            .size(7.dp)
                             .clip(CircleShape)
                             .background(statusColor)
                     )
@@ -494,38 +649,45 @@ fun McpServerItemCard(
                     )
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     Button(
                         onClick = onOAuthConnect,
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
-                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                        shape = RoundedCornerShape(6.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isConnected) Color(0xFF1E2436) else Color(0xFF6366F1),
+                            contentColor = if (isConnected) Color(0xFFCBD5E1) else Color.White
+                        ),
                         modifier = Modifier.height(30.dp)
                     ) {
                         Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, modifier = Modifier.size(12.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(if (server.status.startsWith("Connected")) "Reconnect" else "Connect (OAuth)", fontSize = 10.sp)
+                        Text(if (isConnected) "Re-auth" else "Connect", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                     }
-
-                    Spacer(modifier = Modifier.width(6.dp))
 
                     OutlinedButton(
                         onClick = onConnectTest,
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                        shape = RoundedCornerShape(6.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF262E45)),
                         modifier = Modifier.height(30.dp)
                     ) {
-                        Text("Sync", fontSize = 10.sp)
+                        Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(12.dp), tint = Color(0xFF94A3B8))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Sync", fontSize = 11.sp, color = Color(0xFFCBD5E1))
                     }
-
-                    Spacer(modifier = Modifier.width(6.dp))
 
                     IconButton(
                         onClick = onDelete,
-                        modifier = Modifier.size(28.dp)
+                        modifier = Modifier.size(30.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Delete,
+                            imageVector = Icons.Default.DeleteOutline,
                             contentDescription = "Delete MCP",
-                            tint = MaterialTheme.colorScheme.error,
+                            tint = Color(0xFFF43F5E),
                             modifier = Modifier.size(16.dp)
                         )
                     }

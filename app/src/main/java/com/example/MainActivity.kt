@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.graphics.Color
@@ -34,8 +35,11 @@ class MainActivity : ComponentActivity() {
 
     private var mainViewModel: VibeViewModel? = null
 
+    private var pendingOAuthUri: android.net.Uri? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        pendingOAuthUri = intent?.data
         
         // Handle initial intent if launched via deep link
         intent?.data?.let { uri ->
@@ -69,6 +73,12 @@ class MainActivity : ComponentActivity() {
                         val viewModel: VibeViewModel = viewModel()
                         mainViewModel = viewModel
                         
+                        LaunchedEffect(Unit) {
+                            pendingOAuthUri?.let { uri ->
+                                viewModel.handleMcpOAuthCallback(uri)
+                                pendingOAuthUri = null
+                            }
+                        }
                         val currentProject by viewModel.currentProject.collectAsState()
                         val projectsList by viewModel.projectsList.collectAsState()
                         val projectFiles by viewModel.projectFiles.collectAsState()
@@ -167,6 +177,7 @@ class MainActivity : ComponentActivity() {
                                 onAddMcpServer = { name, url, platform, apiKey -> viewModel.mcpManager.addServer(name, url, platform, apiKey) },
                                 onToggleMcpWorkspace = { serverId, enabled -> viewModel.mcpManager.toggleWorkspaceForServer(serverId, currentProject?.name ?: "", enabled) },
                                 onTestConnectMcp = { serverId -> viewModel.mcpManager.testAndConnectServer(serverId) },
+                                onStartMcpOAuthFlow = { context, serverId, clientId -> viewModel.startMcpOAuthFlow(context, serverId, clientId) },
                                 onDeleteMcpServer = { serverId -> viewModel.mcpManager.deleteServer(serverId) },
                                 terminalOutput = terminalOutput,
                                 isLoadingWorkspace = isLoadingWorkspace,

@@ -144,15 +144,35 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     val mcpManager = McpManager(application)
     val mcpServers: StateFlow<List<McpServer>> = mcpManager.servers
 
+    fun startMcpOAuthFlow(activity: android.content.Context, serverId: String, clientId: String?) {
+        viewModelScope.launch {
+            mcpManager.startOAuthFlow(activity, serverId, clientId)
+        }
+    }
+
     fun handleMcpOAuthCallback(uri: android.net.Uri?) {
         if (uri == null) return
+        val rawState = uri.getQueryParameter("state") ?: ""
+        val serverIdFromState = if (rawState.contains(":")) rawState.substringBefore(":") else rawState
+
         val serverId = uri.getQueryParameter("server_id")
-            ?: mcpServers.value.find { it.status.contains("Browser", ignoreCase = true) || it.status.contains("Discovering", ignoreCase = true) || it.status.contains("Connecting", ignoreCase = true) }?.id
+            ?: (if (serverIdFromState.isNotBlank() && mcpServers.value.any { it.id == serverIdFromState }) serverIdFromState else null)
+            ?: mcpManager.tokenStore.findServerIdByState(rawState)
+            ?: mcpServers.value.find {
+                it.status.contains("Browser", ignoreCase = true) ||
+                it.status.contains("Discovering", ignoreCase = true) ||
+                it.status.contains("Connecting", ignoreCase = true) ||
+                it.status.contains("Awaiting", ignoreCase = true) ||
+                it.status.contains("Authorizing", ignoreCase = true)
+            }?.id
             ?: mcpServers.value.firstOrNull()?.id
             ?: return
 
         viewModelScope.launch {
-            mcpManager.handleOAuthCallback(serverId, uri)
+            val result = mcpManager.handleOAuthCallback(serverId, uri)
+            if (result.isSuccess) {
+                mcpManager.testAndConnectServer(serverId)
+            }
         }
     }
 
