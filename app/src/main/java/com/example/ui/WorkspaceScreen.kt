@@ -266,39 +266,80 @@ fun WorkspaceScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { showRestoreDialog = true }) {
+                    Surface(
+                        onClick = { showAgentSkillsDialog = true },
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFF161B22),
+                        border = BorderStroke(1.dp, Color(0xFF30363D)),
+                        modifier = Modifier.padding(end = 4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Extension,
+                                contentDescription = "Skills",
+                                tint = Color(0xFF58A6FF),
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = "Skills",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFFC9D1D9)
+                            )
+                        }
+                    }
+                    Surface(
+                        onClick = { showMcpDialog = true },
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFF161B22),
+                        border = BorderStroke(1.dp, Color(0xFF30363D)),
+                        modifier = Modifier.padding(end = 4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Hub,
+                                contentDescription = "MCP",
+                                tint = Color(0xFFA371F7),
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = "MCP",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFFC9D1D9)
+                            )
+                        }
+                    }
+                    IconButton(onClick = { showRestoreDialog = true }, modifier = Modifier.size(34.dp)) {
                         Icon(
                             imageVector = Icons.Default.History,
                             contentDescription = "Version Backups",
-                            tint = Color(0xFF89B4FA)
+                            tint = Color(0xFF8B949E),
+                            modifier = Modifier.size(17.dp)
                         )
                     }
-                    IconButton(onClick = { showAgentSkillsDialog = true }) {
-                        Icon(
-                            imageVector = Icons.Default.Extension,
-                            contentDescription = "Agent Skills",
-                            tint = Color(0xFF00F2FE)
-                        )
-                    }
-                    IconButton(onClick = { showMcpDialog = true }) {
-                        Icon(
-                            imageVector = Icons.Default.Hub,
-                            contentDescription = "MCP Servers",
-                            tint = Color(0xFF7C4DFF)
-                        )
-                    }
-                    IconButton(onClick = { showSettingsDialog = true }) {
+                    IconButton(onClick = { showSettingsDialog = true }, modifier = Modifier.size(34.dp)) {
                         Icon(
                             imageVector = Icons.Default.Settings,
                             contentDescription = "AI settings",
-                            tint = Color(0xFF38BDF8)
+                            tint = Color(0xFF8B949E),
+                            modifier = Modifier.size(17.dp)
                         )
                     }
-                    IconButton(onClick = { showCreateFileDialog = true }) {
+                    IconButton(onClick = { showCreateFileDialog = true }, modifier = Modifier.size(34.dp)) {
                         Icon(
                             imageVector = Icons.Default.NoteAdd,
                             contentDescription = "New file",
-                            tint = Color(0xFF38BDF8)
+                            tint = Color(0xFF58A6FF),
+                            modifier = Modifier.size(17.dp)
                         )
                     }
                 },
@@ -798,76 +839,82 @@ fun WorkspaceBottomNavigation(
     currentTab: WorkspaceTab,
     onTabSelected: (WorkspaceTab) -> Unit
 ) {
-    NavigationBar(
-        containerColor = Color(0xFF080A0E),
-        tonalElevation = 8.dp,
-        modifier = Modifier.height(72.dp)
+    Surface(
+        color = Color(0xFF0D1117),
+        border = BorderStroke(1.dp, Color(0xFF21262D)),
+        modifier = Modifier.fillMaxWidth()
     ) {
-        NavigationBarItem(
-            selected = currentTab == WorkspaceTab.CHAT,
-            onClick = { onTabSelected(WorkspaceTab.CHAT) },
-            icon = { Icon(Icons.Default.ChatBubble, contentDescription = "Agent Chat") },
-            label = { Text("Agent", fontWeight = FontWeight.Bold, fontSize = 11.sp) },
-            colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = Color(0xFF38BDF8),
-                selectedTextColor = Color(0xFF38BDF8),
-                unselectedIconColor = Color(0xFF4F5575),
-                unselectedTextColor = Color(0xFF4F5575),
-                indicatorColor = Color(0xFF141A29)
+        NavigationBar(
+            containerColor = Color(0xFF0D1117),
+            tonalElevation = 0.dp,
+            modifier = Modifier.height(64.dp)
+        ) {
+            NavigationBarItem(
+                selected = currentTab == WorkspaceTab.CHAT,
+                onClick = { onTabSelected(WorkspaceTab.CHAT) },
+                icon = { Icon(Icons.Default.ChatBubble, contentDescription = "Agent Chat", modifier = Modifier.size(20.dp)) },
+                label = { Text("Agent", fontWeight = FontWeight.Medium, fontSize = 11.sp) },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Color(0xFF58A6FF),
+                    selectedTextColor = Color(0xFF58A6FF),
+                    unselectedIconColor = Color(0xFF8B949E),
+                    unselectedTextColor = Color(0xFF8B949E),
+                    indicatorColor = Color(0xFF161B22)
+                )
             )
-        )
-        NavigationBarItem(
-            selected = currentTab == WorkspaceTab.CODE,
-            onClick = { onTabSelected(WorkspaceTab.CODE) },
-            icon = { Icon(Icons.Default.Code, contentDescription = "Editor") },
-            label = { Text("Editor", fontWeight = FontWeight.Bold, fontSize = 11.sp) },
-            colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = Color(0xFF8B5CF6),
-                selectedTextColor = Color(0xFF8B5CF6),
-                unselectedIconColor = Color(0xFF4F5575),
-                unselectedTextColor = Color(0xFF4F5575),
-                indicatorColor = Color(0xFF141A29)
+            NavigationBarItem(
+                selected = currentTab == WorkspaceTab.CODE,
+                onClick = { onTabSelected(WorkspaceTab.CODE) },
+                icon = { Icon(Icons.Default.Code, contentDescription = "Editor", modifier = Modifier.size(20.dp)) },
+                label = { Text("Editor", fontWeight = FontWeight.Medium, fontSize = 11.sp) },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Color(0xFF58A6FF),
+                    selectedTextColor = Color(0xFF58A6FF),
+                    unselectedIconColor = Color(0xFF8B949E),
+                    unselectedTextColor = Color(0xFF8B949E),
+                    indicatorColor = Color(0xFF161B22)
+                )
             )
-        )
-        NavigationBarItem(
-            selected = currentTab == WorkspaceTab.PREVIEW,
-            onClick = { onTabSelected(WorkspaceTab.PREVIEW) },
-            icon = { Icon(Icons.Default.Language, contentDescription = "Preview") },
-            label = { Text("Preview", fontWeight = FontWeight.Bold, fontSize = 11.sp) },
-            colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = Color(0xFF2ED573),
-                selectedTextColor = Color(0xFF2ED573),
-                unselectedIconColor = Color(0xFF4F5575),
-                unselectedTextColor = Color(0xFF4F5575),
-                indicatorColor = Color(0xFF141A29)
+            NavigationBarItem(
+                selected = currentTab == WorkspaceTab.PREVIEW,
+                onClick = { onTabSelected(WorkspaceTab.PREVIEW) },
+                icon = { Icon(Icons.Default.Language, contentDescription = "Preview", modifier = Modifier.size(20.dp)) },
+                label = { Text("Preview", fontWeight = FontWeight.Medium, fontSize = 11.sp) },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Color(0xFF3FB950),
+                    selectedTextColor = Color(0xFF3FB950),
+                    unselectedIconColor = Color(0xFF8B949E),
+                    unselectedTextColor = Color(0xFF8B949E),
+                    indicatorColor = Color(0xFF161B22)
+                )
             )
-        )
-        NavigationBarItem(
-            selected = currentTab == WorkspaceTab.TERMINAL,
-            onClick = { onTabSelected(WorkspaceTab.TERMINAL) },
-            icon = { Icon(Icons.Default.Terminal, contentDescription = "Terminal") },
-            label = { Text("Terminal", fontWeight = FontWeight.Bold, fontSize = 11.sp) },
-            colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = Color(0xFFF1C40F),
-                selectedTextColor = Color(0xFFF1C40F),
-                unselectedIconColor = Color(0xFF4F5575),
-                unselectedTextColor = Color(0xFF4F5575),
-                indicatorColor = Color(0xFF141A29)
+            NavigationBarItem(
+                selected = currentTab == WorkspaceTab.TERMINAL,
+                onClick = { onTabSelected(WorkspaceTab.TERMINAL) },
+                icon = { Icon(Icons.Default.Terminal, contentDescription = "Terminal", modifier = Modifier.size(20.dp)) },
+                label = { Text("Terminal", fontWeight = FontWeight.Medium, fontSize = 11.sp) },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Color(0xFFD29922),
+                    selectedTextColor = Color(0xFFD29922),
+                    unselectedIconColor = Color(0xFF8B949E),
+                    unselectedTextColor = Color(0xFF8B949E),
+                    indicatorColor = Color(0xFF161B22)
+                )
             )
-        )
-        NavigationBarItem(
-            selected = currentTab == WorkspaceTab.ANDROID_BUILD,
-            onClick = { onTabSelected(WorkspaceTab.ANDROID_BUILD) },
-            icon = { Icon(Icons.Default.Build, contentDescription = "Android Build") },
-            label = { Text("Build", fontWeight = FontWeight.Bold, fontSize = 11.sp) },
-            colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = Color(0xFFEC4899),
-                selectedTextColor = Color(0xFFEC4899),
-                unselectedIconColor = Color(0xFF4F5575),
-                unselectedTextColor = Color(0xFF4F5575),
-                indicatorColor = Color(0xFF141A29)
+            NavigationBarItem(
+                selected = currentTab == WorkspaceTab.ANDROID_BUILD,
+                onClick = { onTabSelected(WorkspaceTab.ANDROID_BUILD) },
+                icon = { Icon(Icons.Default.Build, contentDescription = "Android Build", modifier = Modifier.size(20.dp)) },
+                label = { Text("Build", fontWeight = FontWeight.Medium, fontSize = 11.sp) },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Color(0xFFA371F7),
+                    selectedTextColor = Color(0xFFA371F7),
+                    unselectedIconColor = Color(0xFF8B949E),
+                    unselectedTextColor = Color(0xFF8B949E),
+                    indicatorColor = Color(0xFF161B22)
+                )
             )
-        )
+        }
     }
 }
 
@@ -1859,17 +1906,17 @@ fun ChatTabContent(
                     OutlinedTextField(
                         value = chatInputText,
                         onValueChange = { onUpdateChatInputText(it) },
-                        placeholder = { Text("Describe your request (@ files, / skills)...", color = Color(0xFF4F5575), fontSize = 13.sp) },
+                        placeholder = { Text("Describe your request (@ files, / skills)...", color = Color(0xFF8D96A0), fontSize = 13.sp) },
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedBorderColor = Color(0xFF222533),
-                            unfocusedBorderColor = Color(0xFF222533),
-                            focusedContainerColor = Color(0xFF161822),
-                            unfocusedContainerColor = Color(0xFF161822)
+                            focusedTextColor = Color(0xFFE6EDF3),
+                            unfocusedTextColor = Color(0xFFE6EDF3),
+                            focusedBorderColor = Color(0xFF2F81F7),
+                            unfocusedBorderColor = Color(0xFF30363D),
+                            focusedContainerColor = Color(0xFF161B22),
+                            unfocusedContainerColor = Color(0xFF161B22)
                         ),
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(10.dp),
                         maxLines = 5,
                         trailingIcon = {
                             Row(
@@ -1878,10 +1925,10 @@ fun ChatTabContent(
                                 modifier = Modifier.padding(end = 8.dp)
                             ) {
                                 IconButton(onClick = { onOpenSettings() }, modifier = Modifier.size(36.dp)) {
-                                    Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color(0xFF94A3B8), modifier = Modifier.size(20.dp))
+                                    Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color(0xFF8D96A0), modifier = Modifier.size(18.dp))
                                 }
                                 IconButton(onClick = { filePickerLauncher.launch("*/*") }, modifier = Modifier.size(36.dp)) {
-                                    Icon(Icons.Default.AttachFile, contentDescription = "Attach", tint = Color(0xFF94A3B8), modifier = Modifier.size(20.dp))
+                                    Icon(Icons.Default.AttachFile, contentDescription = "Attach", tint = Color(0xFF8D96A0), modifier = Modifier.size(18.dp))
                                 }
                                 IconButton(
                                     onClick = {
@@ -1916,33 +1963,33 @@ fun ChatTabContent(
                                     },
                                     enabled = (chatInputText.isNotBlank() || attachedFiles.isNotEmpty() || taggedFiles.isNotEmpty() || taggedSkills.isNotEmpty()) || isThinking,
                                     modifier = Modifier
-                                        .size(36.dp)
+                                        .size(34.dp)
                                         .background(
-                                            if ((chatInputText.isNotBlank() || attachedFiles.isNotEmpty()) || isThinking) Color(0xFF2E3136)
+                                            if ((chatInputText.isNotBlank() || attachedFiles.isNotEmpty()) || isThinking) Color(0xFF238636)
                                             else Color.Transparent,
-                                            RoundedCornerShape(8.dp)
+                                            RoundedCornerShape(6.dp)
                                         )
                                 ) {
                                     if (isThinking) {
                                         Box(contentAlignment = Alignment.Center) {
                                             CircularProgressIndicator(
-                                                modifier = Modifier.size(20.dp),
+                                                modifier = Modifier.size(18.dp),
                                                 strokeWidth = 2.dp,
-                                                color = Color(0xFF38BDF8)
+                                                color = Color.White
                                             )
                                             Icon(
                                                 Icons.Default.Stop,
                                                 contentDescription = "Stop",
                                                 tint = Color.White,
-                                                modifier = Modifier.size(12.dp)
+                                                modifier = Modifier.size(11.dp)
                                             )
                                         }
                                     } else {
                                         Icon(
                                             Icons.AutoMirrored.Filled.Send,
                                             contentDescription = "Send",
-                                            tint = if (chatInputText.isNotBlank() || attachedFiles.isNotEmpty()) Color.White else Color(0xFF4F5575),
-                                            modifier = Modifier.size(18.dp)
+                                            tint = if (chatInputText.isNotBlank() || attachedFiles.isNotEmpty()) Color.White else Color(0xFF6E7681),
+                                            modifier = Modifier.size(16.dp)
                                         )
                                     }
                                 }
@@ -2220,8 +2267,8 @@ fun ChatBubble(
 ) {
     val isUser = message.role == "user"
     val align = if (isUser) Alignment.End else Alignment.Start
-    val bg = if (isUser) Color(0xFF1C1E2A) else Color(0xFF0D0F14)
-    val border = if (isUser) Color(0xFF2E3147) else Color(0xFF1A1F2C)
+    val bg = if (isUser) Color(0xFF21262D) else Color(0xFF161B22)
+    val border = if (isUser) Color(0xFF30363D) else Color(0xFF21262D)
     val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
 
     val (userDisplayText, mentionChips) = remember(message.content) {
@@ -2466,7 +2513,7 @@ fun CodeTabContent(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color(0xFF0D1117))
+                .background(Color(0xFF161B22))
                 .border(BorderStroke(1.dp, Color(0xFF30363D))),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
@@ -2481,28 +2528,34 @@ fun CodeTabContent(
                     val isActive = file.path == activeFile?.path
                     Row(
                         modifier = Modifier
-                            .background(if (isActive) Color(0xFF161B22) else Color.Transparent)
+                            .background(if (isActive) Color(0xFF0D1117) else Color.Transparent)
                             .clickable { onSelectFile(file) }
-                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                            .padding(horizontal = 14.dp, vertical = 9.dp)
                             .let {
-                                if (isActive) it.border(BorderStroke(1.dp, Color(0xFF38BDF8)), RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)) else it
+                                if (isActive) it.border(BorderStroke(1.dp, Color(0xFF30363D)), RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)) else it
                             },
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        Icon(
+                            imageVector = Icons.Default.InsertDriveFile,
+                            contentDescription = null,
+                            tint = if (isActive) Color(0xFF58A6FF) else Color(0xFF8B949E),
+                            modifier = Modifier.size(13.dp)
+                        )
                         Text(
                             text = file.path.substringAfterLast("/"),
                             color = if (isActive) Color(0xFFE6EDF3) else Color(0xFF8B949E),
-                            fontSize = 13.sp,
-                            
+                            fontSize = 12.sp,
+                            fontWeight = if (isActive) FontWeight.Medium else FontWeight.Normal
                         )
                         if (file.path != "index.html") {
                             Icon(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = "Close",
-                                tint = if (isActive) Color(0xFFE6EDF3) else Color(0xFF8B949E),
+                                tint = if (isActive) Color(0xFF8B949E) else Color(0xFF484F58),
                                 modifier = Modifier
-                                    .size(14.dp)
+                                    .size(13.dp)
                                     .clickable { showDeleteConfirmDialog = file.path }
                             )
                         }
@@ -2516,32 +2569,54 @@ fun CodeTabContent(
 
             if (!activeIsImageOr3D) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 8.dp),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .border(1.dp, Color(0xFF30363D), RoundedCornerShape(6.dp))
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
-                            .clickable {
-                                clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(editorContent))
-                                android.widget.Toast.makeText(context, "Copied to clipboard!", android.widget.Toast.LENGTH_SHORT).show()
-                            },
-                        verticalAlignment = Alignment.CenterVertically
+                    Surface(
+                        onClick = {
+                            clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(editorContent))
+                            android.widget.Toast.makeText(context, "Copied to clipboard", android.widget.Toast.LENGTH_SHORT).show()
+                        },
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color(0xFF21262D),
+                        border = BorderStroke(1.dp, Color(0xFF30363D))
                     ) {
-                        Text("Copy", color = Color(0xFFE6EDF3), fontSize = 13.sp)
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ContentCopy,
+                                contentDescription = "Copy",
+                                tint = Color(0xFFC9D1D9),
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Text("Copy", color = Color(0xFFC9D1D9), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                        }
                     }
                     
                     var showQuickEditDialog by remember { mutableStateOf(false) }
-                    Row(
-                        modifier = Modifier
-                            .background(Color(0xFF238636), RoundedCornerShape(6.dp))
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
-                            .clickable { showQuickEditDialog = true },
-                        verticalAlignment = Alignment.CenterVertically
+                    Surface(
+                        onClick = { showQuickEditDialog = true },
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color(0xFF238636),
+                        border = BorderStroke(1.dp, Color(0xFF2EA043))
                     ) {
-                        Text("Edit", color = Color.White, fontSize = 13.sp)
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Edit",
+                                tint = Color.White,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Text("Edit", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                        }
                     }
 
                     if (showQuickEditDialog) {
@@ -2557,14 +2632,14 @@ fun CodeTabContent(
                 }
             } else {
                 Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Viewing Binary File",
+                        text = "Binary File",
                         color = Color(0xFF8B949E),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
                     )
                 }
             }
@@ -2780,25 +2855,39 @@ fun CodeTabContent(
             }
             
             // Status Bar
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xFF0D1117))
-                    .border(BorderStroke(1.dp, Color(0xFF30363D)))
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalAlignment = Alignment.CenterVertically
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = Color(0xFF161B22),
+                border = BorderStroke(1.dp, Color(0xFF30363D))
             ) {
-                val lineCount = editorContent.count { it == '\n' } + 1
-                val kbSize = editorContent.toByteArray().size / 1024.0
-                
-                Text("File:\n${activeFile.path.substringAfterLast("/")}", color = Color(0xFF8B949E), fontSize = 11.sp)
-                Text("Lines:\n$lineCount", color = Color(0xFF8B949E), fontSize = 11.sp)
-                Text("Size:\n${String.format("%.2f", kbSize)} KB", color = Color(0xFF8B949E), fontSize = 11.sp)
-                Text("File\nTokens: ${editorContent.length / 4}", color = Color(0xFF8B949E), fontSize = 11.sp)
-                
-                Spacer(modifier = Modifier.weight(1f))
-                Text("Total Project\nTokens: 4050", color = Color(0xFF2EA043), fontSize = 11.sp, textAlign = TextAlign.End)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val lineCount = editorContent.count { it == '\n' } + 1
+                    val kbSize = editorContent.toByteArray().size / 1024.0
+                    
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("UTF-8", color = Color(0xFF8B949E), fontSize = 11.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+                    }
+                    Text("•", color = Color(0xFF484F58), fontSize = 10.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Lines: $lineCount", color = Color(0xFF8B949E), fontSize = 11.sp)
+                    }
+                    Text("•", color = Color(0xFF484F58), fontSize = 10.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("${String.format("%.1f", kbSize)} KB", color = Color(0xFF8B949E), fontSize = 11.sp)
+                    }
+                    
+                    Spacer(modifier = Modifier.weight(1f))
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF3FB950)))
+                        Text("${editorContent.length / 4} tokens", color = Color(0xFF3FB950), fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                    }
+                }
             }
         } else {
             Box(
@@ -3141,110 +3230,146 @@ fun PreviewTabContent(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color(0xFF0A0B10))
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        Surface(
+            color = Color(0xFF161B22),
+            border = BorderStroke(1.dp, Color(0xFF30363D)),
+            modifier = Modifier.fillMaxWidth()
         ) {
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Default.Language,
-                    contentDescription = "Web",
-                    tint = Color(0xFF2ED573)
-                )
-                Text(
-                    text = "Live Web Preview",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp
-                )
-            }
-            
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                IconButton(
-                    onClick = { isInspectorModeActive = !isInspectorModeActive },
-                    modifier = Modifier
-                        .size(36.dp)
-                        .background(if (isInspectorModeActive) Color(0xFF38BDF8) else Color(0xFF1E2130), CircleShape)
+                // Browser URL/Title bar
+                Surface(
+                    color = Color(0xFF0D1117),
+                    border = BorderStroke(1.dp, Color(0xFF30363D)),
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.weight(1f).padding(end = 8.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Search, // Using Search icon as inspector
-                        contentDescription = "Toggle Inspector",
-                        tint = if (isInspectorModeActive) Color.Black else Color.White,
-                        modifier = Modifier.size(18.dp)
-                    )
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(modifier = Modifier.size(7.dp).clip(CircleShape).background(Color(0xFF3FB950)))
+                        Text(
+                            text = if (isReactViteFramework && hasWebDist) "http://localhost:5173 (dist)" else "http://localhost:8080/index.html",
+                            color = Color(0xFF8B949E),
+                            fontSize = 11.sp,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
+                    }
                 }
-
-                IconButton(
-                    onClick = { showLogs = !showLogs },
-                    modifier = Modifier
-                        .size(36.dp)
-                        .background(if (showLogs) Color(0xFF38BDF8) else Color(0xFF1E2130), CircleShape)
+                
+                // Action Buttons
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = if (showLogs) Icons.Default.Terminal else Icons.Default.Code,
-                        contentDescription = "Toggle Logs",
-                        tint = if (showLogs) Color.Black else Color.White,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-
-                IconButton(
-                    onClick = { 
-                        refreshTrigger++
-                        onClearLogs()
-                    },
-                    modifier = Modifier
-                        .size(36.dp)
-                        .background(Color(0xFF1E2130), CircleShape)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = "Reload Preview",
-                        tint = Color.White,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-
-                IconButton(
-                    onClick = {
-                        if (htmlFile == null) {
-                            android.widget.Toast.makeText(context, "No index.html found", android.widget.Toast.LENGTH_SHORT).show()
-                            return@IconButton
+                    Surface(
+                        onClick = { isInspectorModeActive = !isInspectorModeActive },
+                        shape = RoundedCornerShape(6.dp),
+                        color = if (isInspectorModeActive) Color(0xFF1F6FEB) else Color(0xFF21262D),
+                        border = BorderStroke(1.dp, if (isInspectorModeActive) Color(0xFF388BFD) else Color(0xFF30363D))
+                    ) {
+                        Box(
+                            modifier = Modifier.size(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = "Toggle Inspector",
+                                tint = if (isInspectorModeActive) Color.White else Color(0xFFC9D1D9),
+                                modifier = Modifier.size(15.dp)
+                            )
                         }
-                        com.example.api.LocalHttpServer.start()
-                        com.example.api.LocalHttpServer.updateFiles(files)
+                    }
 
-                        val localUrl = "http://127.0.0.1:8080/index.html"
-                        try {
-                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(localUrl)).apply {
-                                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    Surface(
+                        onClick = { showLogs = !showLogs },
+                        shape = RoundedCornerShape(6.dp),
+                        color = if (showLogs) Color(0xFF1F6FEB) else Color(0xFF21262D),
+                        border = BorderStroke(1.dp, if (showLogs) Color(0xFF388BFD) else Color(0xFF30363D))
+                    ) {
+                        Box(
+                            modifier = Modifier.size(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = if (showLogs) Icons.Default.Terminal else Icons.Default.Code,
+                                contentDescription = "Toggle Logs",
+                                tint = if (showLogs) Color.White else Color(0xFFC9D1D9),
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
+                    }
+
+                    Surface(
+                        onClick = { 
+                            refreshTrigger++
+                            onClearLogs()
+                        },
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color(0xFF21262D),
+                        border = BorderStroke(1.dp, Color(0xFF30363D))
+                    ) {
+                        Box(
+                            modifier = Modifier.size(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Reload Preview",
+                                tint = Color(0xFFC9D1D9),
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
+                    }
+
+                    Surface(
+                        onClick = {
+                            if (htmlFile == null) {
+                                android.widget.Toast.makeText(context, "No index.html found", android.widget.Toast.LENGTH_SHORT).show()
+                                return@Surface
                             }
-                            context.startActivity(intent)
-                        } catch (e: Exception) {
+                            com.example.api.LocalHttpServer.start()
+                            com.example.api.LocalHttpServer.updateFiles(files)
+
+                            val localUrl = "http://127.0.0.1:8080/index.html"
                             try {
-                                uriHandler.openUri(localUrl)
-                            } catch (e2: Exception) {
-                                android.widget.Toast.makeText(context, "Failed to open browser: ${e2.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(localUrl)).apply {
+                                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                try {
+                                    uriHandler.openUri(localUrl)
+                                } catch (e2: Exception) {
+                                    android.widget.Toast.makeText(context, "Failed to open browser: ${e2.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                }
                             }
+                        },
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color(0xFF238636),
+                        border = BorderStroke(1.dp, Color(0xFF2EA043))
+                    ) {
+                        Box(
+                            modifier = Modifier.size(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.OpenInBrowser,
+                                contentDescription = "Open in Browser",
+                                tint = Color.White,
+                                modifier = Modifier.size(15.dp)
+                            )
                         }
-                    },
-                    modifier = Modifier
-                        .size(36.dp)
-                        .background(Color(0xFF2ED573), CircleShape)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.OpenInBrowser,
-                        contentDescription = "Live Preview in Browser",
-                        tint = Color.Black,
-                        modifier = Modifier.size(18.dp)
-                    )
+                    }
                 }
             }
         }
@@ -3554,46 +3679,97 @@ fun PreviewTabContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(200.dp),
-                color = Color(0xFF0C0D14),
-                border = BorderStroke(1.dp, Color(0xFF222533))
+                color = Color(0xFF161B22),
+                border = BorderStroke(1.dp, Color(0xFF30363D))
             ) {
                 Column {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Console Logs", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        TextButton(onClick = onClearLogs) {
-                            Text("Clear", color = Color(0xFFEE5253), fontSize = 11.sp)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Terminal,
+                                contentDescription = null,
+                                tint = Color(0xFF8B949E),
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                "Console Output",
+                                color = Color(0xFFE6EDF3),
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 12.sp,
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                            )
+                        }
+                        Surface(
+                            onClick = onClearLogs,
+                            shape = RoundedCornerShape(4.dp),
+                            color = Color(0xFF21262D),
+                            border = BorderStroke(1.dp, Color(0xFF30363D))
+                        ) {
+                            Text(
+                                "Clear",
+                                color = Color(0xFFF85149),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
                         }
                     }
-                    Divider(color = Color(0xFF222533))
+                    HorizontalDivider(color = Color(0xFF30363D), thickness = 1.dp)
                     LazyColumn(
-                        modifier = Modifier.fillMaxSize().padding(8.dp),
+                        modifier = Modifier.fillMaxSize().padding(10.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        items(consoleLogs) { log ->
-                            val color = when (log.level) {
-                                "error" -> Color(0xFFEE5253)
-                                "warning" -> Color(0xFFFF9F43)
-                                else -> Color(0xFF2ED573)
+                        if (consoleLogs.isEmpty()) {
+                            item {
+                                Text(
+                                    "No console logs recorded.",
+                                    color = Color(0xFF6E7681),
+                                    fontSize = 11.sp,
+                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                                )
                             }
-                            Column(modifier = Modifier.padding(vertical = 2.dp)) {
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Text("[${log.level.uppercase()}]", color = color, fontSize = 10.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontWeight = FontWeight.Bold)
-                                    Text(log.message, color = Color.White, fontSize = 11.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+                        } else {
+                            items(consoleLogs) { log ->
+                                val (badgeBg, badgeText) = when (log.level) {
+                                    "error" -> Color(0x33F85149) to Color(0xFFF85149)
+                                    "warning" -> Color(0x33D29922) to Color(0xFFD29922)
+                                    else -> Color(0x333FB950) to Color(0xFF3FB950)
                                 }
-                                if (log.sourceId.isNotEmpty()) {
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(start = 16.dp, top = 2.dp)
-                                    ) {
-                                        Icon(Icons.Default.InsertDriveFile, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(11.dp))
-                                        Text("File: ${log.sourceId} (Line ${log.lineNumber})", color = Color(0xFF38BDF8), fontSize = 10.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontWeight = FontWeight.Medium)
+                                Column(modifier = Modifier.padding(vertical = 2.dp)) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Surface(
+                                            color = badgeBg,
+                                            shape = RoundedCornerShape(4.dp)
+                                        ) {
+                                            Text(
+                                                log.level.uppercase(),
+                                                color = badgeText,
+                                                fontSize = 9.sp,
+                                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                            )
+                                        }
+                                        Text(log.message, color = Color(0xFFE6EDF3), fontSize = 11.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+                                    }
+                                    if (log.sourceId.isNotEmpty()) {
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.padding(start = 16.dp, top = 2.dp)
+                                        ) {
+                                            Icon(Icons.Default.InsertDriveFile, contentDescription = null, tint = Color(0xFF58A6FF), modifier = Modifier.size(11.dp))
+                                            Text("File: ${log.sourceId} (Line ${log.lineNumber})", color = Color(0xFF58A6FF), fontSize = 10.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontWeight = FontWeight.Medium)
+                                        }
                                     }
                                 }
                             }
@@ -3618,76 +3794,141 @@ fun TerminalTabContent(
         scrollState.animateScrollTo(scrollState.maxValue)
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(Color(0xFF050508))) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Icon(Icons.Default.Terminal, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(16.dp))
-                Text("bash", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            }
-            IconButton(onClick = onClear, modifier = Modifier.size(24.dp)) {
-                Icon(Icons.Default.DeleteSweep, contentDescription = "Clear Terminal", tint = Color.Gray, modifier = Modifier.size(18.dp))
-            }
-        }
-        Divider(color = Color(0xFF1E2230))
-
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .padding(16.dp)
-                .verticalScroll(scrollState)
-        ) {
-            Text(
-                text = terminalOutput,
-                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                fontSize = 12.sp,
-                color = Color(0xFF2ED573), // Professional Green
-                lineHeight = 18.sp
-            )
-        }
-
+    Column(modifier = Modifier.fillMaxSize().background(Color(0xFF0D1117))) {
+        // Terminal Title Header
         Surface(
-            color = Color(0xFF0C0D14),
-            border = BorderStroke(1.dp, Color(0xFF1E2230)),
+            color = Color(0xFF161B22),
+            border = BorderStroke(1.dp, Color(0xFF30363D)),
             modifier = Modifier.fillMaxWidth()
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(12.dp),
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Window dots
+                    Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(Color(0xFFF85149)))
+                        Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(Color(0xFFD29922)))
+                        Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(Color(0xFF3FB950)))
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "terminal • bash",
+                        color = Color(0xFF8B949E),
+                        fontSize = 12.sp,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                    )
+                }
+
+                Surface(
+                    onClick = onClear,
+                    shape = RoundedCornerShape(6.dp),
+                    color = Color(0xFF21262D),
+                    border = BorderStroke(1.dp, Color(0xFF30363D))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DeleteSweep,
+                            contentDescription = "Clear Terminal",
+                            tint = Color(0xFF8B949E),
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Text(
+                            text = "Clear",
+                            color = Color(0xFF8B949E),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+        }
+
+        // Terminal Output Screen
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(14.dp)
+                .verticalScroll(scrollState)
+        ) {
+            if (terminalOutput.isBlank()) {
+                Text(
+                    text = "Ready. Type a command below and press Enter.",
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                    fontSize = 12.sp,
+                    color = Color(0xFF6E7681),
+                    lineHeight = 18.sp
+                )
+            } else {
+                Text(
+                    text = terminalOutput,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                    fontSize = 12.sp,
+                    color = Color(0xFF58A6FF),
+                    lineHeight = 18.sp
+                )
+            }
+        }
+
+        // Terminal Prompt Input Line
+        Surface(
+            color = Color(0xFF161B22),
+            border = BorderStroke(1.dp, Color(0xFF30363D)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
                     text = "$",
                     fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                    color = Color(0xFF38BDF8),
-                    fontSize = 16.sp,
+                    color = Color(0xFF3FB950),
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Bold
                 )
                 OutlinedTextField(
                     value = commandInput,
                     onValueChange = { commandInput = it },
-                    placeholder = { Text("Enter command...", color = Color(0xFF4F5575), fontSize = 13.sp) },
+                    placeholder = {
+                        Text(
+                            "Type command (e.g. ls, npm build)...",
+                            color = Color(0xFF6E7681),
+                            fontSize = 12.sp,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                        )
+                    },
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = Color(0xFF38BDF8),
-                        unfocusedBorderColor = Color(0xFF1E2230)
+                        focusedTextColor = Color(0xFFE6EDF3),
+                        unfocusedTextColor = Color(0xFFE6EDF3),
+                        focusedBorderColor = Color(0xFF58A6FF),
+                        unfocusedBorderColor = Color(0xFF30363D)
                     ),
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(8.dp),
-                    maxLines = 1,
-                    textStyle = TextStyle(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontSize = 13.sp)
+                    shape = RoundedCornerShape(6.dp),
+                    singleLine = true,
+                    textStyle = TextStyle(
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        fontSize = 12.sp
+                    )
                 )
 
-                IconButton(
+                Surface(
                     onClick = {
                         if (commandInput.isNotBlank()) {
                             onSendCommand(commandInput)
@@ -3695,19 +3936,21 @@ fun TerminalTabContent(
                         }
                     },
                     enabled = commandInput.isNotBlank(),
-                    modifier = Modifier
-                        .size(40.dp)
-                        .background(
-                            if (commandInput.isNotBlank()) Color(0xFF38BDF8) else Color(0xFF1E2130),
-                            RoundedCornerShape(8.dp)
-                        )
+                    shape = RoundedCornerShape(6.dp),
+                    color = if (commandInput.isNotBlank()) Color(0xFF238636) else Color(0xFF21262D),
+                    border = BorderStroke(1.dp, if (commandInput.isNotBlank()) Color(0xFF2EA043) else Color(0xFF30363D))
                 ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.KeyboardReturn,
-                        contentDescription = "Run",
-                        tint = if (commandInput.isNotBlank()) Color.Black else Color.Gray,
-                        modifier = Modifier.size(18.dp)
-                    )
+                    Box(
+                        modifier = Modifier.size(38.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardReturn,
+                            contentDescription = "Execute",
+                            tint = if (commandInput.isNotBlank()) Color.White else Color(0xFF484F58),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
             }
         }
@@ -5201,46 +5444,46 @@ fun CustomSettingsDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF0D0E15)),
-            border = BorderStroke(1.dp, Color(0xFF1E2230)),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF161B22)),
+            border = BorderStroke(1.dp, Color(0xFF30363D)),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
             Column(
                 modifier = Modifier
-                    .padding(24.dp)
+                    .padding(20.dp)
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
                     text = "AI Orchestrator Settings",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFFE6EDF3)
                 )
 
                 Text(
                     text = "Register your own API keys and select models. Default AI is disabled for security.",
-                    color = Color(0xFF80809B),
+                    color = Color(0xFF8D96A0),
                     fontSize = 12.sp,
                     lineHeight = 16.sp
                 )
 
                 // Agent Skills & Extensions Banner Card
                 Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF131520)),
-                    border = BorderStroke(1.dp, Color(0xFF00F2FE).copy(alpha = 0.5f)),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0D1117)),
+                    border = BorderStroke(1.dp, Color(0xFF30363D)),
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { onOpenAgentSkills() }
                 ) {
                     Row(
                         modifier = Modifier
-                            .padding(16.dp)
+                            .padding(14.dp)
                             .fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
@@ -5251,37 +5494,37 @@ fun CustomSettingsDialog(
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFF00F2FE).copy(alpha = 0.15f)),
+                                    .size(36.dp)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(Color(0xFF21262D)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Extension,
                                     contentDescription = null,
-                                    tint = Color(0xFF00F2FE),
-                                    modifier = Modifier.size(22.dp)
+                                    tint = Color(0xFF2F81F7),
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
                                 Text(
                                     text = "Agent Skills & Extensions",
-                                    color = Color.White,
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold
+                                    color = Color(0xFFE6EDF3),
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold
                                 )
                                 Text(
                                     text = "Discover, install & toggle online agent skills",
-                                    color = Color(0xFF94A3B8),
-                                    fontSize = 12.sp
+                                    color = Color(0xFF8D96A0),
+                                    fontSize = 11.5.sp
                                 )
                             }
                         }
                         Icon(
                             imageVector = Icons.Default.ChevronRight,
                             contentDescription = null,
-                            tint = Color(0xFF00F2FE)
+                            tint = Color(0xFF8D96A0)
                         )
                     }
                 }
@@ -5290,20 +5533,20 @@ fun CustomSettingsDialog(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color(0xFF161822), RoundedCornerShape(16.dp))
-                        .border(BorderStroke(1.dp, Color(0xFF222533)), RoundedCornerShape(16.dp))
-                        .padding(16.dp),
+                        .background(Color(0xFF0D1117), RoundedCornerShape(8.dp))
+                        .border(BorderStroke(1.dp, Color(0xFF30363D)), RoundedCornerShape(8.dp))
+                        .padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
                         text = "Agent Step Execution Limit",
-                        color = Color.White,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
+                        color = Color(0xFFE6EDF3),
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.SemiBold
                     )
                     Text(
                         text = "Configure maximum tool calls and action perform steps. (Default is 80 steps)",
-                        color = Color(0xFF80809B),
+                        color = Color(0xFF8D96A0),
                         fontSize = 11.sp,
                         lineHeight = 14.sp
                     )
@@ -5315,15 +5558,15 @@ fun CustomSettingsDialog(
                             }
                         },
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedBorderColor = Color(0xFF38BDF8),
-                            unfocusedBorderColor = Color(0xFF222533),
-                            focusedContainerColor = Color(0xFF0D0E15),
-                            unfocusedContainerColor = Color(0xFF0D0E15)
+                            focusedTextColor = Color(0xFFE6EDF3),
+                            unfocusedTextColor = Color(0xFFE6EDF3),
+                            focusedBorderColor = Color(0xFF2F81F7),
+                            unfocusedBorderColor = Color(0xFF30363D),
+                            focusedContainerColor = Color(0xFF161B22),
+                            unfocusedContainerColor = Color(0xFF161B22)
                         ),
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(6.dp),
                         singleLine = true
                     )
                 }
@@ -5332,9 +5575,9 @@ fun CustomSettingsDialog(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color(0xFF161822), RoundedCornerShape(16.dp))
-                        .border(BorderStroke(1.dp, Color(0xFF222533)), RoundedCornerShape(16.dp))
-                        .padding(16.dp),
+                        .background(Color(0xFF0D1117), RoundedCornerShape(8.dp))
+                        .border(BorderStroke(1.dp, Color(0xFF30363D)), RoundedCornerShape(8.dp))
+                        .padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Row(
@@ -5345,14 +5588,14 @@ fun CustomSettingsDialog(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "Allow Auto Build & Push Permission",
-                                color = Color.White,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold
+                                color = Color(0xFFE6EDF3),
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.SemiBold
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = "Automatically push to GitHub and build Kotlin/Flutter projects when AI finishes, without asking for confirmation every time.",
-                                color = Color(0xFF80809B),
+                                color = Color(0xFF8D96A0),
                                 fontSize = 11.sp,
                                 lineHeight = 14.sp
                             )
@@ -5362,10 +5605,10 @@ fun CustomSettingsDialog(
                             checked = allowBuildPushState,
                             onCheckedChange = { allowBuildPushState = it },
                             colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.Black,
-                                checkedTrackColor = Color(0xFF38BDF8),
-                                uncheckedThumbColor = Color(0xFF80809B),
-                                uncheckedTrackColor = Color(0xFF161822)
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = Color(0xFF238636),
+                                uncheckedThumbColor = Color(0xFF8D96A0),
+                                uncheckedTrackColor = Color(0xFF21262D)
                             )
                         )
                     }
@@ -5375,9 +5618,9 @@ fun CustomSettingsDialog(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color(0xFF161822), RoundedCornerShape(16.dp))
-                        .border(BorderStroke(1.dp, Color(0xFF222533)), RoundedCornerShape(16.dp))
-                        .padding(16.dp),
+                        .background(Color(0xFF0D1117), RoundedCornerShape(8.dp))
+                        .border(BorderStroke(1.dp, Color(0xFF30363D)), RoundedCornerShape(8.dp))
+                        .padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Row(
@@ -5388,14 +5631,14 @@ fun CustomSettingsDialog(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "Allow Auto Fix Build Errors",
-                                color = Color.White,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold
+                                color = Color(0xFFE6EDF3),
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.SemiBold
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = "Automatically analyze and fix any compilation or web console errors as soon as they are detected, without asking for confirmation.",
-                                color = Color(0xFF80809B),
+                                color = Color(0xFF8D96A0),
                                 fontSize = 11.sp,
                                 lineHeight = 14.sp
                             )
@@ -5405,10 +5648,10 @@ fun CustomSettingsDialog(
                             checked = allowAutoFixState,
                             onCheckedChange = { allowAutoFixState = it },
                             colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.Black,
-                                checkedTrackColor = Color(0xFF38BDF8),
-                                uncheckedThumbColor = Color(0xFF80809B),
-                                uncheckedTrackColor = Color(0xFF161822)
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = Color(0xFF238636),
+                                uncheckedThumbColor = Color(0xFF8D96A0),
+                                uncheckedTrackColor = Color(0xFF21262D)
                             )
                         )
                     }
@@ -5418,9 +5661,9 @@ fun CustomSettingsDialog(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color(0xFF161822), RoundedCornerShape(16.dp))
-                        .border(BorderStroke(1.dp, Color(0xFF222533)), RoundedCornerShape(16.dp))
-                        .padding(16.dp),
+                        .background(Color(0xFF0D1117), RoundedCornerShape(8.dp))
+                        .border(BorderStroke(1.dp, Color(0xFF30363D)), RoundedCornerShape(8.dp))
+                        .padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Row(
@@ -5431,14 +5674,14 @@ fun CustomSettingsDialog(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "Run AI Agent in Background",
-                                color = Color.White,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold
+                                color = Color(0xFFE6EDF3),
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.SemiBold
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = "Keep the AI Agent and the application fully running and working in the background even if you minimize or close the app.",
-                                color = Color(0xFF80809B),
+                                color = Color(0xFF8D96A0),
                                 fontSize = 11.sp,
                                 lineHeight = 14.sp
                             )
@@ -5448,10 +5691,10 @@ fun CustomSettingsDialog(
                             checked = allowBackgroundExecutionState,
                             onCheckedChange = { allowBackgroundExecutionState = it },
                             colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.Black,
-                                checkedTrackColor = Color(0xFF38BDF8),
-                                uncheckedThumbColor = Color(0xFF80809B),
-                                uncheckedTrackColor = Color(0xFF161822)
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = Color(0xFF238636),
+                                uncheckedThumbColor = Color(0xFF8D96A0),
+                                uncheckedTrackColor = Color(0xFF21262D)
                             )
                         )
                     }
@@ -5461,16 +5704,16 @@ fun CustomSettingsDialog(
                     Button(
                         onClick = { showAddNewForm = true },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF38BDF8).copy(alpha = 0.1f),
+                            containerColor = Color(0xFF21262D),
                             contentColor = Color(0xFF38BDF8)
                         ),
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.3f)),
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, Color(0xFF30363D)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Add New Model Configuration", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        Text("Add New Model Configuration", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     }
                 } else {
                     // Add New Model Form
@@ -5857,9 +6100,9 @@ fun CustomSettingsDialog(
                 if (customModels.isNotEmpty()) {
                     Text(
                         text = "Saved Configurations",
-                        color = Color.White,
+                        color = Color(0xFFE6EDF3),
                         fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.SemiBold
                     )
 
                     Column(
@@ -5870,14 +6113,14 @@ fun CustomSettingsDialog(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(if (isSelected) Color(0xFF1E2130) else Color(0xFF11121A))
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (isSelected) Color(0xFF21262D) else Color(0xFF0D1117))
                                     .border(
                                         BorderStroke(
                                             1.dp,
-                                            if (isSelected) Color(0xFF38BDF8) else Color(0xFF222533)
+                                            if (isSelected) Color(0xFF2F81F7) else Color(0xFF30363D)
                                         ),
-                                        RoundedCornerShape(12.dp)
+                                        RoundedCornerShape(8.dp)
                                     )
                                     .clickable { onSelectCustomModel(model.id) }
                                     .padding(12.dp),
@@ -5893,20 +6136,20 @@ fun CustomSettingsDialog(
                                         selected = isSelected,
                                         onClick = { onSelectCustomModel(model.id) },
                                         colors = RadioButtonDefaults.colors(
-                                            selectedColor = Color(0xFF38BDF8),
-                                            unselectedColor = Color(0xFF3B4056)
+                                            selectedColor = Color(0xFF2F81F7),
+                                            unselectedColor = Color(0xFF6E7681)
                                         )
                                     )
                                     Column {
                                         Text(
                                             text = model.alias,
-                                            color = Color.White,
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.Bold
+                                            color = Color(0xFFE6EDF3),
+                                            fontSize = 13.5.sp,
+                                            fontWeight = FontWeight.SemiBold
                                         )
                                         Text(
                                             text = "${model.provider.uppercase()} • ${model.modelId}",
-                                            color = Color(0xFF80809B),
+                                            color = Color(0xFF8D96A0),
                                             fontSize = 11.sp
                                         )
                                     }
@@ -5918,7 +6161,7 @@ fun CustomSettingsDialog(
                                     Icon(
                                         imageVector = Icons.Default.Delete,
                                         contentDescription = "Delete model",
-                                        tint = Color(0xFFEF4444).copy(alpha = 0.8f),
+                                        tint = Color(0xFFF85149),
                                         modifier = Modifier.size(18.dp)
                                     )
                                 }
@@ -5942,9 +6185,9 @@ fun CustomSettingsDialog(
                             onDismiss()
                         }
                     ) {
-                        Text("Close", color = Color(0xFF80809B))
+                        Text("Close", color = Color(0xFF8D96A0), fontSize = 12.5.sp)
                     }
-                    Spacer(modifier = Modifier.width(16.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
                     Button(
                         onClick = {
                             val activeConfig = customModels.find { it.id == selectedModelId }
@@ -5966,12 +6209,12 @@ fun CustomSettingsDialog(
                         },
                         enabled = selectedModelId.isNotEmpty(),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF38BDF8),
-                            contentColor = Color.Black
+                            containerColor = Color(0xFF238636),
+                            contentColor = Color.White
                         ),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(6.dp)
                     ) {
-                        Text("Apply Selection", fontWeight = FontWeight.Bold)
+                        Text("Apply Selection", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
                     }
                 }
             }
@@ -6446,7 +6689,7 @@ fun WorkspaceOperationsTimeline(
     displayLogs: List<com.example.ui.AiActionLog>,
     isThinking: Boolean
 ) {
-    var isExpanded by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) } // Collapse by default as requested by the user
+    var isExpanded by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     
     val currentMillis = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(System.currentTimeMillis()) }
     androidx.compose.runtime.LaunchedEffect(isThinking) {
@@ -6459,15 +6702,15 @@ fun WorkspaceOperationsTimeline(
     androidx.compose.foundation.layout.Column(
         modifier = androidx.compose.ui.Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-            .background(Color(0xFF0F141C), RoundedCornerShape(12.dp))
-            .border(BorderStroke(1.dp, Color(0xFF1F2937)), RoundedCornerShape(12.dp))
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .background(Color(0xFF161B22), RoundedCornerShape(10.dp))
+            .border(BorderStroke(1.dp, Color(0xFF30363D)), RoundedCornerShape(10.dp))
     ) {
         androidx.compose.foundation.layout.Row(
             modifier = androidx.compose.ui.Modifier
                 .fillMaxWidth()
                 .clickable { isExpanded = !isExpanded }
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -6477,28 +6720,29 @@ fun WorkspaceOperationsTimeline(
             ) {
                 androidx.compose.foundation.layout.Box(
                     modifier = androidx.compose.ui.Modifier
-                        .size(24.dp)
-                        .background(Color(0xFFE3B341).copy(alpha = 0.15f), CircleShape),
+                        .size(26.dp)
+                        .background(Color(0xFF21262D), RoundedCornerShape(6.dp))
+                        .border(BorderStroke(1.dp, Color(0xFF30363D)), RoundedCornerShape(6.dp)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Bolt,
-                        contentDescription = "Run",
-                        tint = Color(0xFFE3B341),
+                        imageVector = Icons.Default.Terminal,
+                        contentDescription = "Operations",
+                        tint = Color(0xFF58A6FF),
                         modifier = Modifier.size(15.dp)
                     )
                 }
                 androidx.compose.foundation.layout.Column {
                     Text(
                         text = "Agent Operations Timeline",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFFE6EDF3)
                     )
                     Text(
                         text = "${displayLogs.size} operations executed",
                         fontSize = 11.sp,
-                        color = Color(0xFF9CA3AF)
+                        color = Color(0xFF8B949E)
                     )
                 }
             }
@@ -6508,30 +6752,30 @@ fun WorkspaceOperationsTimeline(
             ) {
                 if (isThinking) {
                     androidx.compose.material3.CircularProgressIndicator(
-                        modifier = Modifier.size(14.dp),
-                        color = Color(0xFF38BDF8),
-                        strokeWidth = 2.dp
+                        modifier = Modifier.size(12.dp),
+                        color = Color(0xFF58A6FF),
+                        strokeWidth = 1.5.dp
                     )
-                    Text("Live", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF38BDF8))
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Running", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Color(0xFF58A6FF))
+                    Spacer(modifier = Modifier.width(2.dp))
                 }
-                Text(if (isExpanded) "Collapse" else "Expand", fontSize = 12.sp, color = Color(0xFF6B7280))
+                Text(if (isExpanded) "Hide" else "Show", fontSize = 12.sp, color = Color(0xFF8B949E))
                 Icon(
                     if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                     contentDescription = "Toggle",
-                    tint = Color(0xFF6B7280),
+                    tint = Color(0xFF8B949E),
                     modifier = Modifier.size(16.dp)
                 )
             }
         }
         
         if (isExpanded) {
-            HorizontalDivider(color = Color(0xFF1F2937))
+            HorizontalDivider(color = Color(0xFF21262D), thickness = 1.dp)
             
             androidx.compose.foundation.layout.Column(
                 modifier = androidx.compose.ui.Modifier
                     .fillMaxWidth()
-                    .padding(16.dp)
+                    .padding(14.dp)
             ) {
                 displayLogs.forEachIndexed { index, log ->
                     val isThought = log.title.contains("thinking", ignoreCase = true) || log.title.contains("formulating", ignoreCase = true) || log.title.contains("Thought process", ignoreCase = true)
@@ -6543,14 +6787,14 @@ fun WorkspaceOperationsTimeline(
                     val isItemThinking = log.status == "thinking"
                     
                     val iconColor = when {
-                        isDelete -> Color(0xFFEF4444)
-                        isMove -> Color(0xFF8B5CF6)
-                        isCopy -> Color(0xFF0EA5E9)
-                        log.title == "Read file" || log.title.startsWith("read :") || log.title.startsWith("read_file") -> Color(0xFF3B82F6)
-                        isEditOrPatch || log.title == "Appended to file" || log.title.startsWith("Appended:") -> Color(0xFF10B981)
-                        log.title == "Executed shell command" || log.title.contains("command") || log.title.startsWith("Run:") || log.title.startsWith("Search:") -> Color(0xFFD946EF)
-                        log.title.contains("Thought process", ignoreCase = true) -> Color(0xFFFFB020)
-                        else -> if (isThought) Color(0xFFFFB020) else Color(0xFF38BDF8)
+                        isDelete -> Color(0xFFF85149)
+                        isMove -> Color(0xFFA371F7)
+                        isCopy -> Color(0xFF388BFD)
+                        log.title == "Read file" || log.title.startsWith("read :") || log.title.startsWith("read_file") -> Color(0xFF58A6FF)
+                        isEditOrPatch || log.title == "Appended to file" || log.title.startsWith("Appended:") -> Color(0xFF3FB950)
+                        log.title == "Executed shell command" || log.title.contains("command") || log.title.startsWith("Run:") || log.title.startsWith("Search:") -> Color(0xFFD29922)
+                        log.title.contains("Thought process", ignoreCase = true) -> Color(0xFFD29922)
+                        else -> if (isThought) Color(0xFFD29922) else Color(0xFF58A6FF)
                     }
                     
                     val icon = when {
@@ -6567,7 +6811,7 @@ fun WorkspaceOperationsTimeline(
                     
                     androidx.compose.foundation.layout.Row(
                         modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         // Timeline line and icon
                         androidx.compose.foundation.layout.Column(
@@ -6576,14 +6820,14 @@ fun WorkspaceOperationsTimeline(
                         ) {
                             androidx.compose.foundation.layout.Box(
                                 modifier = androidx.compose.ui.Modifier
-                                    .size(28.dp)
-                                    .border(1.dp, iconColor.copy(alpha = 0.4f), CircleShape)
-                                    .background(Color(0xFF0F141C), CircleShape),
+                                    .size(24.dp)
+                                    .border(1.dp, Color(0xFF30363D), RoundedCornerShape(6.dp))
+                                    .background(Color(0xFF21262D), RoundedCornerShape(6.dp)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 if (isItemThinking) {
                                     androidx.compose.material3.CircularProgressIndicator(
-                                        modifier = Modifier.size(12.dp),
+                                        modifier = Modifier.size(11.dp),
                                         color = iconColor,
                                         strokeWidth = 1.5.dp
                                     )
@@ -6599,10 +6843,10 @@ fun WorkspaceOperationsTimeline(
                             if (index < displayLogs.size - 1 || isThinking) {
                                 androidx.compose.foundation.layout.Box(
                                     modifier = androidx.compose.ui.Modifier
-                                        .width(1.5.dp)
+                                        .width(1.dp)
                                         .weight(1f, fill = false)
-                                        .heightIn(min = 28.dp)
-                                        .background(Color(0xFF1F2937))
+                                        .heightIn(min = 24.dp)
+                                        .background(Color(0xFF30363D))
                                 )
                             }
                         }
@@ -6611,16 +6855,16 @@ fun WorkspaceOperationsTimeline(
                         androidx.compose.foundation.layout.Column(
                             modifier = androidx.compose.ui.Modifier
                                 .weight(1f)
-                                .padding(bottom = 20.dp)
+                                .padding(bottom = 16.dp)
                         ) {
                             androidx.compose.foundation.layout.Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Text(
                                     text = log.title,
-                                    fontSize = 13.sp,
-                                    color = Color(0xFFF3F4F6),
+                                    fontSize = 12.sp,
+                                    color = Color(0xFFE6EDF3),
                                     fontWeight = FontWeight.SemiBold
                                 )
 
@@ -6645,32 +6889,32 @@ fun WorkspaceOperationsTimeline(
                                         "Cloudflare" -> Color(0xFFF38020)
                                         "Vercel" -> Color(0xFFE0E0E0)
                                         "Google Stitch" -> Color(0xFF4285F4)
-                                        else -> Color(0xFF7C4DFF)
+                                        else -> Color(0xFFA371F7)
                                     }
                                     androidx.compose.foundation.layout.Box(
                                         modifier = Modifier
-                                            .background(badgeColor.copy(alpha = 0.2f), RoundedCornerShape(4.dp))
+                                            .background(badgeColor.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
                                             .padding(horizontal = 5.dp, vertical = 2.dp)
                                     ) {
-                                        Text(platformName, color = badgeColor, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                        Text(platformName, color = badgeColor, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
                                     }
                                 }
                                 
                                 if (isSuccess) {
                                     androidx.compose.foundation.layout.Box(
                                         modifier = Modifier
-                                            .background(Color(0xFF10B981).copy(alpha = 0.15f), RoundedCornerShape(4.dp))
+                                            .background(Color(0xFF238636).copy(alpha = 0.2f), RoundedCornerShape(4.dp))
                                             .padding(horizontal = 6.dp, vertical = 2.dp)
                                     ) {
-                                        Text("Done", color = Color(0xFF10B981), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                        Text("Done", color = Color(0xFF3FB950), fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
                                     }
                                 } else if (log.status == "failed") {
                                     androidx.compose.foundation.layout.Box(
                                         modifier = Modifier
-                                            .background(Color(0xFFEF4444).copy(alpha = 0.15f), RoundedCornerShape(4.dp))
+                                            .background(Color(0xFFDA3633).copy(alpha = 0.2f), RoundedCornerShape(4.dp))
                                             .padding(horizontal = 6.dp, vertical = 2.dp)
                                     ) {
-                                        Text("Failed", color = Color(0xFFEF4444), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                        Text("Failed", color = Color(0xFFF85149), fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
                                     }
                                 }
                             }
@@ -6705,23 +6949,32 @@ fun WorkspaceOperationsTimeline(
                                     log.details
                                 }
                                 
-                                Text(
-                                    text = displayText,
-                                    fontSize = 12.sp,
-                                    color = Color(0xFF9CA3AF),
-                                    modifier = Modifier.padding(top = 4.dp),
-                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
-                                )
+                                androidx.compose.foundation.layout.Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 4.dp)
+                                        .background(Color(0xFF0D1117), RoundedCornerShape(6.dp))
+                                        .border(BorderStroke(1.dp, Color(0xFF21262D)), RoundedCornerShape(6.dp))
+                                        .padding(horizontal = 8.dp, vertical = 6.dp)
+                                ) {
+                                    Text(
+                                        text = displayText,
+                                        fontSize = 11.sp,
+                                        color = Color(0xFF8B949E),
+                                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                        lineHeight = 16.sp
+                                    )
+                                }
                             }
                         }
                     }
                 }
                 
-                // If thinking, show final thought step
+                // If thinking, show active step
                 if (isThinking) {
                     androidx.compose.foundation.layout.Row(
                         modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         androidx.compose.foundation.layout.Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -6729,14 +6982,14 @@ fun WorkspaceOperationsTimeline(
                         ) {
                             androidx.compose.foundation.layout.Box(
                                 modifier = androidx.compose.ui.Modifier
-                                    .size(28.dp)
-                                    .border(1.dp, Color(0xFFFFB020).copy(alpha = 0.4f), CircleShape)
-                                    .background(Color(0xFF0F141C), CircleShape),
+                                    .size(24.dp)
+                                    .border(1.dp, Color(0xFF30363D), RoundedCornerShape(6.dp))
+                                    .background(Color(0xFF21262D), RoundedCornerShape(6.dp)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 androidx.compose.material3.CircularProgressIndicator(
-                                    modifier = Modifier.size(12.dp),
-                                    color = Color(0xFFFFB020),
+                                    modifier = Modifier.size(11.dp),
+                                    color = Color(0xFF58A6FF),
                                     strokeWidth = 1.5.dp
                                 )
                             }
@@ -6744,18 +6997,18 @@ fun WorkspaceOperationsTimeline(
                         androidx.compose.foundation.layout.Column(
                             modifier = androidx.compose.ui.Modifier
                                 .weight(1f)
-                                .padding(bottom = 8.dp)
+                                .padding(bottom = 6.dp)
                         ) {
                             Text(
                                 "Formulating next operation...",
-                                fontSize = 13.sp,
-                                color = Color(0xFFF3F4F6),
+                                fontSize = 12.sp,
+                                color = Color(0xFFE6EDF3),
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
-                                "Analyzing codebase and project files",
+                                "Analyzing codebase context and executing steps",
                                 fontSize = 11.sp,
-                                color = Color(0xFF9CA3AF),
+                                color = Color(0xFF8B949E),
                                 modifier = Modifier.padding(top = 2.dp)
                             )
                         }

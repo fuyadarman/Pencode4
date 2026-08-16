@@ -507,8 +507,8 @@ object GeminiClient {
             }
 
             useCustom && (provider == "mistral" || provider == "openai" || provider == "custom" || provider == "groq" || provider == "cohere" || provider == "ollama_cloud" || provider == "ollama" || provider == "openrouter" || provider == "opencode_zen" || provider == "opencode") -> {
-                val baseUrl = when {
-                    !customBaseUrl.isNullOrBlank() -> customBaseUrl.trimEnd('/')
+                val rawBase = when {
+                    !customBaseUrl.isNullOrBlank() -> customBaseUrl.trim()
                     provider == "opencode_zen" || provider == "opencode" -> "https://opencode.ai/zen/v1"
                     provider == "mistral" -> "https://api.mistral.ai"
                     provider == "openai" -> "https://api.openai.com"
@@ -517,6 +517,12 @@ object GeminiClient {
                     provider == "openrouter" -> "https://openrouter.ai/api"
                     provider == "ollama_cloud" || provider == "ollama" -> "https://api.ollama.com"
                     else -> "https://api.openai.com"
+                }
+
+                val baseUrl = if (!rawBase.startsWith("http://") && !rawBase.startsWith("https://")) {
+                    "https://${rawBase.trimEnd('/')}"
+                } else {
+                    rawBase.trimEnd('/')
                 }
                 
                 val url = when {
@@ -558,7 +564,7 @@ object GeminiClient {
                     bodyMap["response_format"] = mapOf("type" to "json_object")
                 }
 
-                val bodyJson = moshi.adapter(Map::class.java).toJson(bodyMap)
+                val bodyJson = moshi.adapter(Map::class.java).lenient().toJson(bodyMap)
                 val body = bodyJson.toRequestBody(mediaType)
 
                 val requestBuilder = Request.Builder()
@@ -604,7 +610,7 @@ object GeminiClient {
                                     } else {
                                         1000L * attempt
                                     }
-                                    val errStr = "API Error $lastCode"
+                                    val errStr = if (isRateLimit) "Rate Limit (429)" else "API Error $lastCode"
                                     onRetryListener?.invoke(provider, attempt, maxAttempts, errStr)
                                     Log.w(TAG, "$provider API Error $lastCode. Retrying in ${backoff}ms (Attempt $attempt of $maxAttempts)...")
                                     Thread.sleep(backoff)
@@ -618,13 +624,13 @@ object GeminiClient {
                             if (attempt < maxAttempts) {
                                 val msg = e.message?.lowercase() ?: ""
                                 val isRateLimit = msg.contains("429") || msg.contains("rate limit") || msg.contains("quota") || msg.contains("exhausted")
-                                val isTransientError = isRateLimit || msg.contains("503") || msg.contains("502") || msg.contains("504") || msg.contains("overloaded") || msg.contains("unavailable")
+                                val isTransientError = isRateLimit || msg.contains("503") || msg.contains("502") || msg.contains("504") || msg.contains("overloaded") || msg.contains("unavailable") || msg.contains("unable to resolve host") || msg.contains("timeout")
                                 val backoff = if (isRateLimit) {
                                     val base = Math.min(5000L * (1 shl (attempt - 1)), 60000L)
                                     val jitter = (Math.random() * 1000).toLong()
                                     base + jitter
                                 } else if (isTransientError) {
-                                    val base = 2000L * (1 shl (attempt - 1))
+                                    val base = 2500L * (1 shl (attempt - 1))
                                     val jitter = (Math.random() * 500).toLong()
                                     base + jitter
                                 } else {
@@ -644,7 +650,7 @@ object GeminiClient {
                     if (response == null || !response.isSuccessful || rawResponse == null) {
                         Log.e(TAG, "$provider Error response: $rawResponse")
                         val errorMsg = try {
-                            val errorMap = moshi.adapter(Map::class.java).fromJson(rawResponse ?: "")
+                            val errorMap = moshi.adapter(Map::class.java).lenient().fromJson(rawResponse ?: "")
                             val errorInner = errorMap?.get("error") as? Map<*, *>
                             errorInner?.get("message")?.toString() ?: rawResponse
                         } catch (e: Exception) {
@@ -683,13 +689,24 @@ object GeminiClient {
                         )
                     }
 
-                    val responseMap = moshi.adapter(Map::class.java).fromJson(rawResponse) as? Map<*, *>
+                    val responseMap = try {
+                        moshi.adapter(Map::class.java).lenient().fromJson(rawResponse) as? Map<*, *>
+                    } catch (e: Exception) {
+                        null
+                    }
+
                     val choices = responseMap?.get("choices") as? List<*>
                     val choice = choices?.firstOrNull() as? Map<*, *>
                     val messageMap = choice?.get("message") as? Map<*, *>
-                    val responseText = messageMap?.get("content") as? String
+                    val responseText = (messageMap?.get("content") as? String) ?: (responseMap?.get("response") as? String)
 
                     if (responseText == null) {
+                        // Fallback: If rawResponse is non-empty and contains XML or JSON tool calls directly
+                        if (!rawResponse.isNullOrBlank() && (rawResponse.contains("<tool") || rawResponse.contains("<arg_key") || rawResponse.contains("\"tool\""))) {
+                            val fallbackParsed = parseFallbackToolCall(rawResponse)
+                            return@withContext fallbackParsed
+                        }
+
                         return@withContext ToolCallResponse(
                             thought = "Empty content from $provider response.",
                             tool = "complete",
@@ -704,7 +721,7 @@ object GeminiClient {
                     return@withContext ToolCallResponse(
                         thought = "Exception caught.",
                         tool = "complete",
-                        arguments = ToolArguments(message = "An error occurred during $provider communication: ${e.localizedMessage}")
+                        arguments = ToolArguments(message = "An error occurred during $provider communication: ${formatNetworkError(e)}")
                     )
                 }
             }
@@ -1169,14 +1186,18 @@ object GeminiClient {
             msg.contains("UnknownHostException", ignoreCase = true) ||
             msg.contains("No address associated with hostname", ignoreCase = true)
         ) {
-            return "Network Connection Failed (ইন্টারনেট কানেকশন সমস্যা):\n" +
-                    "Unable to resolve host \"generativelanguage.googleapis.com\".\n\n" +
-                    "This error occurs when the Android device or Emulator has no internet access or its DNS configuration is failing.\n\n" +
+            val hostMatcher = Regex("""\"([^\"]+)\"""").find(msg)
+            val failedHost = hostMatcher?.groupValues?.get(1) ?: "the API server"
+            return "Network / DNS Connection Failed (হোস্ট অ্যাড্রেস পাওয়া যায়নি):\n" +
+                    "Unable to resolve host \"$failedHost\".\n\n" +
+                    "Why this happens / কারণ:\n" +
+                    "1. The provider ($failedHost) is temporarily unavailable, down, or blocked by ISP/DNS.\n" +
+                    "2. The API Base URL entered in Settings may be incorrect or missing 'https://'.\n" +
+                    "3. Rate Limit / Network throttle occurred.\n\n" +
                     "How to fix / সমাধান:\n" +
-                    "1. Check if your phone/computer has an active internet connection.\n" +
-                    "2. Enable Mobile Data or Wi-Fi on the Android Emulator.\n" +
-                    "3. Go to Emulator Settings -> Network, or try restarting the emulator with a 'Cold Boot'.\n" +
-                    "4. If you are using a proxy or VPN, please disable it or configure a custom Base URL in Settings."
+                    "1. Check if your internet connection is active.\n" +
+                    "2. Verify the Base URL in Settings (ensure it uses a valid reachable endpoint like https://api.openai.com/v1, https://api.groq.com/openai/v1, etc.).\n" +
+                    "3. If using a proxy or VPN, try switching or reconnecting."
         }
         return msg
     }

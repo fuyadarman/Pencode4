@@ -177,11 +177,35 @@ fun McpOAuthConnectDialog(
 
                     OutlinedTextField(
                         value = tokenValue,
-                        onValueChange = { tokenValue = it },
-                        label = { Text("OAuth Access Token / Bearer Code", fontSize = 11.sp) },
-                        placeholder = { Text("Enter token or authorization code") },
+                        onValueChange = { input ->
+                            var clean = input.trim()
+                            if (clean.contains("code=")) {
+                                try {
+                                    val uri = android.net.Uri.parse(clean)
+                                    val extractedCode = uri.getQueryParameter("code")
+                                    if (!extractedCode.isNullOrBlank()) {
+                                        clean = extractedCode
+                                    }
+                                } catch (e: Exception) {
+                                    val codeIndex = clean.indexOf("code=")
+                                    if (codeIndex != -1) {
+                                        var extracted = clean.substring(codeIndex + 5)
+                                        if (extracted.contains("&")) {
+                                            extracted = extracted.substringBefore("&")
+                                        }
+                                        clean = extracted
+                                    }
+                                }
+                            }
+                            tokenValue = clean
+                        },
+                        label = { Text("OAuth Code / Callback URL / Token", fontSize = 11.sp) },
+                        placeholder = { Text("Paste code or full callback URL") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
+                        supportingText = {
+                            Text("If browser shows 404, copy the address bar URL & paste here", fontSize = 10.sp, color = MaterialTheme.colorScheme.primary)
+                        },
                         visualTransformation = if (showToken) VisualTransformation.None else PasswordVisualTransformation(),
                         trailingIcon = {
                             IconButton(onClick = { showToken = !showToken }) {

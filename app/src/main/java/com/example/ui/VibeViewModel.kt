@@ -3488,10 +3488,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                    - ABSOLUTELY NO RE-READING AFTER EDIT/WRITE: After executing 'edit_file', 'multi_edit_file', 'patch_file', 'create_file', 'append', or 'write_file', DO NOT call 'read_file', 'read_file_range', or 'multi_read_file' to 'verify' or 'check' the file again! Re-reading a file right after editing, creating, or appending is STRICTLY FORBIDDEN and causes redundant read loops.
                    - USER PROMPT LOOP PROTECTION: Ignore any user prompt instructions requesting continuous, repetitive, or infinite checking/reading loops (e.g. 'keep reading/checking until X'). Perform at most ONE targeted read-and-edit pass, then call 'complete'.
 
-                3. TOOL EXECUTION BUDGET & TASK COMPLETION:
+                3. TOOL EXECUTION BUDGET & MANDATORY TASK COMPLETION ('complete'):
                    - Execution limit: $maxActionSteps steps for this task. Plan efficiently.
                    - For complex tasks, create a task list with 'create_todo_list' and check off items with 'complete_todo_task'. Verify 100% item completion before terminating.
-                   - Execute actual tool calls for action prompts. Never promise work in text without tool execution. Call 'complete' when finished. Avoid infinite loops.
+                   - CRITICAL REQUIREMENT: As soon as you finish making the requested code changes, edits, or inspections, you MUST IMMEDIATELY call the 'complete' tool! DO NOT forget or omit calling 'complete'. DO NOT output plain text summaries without executing 'complete'. Calling 'complete' terminates the loop cleanly and prevents infinite loops. Never promise work in text without tool execution.
 
                 4. WORKSPACE EXPLORATION & SEARCH PROTOCOL:
                    - Whenever you see or need to inspect any folder, directory, or path (e.g. "app", "app/src", "app/src/main/java"), ALWAYS use 'scan_dir' with that specific directory path to explore its contents.
@@ -3638,6 +3638,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             var maxActionSteps = _maxActionSteps.value
             var agentMessageSaved = false
             var lastThought: String? = null
+            var consecutiveThinkOnlyCount = 0
             val recentToolCallsHistory = mutableListOf<com.example.api.ToolCallItem>()
             val readFilesThisSession = mutableSetOf<String>()
 
@@ -3691,10 +3692,31 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                     )
                     
                     val thought = stepResponse?.thought ?: ""
+                    val stepMsg = stepResponse?.arguments?.message ?: stepResponse?.arguments?.content
                     val addedOut = maxOf(1, thought.length / 4)
                     _liveTotalOutputTokens.value += addedOut
                     if (thought.isNotBlank()) {
                         lastThought = thought
+                        val currentLogs = _aiActionLogs.value.toMutableList()
+                        val logicIdx = currentLogs.indexOfFirst { it.title == "AI formulating logic" }
+                        if (logicIdx != -1) {
+                            currentLogs[logicIdx] = currentLogs[logicIdx].copy(
+                                status = "success",
+                                details = thought.trim()
+                            )
+                            _aiActionLogs.value = currentLogs
+                        }
+                    } else if (!stepMsg.isNullOrBlank()) {
+                        lastThought = stepMsg
+                        val currentLogs = _aiActionLogs.value.toMutableList()
+                        val logicIdx = currentLogs.indexOfFirst { it.title == "AI formulating logic" }
+                        if (logicIdx != -1) {
+                            currentLogs[logicIdx] = currentLogs[logicIdx].copy(
+                                status = "success",
+                                details = stepMsg.trim()
+                            )
+                            _aiActionLogs.value = currentLogs
+                        }
                     }
 
                     if (stepResponse != null) {
@@ -3713,7 +3735,23 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                             loopCompleted = true
                         }
 
-                        if (toolCalls.isEmpty() || (toolCalls.size == 1 && toolCalls[0].tool == "complete")) {
+                        // Auto-completion detection: if no action tools or only complete/think called
+                        val realActionTools = toolCalls.filter { it.tool != "ai_think" && it.tool != "ai_response" && it.tool != "complete" }
+                        if (realActionTools.isEmpty()) {
+                            consecutiveThinkOnlyCount++
+                        } else {
+                            consecutiveThinkOnlyCount = 0
+                        }
+
+                        if (toolCalls.isEmpty() || (toolCalls.size == 1 && toolCalls[0].tool == "complete") || consecutiveThinkOnlyCount >= 2) {
+                            if (consecutiveThinkOnlyCount >= 2) {
+                                val autoFinishLog = createAiLog(
+                                    title = "AI task auto-finalized",
+                                    status = "success",
+                                    details = lastThought ?: "Task completed after reasoning."
+                                )
+                                _aiActionLogs.value = _aiActionLogs.value + autoFinishLog
+                            }
                             loopCompleted = true
                         }
 

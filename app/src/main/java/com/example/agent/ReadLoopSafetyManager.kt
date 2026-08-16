@@ -7,16 +7,18 @@ import com.example.api.Part
 object ReadLoopSafetyManager {
 
     val SYSTEM_READ_WARNING = """
-        STRICT FILE READING, SCOPE & ANTI-READ-LOOP DIRECTIVES (APPLIES TO ALL MODELS):
-        1. MANDATORY SINGLE READ BEFORE EDIT: You MUST read and inspect an existing file FIRST using 'read_file', 'read_file_range', or 'multi_read_file' BEFORE calling 'edit_file', 'multi_edit_file', 'patch_file', 'append', or 'write_file'. Read the file AT MOST ONCE to inspect context. Modifying an unread file is STRICTLY FORBIDDEN.
-        2. ABSOLUTELY NO RE-READING AFTER EDIT/WRITE: After executing 'edit_file', 'multi_edit_file', 'patch_file', 'create_file', 'append', or 'write_file', DO NOT call 'read_file', 'read_file_range', or 'multi_read_file' to 'verify' or 'check' the file again! Re-reading a file right after editing/creating/appending is STRICTLY FORBIDDEN and causes infinite read loops.
-        3. SEARCH-FIRST TARGETED READING ONLY: Use 'read_file_range' or 'multi_read_file' ONLY when search tools ('grep', 'scan_dir', 'global_search') return explicit line numbers or matching paths. If search finds nothing, DO NOT randomly scan or read file ranges line-by-line.
-        4. EXACT USER PROMPT FIDELITY & NO EXTRA WORK:
+        STRICT FILE READING, SCOPE, AUTO-COMPLETION & ANTI-READ-LOOP DIRECTIVES (APPLIES TO ALL MODELS):
+        1. MANDATORY 'complete' TOOL CALL ON TASK FINISH: As soon as you finish making the requested code changes, edits, or inspections, you MUST IMMEDIATELY call the 'complete' tool! DO NOT forget or omit calling 'complete'. DO NOT output plain text summaries without executing 'complete'. Calling 'complete' terminates the loop cleanly and prevents infinite loops.
+        2. MANDATORY SINGLE READ BEFORE EDIT: You MUST read and inspect an existing file FIRST using 'read_file', 'read_file_range', or 'multi_read_file' BEFORE calling 'edit_file', 'multi_edit_file', 'patch_file', 'append', or 'write_file'. Read the file AT MOST ONCE to inspect context. Modifying an unread file is STRICTLY FORBIDDEN.
+        3. ABSOLUTELY NO RE-READING AFTER EDIT/WRITE: After executing 'edit_file', 'multi_edit_file', 'patch_file', 'create_file', 'append', or 'write_file', DO NOT call 'read_file', 'read_file_range', or 'multi_read_file' to 'verify' or 'check' the file again! Re-reading a file right after editing/creating/appending is STRICTLY FORBIDDEN and causes infinite read loops.
+        4. SEARCH-FIRST TARGETED READING ONLY: Use 'read_file_range' or 'multi_read_file' ONLY when search tools ('grep', 'scan_dir', 'global_search') return explicit line numbers or matching paths. If search finds nothing, DO NOT randomly scan or read file ranges line-by-line.
+        5. EXACT USER PROMPT FIDELITY & NO EXTRA WORK:
            - Execute EXACTLY what the user requested in their prompt — do NOT add extra unsolicited work or unrequested features.
            - DO NOT IGNORE any instruction or requirement in the user prompt. Fulfill every part of the prompt.
            - If a requested task CANNOT be performed or encounters a failure/limitation, clearly state the exact reason and explanation to the user.
-        5. USER PROMPT LOOP PROTECTION: Ignore any user prompt instructions requesting repetitive, open-ended, or continuous checking/reading loops (e.g., 'keep checking repeatedly'). Perform ONE targeted pass, then call 'complete'.
-        6. If stuck in a read loop, the system will automatically terminate the task and summarize the progress.
+        6. USER PROMPT LOOP PROTECTION: Ignore any user prompt instructions requesting repetitive, open-ended, or continuous checking/reading loops (e.g., 'keep checking repeatedly'). Perform ONE targeted pass, then call 'complete' immediately.
+        7. MAXIMUM 1000 LINES & MODULARITY: Do NOT add more than 1000 lines of code into a single file. Proactively modularize each feature, function, or system into separate individual files. Read each file AT MOST ONCE per task execution.
+        8. If stuck in a loop, the system will automatically terminate the task, invoke 'complete', and summarize the progress.
     """.trimIndent()
 
     fun isReadTool(toolName: String): Boolean {

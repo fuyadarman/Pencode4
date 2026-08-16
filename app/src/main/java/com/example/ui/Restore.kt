@@ -185,9 +185,9 @@ fun RestoreDialog(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            shape = RoundedCornerShape(20.dp),
-            color = Color(0xFF1E1E2E),
-            border = BorderStroke(1.dp, Color(0xFF313244))
+            shape = RoundedCornerShape(12.dp),
+            color = Color(0xFF161B22),
+            border = BorderStroke(1.dp, Color(0xFF30363D))
         ) {
             Column(
                 modifier = Modifier
@@ -203,14 +203,14 @@ fun RestoreDialog(
                         Box(
                             modifier = Modifier
                                 .size(36.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF89B4FA).copy(alpha = 0.2f)),
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFF21262D)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.History,
                                 contentDescription = null,
-                                tint = Color(0xFF89B4FA),
+                                tint = Color(0xFF2F81F7),
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -218,13 +218,13 @@ fun RestoreDialog(
                         Column {
                             Text(
                                 text = "Project Version Backups",
-                                color = Color.White,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold
+                                color = Color(0xFFE6EDF3),
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold
                             )
                             Text(
                                 text = "Last 3 prompt snapshots",
-                                color = Color(0xFFA6ADC8),
+                                color = Color(0xFF8D96A0),
                                 fontSize = 11.sp
                             )
                         }
@@ -237,7 +237,7 @@ fun RestoreDialog(
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = "Close",
-                            tint = Color(0xFFA6ADC8),
+                            tint = Color(0xFF8D96A0),
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -256,18 +256,18 @@ fun RestoreDialog(
                             Icon(
                                 imageVector = Icons.Default.Backup,
                                 contentDescription = null,
-                                tint = Color(0xFF585B70),
+                                tint = Color(0xFF6E7681),
                                 modifier = Modifier.size(40.dp)
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 text = "No backups stored yet",
-                                color = Color(0xFFA6ADC8),
+                                color = Color(0xFFE6EDF3),
                                 fontSize = 13.sp
                             )
                             Text(
                                 text = "Backups are saved automatically when you send prompts",
-                                color = Color(0xFF6C7086),
+                                color = Color(0xFF8D96A0),
                                 fontSize = 11.sp,
                                 modifier = Modifier.padding(top = 4.dp)
                             )
@@ -294,12 +294,12 @@ fun RestoreDialog(
                     onClick = onDismiss,
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF313244),
-                        contentColor = Color.White
+                        containerColor = Color(0xFF21262D),
+                        contentColor = Color(0xFFE6EDF3)
                     ),
-                    shape = RoundedCornerShape(10.dp)
+                    shape = RoundedCornerShape(8.dp)
                 ) {
-                    Text("Close", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Close", fontSize = 12.5.sp, fontWeight = FontWeight.Medium)
                 }
             }
         }
@@ -311,16 +311,16 @@ fun RestoreDialog(
             title = {
                 Text(
                     text = "Confirm Version Restore",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
+                    color = Color(0xFFE6EDF3),
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 15.sp
                 )
             },
             text = {
                 Text(
                     text = "Are you sure you want to restore project '$projectName' to the snapshot from ${formatTimestamp(backup.timestamp)}?\n\nThis will replace current files with ${backup.fileCount} files from that backup.",
-                    color = Color(0xFFCDD6F4),
-                    fontSize = 13.sp
+                    color = Color(0xFF8D96A0),
+                    fontSize = 12.5.sp
                 )
             },
             confirmButton = {
@@ -331,20 +331,21 @@ fun RestoreDialog(
                         onRestoreConfirmed(toRestore)
                     },
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFF38BA8),
-                        contentColor = Color(0xFF11111B)
-                    )
+                        containerColor = Color(0xFF238636),
+                        contentColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(6.dp)
                 ) {
-                    Text("Restore Version", fontWeight = FontWeight.Bold)
+                    Text("Restore Version", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { selectedBackupForConfirm = null }) {
-                    Text("Cancel", color = Color(0xFFA6ADC8))
+                    Text("Cancel", color = Color(0xFF8D96A0), fontSize = 12.sp)
                 }
             },
-            containerColor = Color(0xFF1E1E2E),
-            shape = RoundedCornerShape(16.dp)
+            containerColor = Color(0xFF161B22),
+            shape = RoundedCornerShape(12.dp)
         )
     }
 }
@@ -357,11 +358,11 @@ private fun BackupVersionItem(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF181825)),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0D1117)),
         border = BorderStroke(
             1.dp,
-            if (isLatest) Color(0xFF89B4FA).copy(alpha = 0.5f) else Color(0xFF313244)
+            if (isLatest) Color(0xFF2F81F7).copy(alpha = 0.6f) else Color(0xFF30363D)
         )
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
@@ -372,15 +373,15 @@ private fun BackupVersionItem(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Surface(
-                        color = if (isLatest) Color(0xFF89B4FA).copy(alpha = 0.2f) else Color(0xFF45475A),
-                        shape = RoundedCornerShape(6.dp)
+                        color = if (isLatest) Color(0xFF2F81F7).copy(alpha = 0.15f) else Color(0xFF21262D),
+                        shape = RoundedCornerShape(4.dp)
                     ) {
                         Text(
                             text = if (isLatest) "Latest Version" else "Backup Snapshot",
-                            color = if (isLatest) Color(0xFF89B4FA) else Color(0xFFBAC2DE),
+                            color = if (isLatest) Color(0xFF38BDF8) else Color(0xFF8D96A0),
                             fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
 
@@ -388,15 +389,15 @@ private fun BackupVersionItem(
 
                     Text(
                         text = "${backup.fileCount} files",
-                        color = Color(0xFFA6ADC8),
-                        fontSize = 10.sp
+                        color = Color(0xFF8D96A0),
+                        fontSize = 10.5.sp
                     )
                 }
 
                 Text(
                     text = formatTimestamp(backup.timestamp),
-                    color = Color(0xFF6C7086),
-                    fontSize = 10.sp
+                    color = Color(0xFF6E7681),
+                    fontSize = 10.5.sp
                 )
             }
 
@@ -404,37 +405,37 @@ private fun BackupVersionItem(
 
             Text(
                 text = if (backup.promptText.isNotBlank()) backup.promptText else "Automated prompt snapshot",
-                color = Color(0xFFCDD6F4),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
+                color = Color(0xFFE6EDF3),
+                fontSize = 12.5.sp,
+                fontWeight = FontWeight.Normal,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             Button(
                 onClick = onRestoreClick,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(34.dp),
+                    .height(32.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF89B4FA),
-                    contentColor = Color(0xFF11111B)
+                    containerColor = Color(0xFF238636),
+                    contentColor = Color.White
                 ),
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(6.dp),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Restore,
                     contentDescription = null,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(14.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
                     text = "Restore to this Version",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
         }

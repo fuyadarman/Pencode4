@@ -55,121 +55,128 @@ fun HomeScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Terminal,
-                            contentDescription = "Terminal Icon",
-                            tint = Color(0xFF38BDF8),
-                            modifier = Modifier.size(28.dp)
-                        )
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFF21262D),
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Code,
+                                    contentDescription = "Code Icon",
+                                    tint = Color(0xFF2F81F7),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
                         Text(
-                            text = "PenCode AI",
+                            text = "PenCode Studio",
                             fontFamily = FontFamily.SansSerif,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFFF1F5F9)
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 17.sp,
+                            color = Color(0xFFE6EDF3)
                         )
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(Color(0xFF8B5CF6).copy(alpha = 0.15f))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = Color(0xFF30363D),
+                            border = BorderStroke(1.dp, Color(0xFF30363D))
                         ) {
                             Text(
-                                text = "Cursor Vibe",
+                                text = "IDE Workspace",
                                 fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF8B5CF6)
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF8D96A0),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF090B10),
-                    titleContentColor = Color.White
+                    containerColor = Color(0xFF0D1117),
+                    titleContentColor = Color(0xFFE6EDF3)
                 )
             )
         },
-        containerColor = Color(0xFF07090D)
+        containerColor = Color(0xFF0D1117)
     ) { innerPadding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .background(Color(0xFF07090D))
+                .background(Color(0xFF0D1117))
         ) {
-            // Dark futuristic radial glow of developer workspace
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.radialGradient(
-                            colors = listOf(Color(0x226366F1), Color.Transparent),
-                            radius = 1400f
-                        )
-                    )
-            )
-
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(24.dp)
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
-                // Intro Hero Banner styled like Cursor homepage
+                // Intro Hero Banner - Professional Slate Developer Card
                 Card(
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0E111A)),
-                    border = BorderStroke(1.dp, Color(0xFF1F2437)),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF161B22)),
+                    border = BorderStroke(1.dp, Color(0xFF30363D)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(24.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                            .padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = Color(0xFF2F81F7),
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = "Autonomous Software Agent Workspace",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFFE6EDF3)
+                            )
+                        }
                         Text(
-                            text = "AI Vibe Coding Workspace",
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = Color(0xFF38BDF8)
-                        )
-                        Text(
-                            text = "Describe any website, Android app, Flutter app, or custom software. Your agent will read, create, edit, and patch files instantly, with a full live web preview and automated build pipeline!",
-                            fontSize = 13.sp,
-                            color = Color(0xFF94A3B8),
-                            lineHeight = 20.sp
+                            text = "Develop web applications, Android packages, and services using direct file operations, embedded terminal tools, and automated compilation pipelines.",
+                            fontSize = 12.5.sp,
+                            color = Color(0xFF8D96A0),
+                            lineHeight = 18.sp
                         )
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            modifier = Modifier.padding(top = 12.dp)
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.padding(top = 6.dp)
                         ) {
                             Button(
                                 onClick = { showCreateDialog = true },
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF6366F1),
+                                    containerColor = Color(0xFF238636),
                                     contentColor = Color.White
                                 ),
-                                shape = RoundedCornerShape(12.dp),
-                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
                             ) {
-                                Icon(Icons.Default.Add, contentDescription = "Add", modifier = Modifier.size(18.dp))
+                                Icon(Icons.Default.Add, contentDescription = "Add", modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("New Workspace", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                Text("New Project", fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp)
                             }
 
-                            Button(
+                            OutlinedButton(
                                 onClick = { showCloneDialog = true },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF1E293B).copy(alpha = 0.4f),
-                                    contentColor = Color(0xFF38BDF8)
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = Color(0xFFE6EDF3)
                                 ),
-                                shape = RoundedCornerShape(12.dp),
-                                border = BorderStroke(1.dp, Color(0xFF1F2437)),
-                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
+                                border = BorderStroke(1.dp, Color(0xFF30363D)),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
                             ) {
-                                Icon(Icons.Default.Share, contentDescription = "Clone", modifier = Modifier.size(18.dp))
+                                Icon(Icons.Default.Share, contentDescription = "Clone", modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Clone Git Repo", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                Text("Clone Repository", fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp)
                             }
                         }
                     }
