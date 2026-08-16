@@ -27,7 +27,7 @@ data class McpOAuthMetadata(
     val scopesSupported: List<String> = emptyList(),
     val responseTypesSupported: List<String> = listOf("code"),
     val codeChallengeMethodsSupported: List<String> = listOf("S256"),
-    val clientMetadataUrl: String = "https://fuyadarman.github.io/agents/.well-known/mcp-client-metadata.json"
+    val clientMetadataUrl: String = "https://pencode.vercel.app/.well-known/mcp-client-metadata.json"
 )
 
 class McpAuthManager(
@@ -40,9 +40,9 @@ class McpAuthManager(
         .build()
 
     companion object {
-        const val DEFAULT_REDIRECT_URI = "https://fuyadarman.github.io/agents/oauth/callback"
+        const val DEFAULT_REDIRECT_URI = "https://pencode.vercel.app/oauth/callback"
         const val CUSTOM_SCHEME_REDIRECT_URI = "pencode://mcp/oauth/callback"
-        const val DEFAULT_CIMD_CLIENT_ID = "https://fuyadarman.github.io/agents/.well-known/mcp-client-metadata.json"
+        const val DEFAULT_CIMD_CLIENT_ID = "https://pencode.vercel.app/.well-known/mcp-client-metadata.json"
     }
 
     /**
@@ -222,8 +222,9 @@ class McpAuthManager(
             try {
                 val dcrBody = JSONObject().apply {
                     put("client_name", "Pencode AI Agent")
-                    put("client_uri", "https://pencode.app")
-                    put("redirect_uris", listOf(DEFAULT_REDIRECT_URI, "https://pencode.app/mcp/oauth/callback"))
+                    put("client_uri", "https://pencode.vercel.app")
+                    put("logo_uri", "https://pencode.vercel.app/logo.png")
+                    put("redirect_uris", listOf(CUSTOM_SCHEME_REDIRECT_URI, DEFAULT_REDIRECT_URI))
                     put("grant_types", listOf("authorization_code", "refresh_token"))
                     put("response_types", listOf("code"))
                     put("token_endpoint_auth_method", "none")
