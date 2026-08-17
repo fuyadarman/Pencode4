@@ -15,6 +15,15 @@ interface VibeDao {
     @Query("DELETE FROM projects WHERE name = :name")
     suspend fun deleteProject(name: String)
 
+    @Query("UPDATE projects SET name = :newName, description = :newDescription WHERE name = :oldName")
+    suspend fun updateProject(oldName: String, newName: String, newDescription: String)
+
+    @Query("UPDATE project_files SET projectName = :newName WHERE projectName = :oldName")
+    suspend fun updateProjectFilesProjectName(oldName: String, newName: String)
+
+    @Query("UPDATE chat_messages SET projectName = :newName WHERE projectName = :oldName")
+    suspend fun updateChatMessagesProjectName(oldName: String, newName: String)
+
     // Files
     @Query("SELECT * FROM project_files WHERE projectName = :projectName ORDER BY path ASC")
     suspend fun getFilesForProject(projectName: String): List<ProjectFileEntity>

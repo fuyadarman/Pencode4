@@ -106,7 +106,26 @@ object McpToolHandler {
                 updateLog(mcpLog.id, if (targetServer != null) "success" else "failed", result)
                 result
             }
-            else -> "Error: Unknown MCP tool '$tool'"
+            else -> {
+                if (tool.startsWith("gsc_")) {
+                    val enabledServers = mcpManager.getEnabledServersForWorkspace(project.name)
+                    val gscServer = enabledServers.find { it.platform == "GOOGLE_SEARCH_CONSOLE" || it.url.contains("searchconsole") }
+                        ?: mcpManager.servers.value.find { it.platform == "GOOGLE_SEARCH_CONSOLE" }
+                    if (gscServer != null) {
+                        val mcpLog = createLog(
+                            "Search Console: $tool",
+                            "Executing Google Search Console operation '$tool'"
+                        )
+                        addLog(mcpLog)
+                        val mcpArgsJson = args?.mcpArgsJson ?: args?.content ?: args?.query ?: ""
+                        val result = mcpManager.executeMcpToolCall(gscServer.id, tool, mcpArgsJson)
+                        val isSuccess = !result.startsWith("Error:")
+                        updateLog(mcpLog.id, if (isSuccess) "success" else "failed", if (isSuccess) "GSC ($tool)" else result)
+                        return result
+                    }
+                }
+                "Error: Unknown MCP tool '$tool'"
+            }
         }
     }
 }

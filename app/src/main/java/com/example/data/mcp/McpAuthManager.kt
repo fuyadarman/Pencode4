@@ -4,7 +4,9 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.browser.customtabs.CustomTabsIntent
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.FormBody
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -71,6 +73,34 @@ class McpAuthManager(
             val cleanUrl = mcpServerUrl.trim().removeSuffix("/")
             val parsedUri = Uri.parse(cleanUrl)
             val baseUrl = "${parsedUri.scheme}://${parsedUri.host}${if (parsedUri.port > 0 && parsedUri.port != 80 && parsedUri.port != 443) ":${parsedUri.port}" else ""}"
+
+            // Google Search Console & Google Stitch OAuth discovery
+            if (cleanUrl.contains("searchconsole") || cleanUrl.contains("webmasters") || cleanUrl.contains("stitch") || cleanUrl.contains("googleapis.com")) {
+                val scopes = if (cleanUrl.contains("stitch")) {
+                    listOf(
+                        "https://www.googleapis.com/auth/cloud-platform",
+                        "openid",
+                        "email",
+                        "profile"
+                    )
+                } else {
+                    listOf(
+                        GoogleSearchConsoleMcpService.SEARCH_CONSOLE_SCOPE,
+                        "openid",
+                        "email",
+                        "profile"
+                    )
+                }
+                return@withContext Result.success(
+                    McpOAuthMetadata(
+                        serverUrl = mcpServerUrl,
+                        authorizationEndpoint = "https://accounts.google.com/o/oauth2/v2/auth",
+                        tokenEndpoint = "https://oauth2.googleapis.com/token",
+                        issuer = "https://accounts.google.com",
+                        scopesSupported = scopes
+                    )
+                )
+            }
 
             val discoveryCandidates = mutableListOf<String>()
 
@@ -184,14 +214,14 @@ class McpAuthManager(
         if (!cid.isNullOrBlank()) return cid
 
         val existing = tokenStore.getTokens(serverId)?.clientId
-        if (!existing.isNullOrBlank() && existing != DEFAULT_CLIENT_ID && existing != "cloudflare-mcp") {
+        if (!existing.isNullOrBlank() && existing != DEFAULT_CLIENT_ID && existing != "cloudflare-mcp" && existing != "vercel-mcp-client") {
             return existing
         }
 
         val dcrEndpoint = metadata.registrationEndpoint
         if (!dcrEndpoint.isNullOrBlank()) {
             val dcrClientId = registerClientIfNeeded(metadata, serverId)
-            if (dcrClientId != DEFAULT_CLIENT_ID) {
+            if (dcrClientId != DEFAULT_CLIENT_ID && dcrClientId != "vercel-mcp-client") {
                 return dcrClientId
             }
         }
@@ -207,12 +237,74 @@ class McpAuthManager(
             return if (envClientId.isNotBlank() && envClientId != "null") envClientId else "0191848f-8044-4d51-b69a-296f32c4d900"
         }
 
-        // Vercel OAuth client ID
-        if (metadata.authorizationEndpoint.contains("vercel") || serverId.contains("vercel", ignoreCase = true)) {
-            return "vercel-mcp-client"
+        // Google Search Console, Google Stitch & all Google Cloud OAuth
+        if (metadata.authorizationEndpoint.contains("accounts.google.com") || 
+            serverId.contains("google", ignoreCase = true) || 
+            serverId.contains("searchconsole", ignoreCase = true) ||
+            serverId.contains("stitch", ignoreCase = true) ||
+            metadata.serverUrl.contains("stitch") ||
+            metadata.serverUrl.contains("googleapis.com")) {
+            val envGoogleCid = try { com.example.BuildConfig.GOOGLE_OAUTH_CLIENT_ID } catch (e: Throwable) { "" }
+            return if (envGoogleCid.isNotBlank() && envGoogleCid != "null" && envGoogleCid.contains("apps.googleusercontent.com")) {
+                envGoogleCid
+            } else {
+                "798989414934-nn16qvt7t909d7hvc73ccvr1u0t24rom.apps.googleusercontent.com"
+            }
         }
 
         return DEFAULT_CLIENT_ID
+    }
+
+    private var loopbackJob: kotlinx.coroutines.Job? = null
+
+    private fun startLoopbackServer(
+        port: Int = 8080,
+        onCallbackReceived: (Uri) -> Unit
+    ) {
+        loopbackJob?.cancel()
+        loopbackJob = CoroutineScope(Dispatchers.IO).launch {
+            var serverSocket: java.net.ServerSocket? = null
+            try {
+                serverSocket = java.net.ServerSocket(port)
+                serverSocket.soTimeout = 120_000 // 2 minutes timeout
+                val socket = serverSocket.accept()
+                val reader = java.io.BufferedReader(java.io.InputStreamReader(socket.getInputStream()))
+                val firstLine = reader.readLine() ?: ""
+                val path = firstLine.split(" ").getOrNull(1) ?: "/callback"
+                val uri = Uri.parse("http://localhost:$port$path")
+
+                val responseBody = """
+                    <!DOCTYPE html>
+                    <html>
+                    <head><title>Authorization Successful</title><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+                    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align:center; padding:50px 20px; background:#0B0F17; color:#F0F6FC;">
+                        <div style="background:#161B22; border:1px solid #30363D; border-radius:16px; max-width:400px; margin:0 auto; padding:32px; box-shadow:0 8px 24px rgba(0,0,0,0.5);">
+                            <div style="font-size:48px; margin-bottom:16px;">✅</div>
+                            <h2 style="margin:0 0 8px 0; color:#58A6FF; font-size:22px;">MCP Authorization Successful</h2>
+                            <p style="color:#8B949E; font-size:14px; margin:0 0 24px 0;">You can now close this tab and return to Pencode.</p>
+                        </div>
+                    </body>
+                    </html>
+                """.trimIndent()
+
+                val writer = java.io.PrintWriter(socket.getOutputStream(), true)
+                writer.print("HTTP/1.1 200 OK\r\n")
+                writer.print("Content-Type: text/html; charset=UTF-8\r\n")
+                writer.print("Content-Length: ${responseBody.toByteArray().size}\r\n")
+                writer.print("Connection: close\r\n\r\n")
+                writer.print(responseBody)
+                writer.flush()
+                socket.close()
+
+                CoroutineScope(Dispatchers.Main).launch {
+                    onCallbackReceived(uri)
+                }
+            } catch (e: Exception) {
+                // Timeout or cancelled
+            } finally {
+                try { serverSocket?.close() } catch (ignored: Exception) {}
+            }
+        }
     }
 
     /**
@@ -220,51 +312,67 @@ class McpAuthManager(
      */
     suspend fun registerClientIfNeeded(metadata: McpOAuthMetadata, serverId: String): String = withContext(Dispatchers.IO) {
         val existing = tokenStore.getTokens(serverId)
-        if (!existing?.clientId.isNullOrBlank() && existing!!.clientId != DEFAULT_CLIENT_ID && existing.clientId != "cloudflare-mcp") {
+        if (!existing?.clientId.isNullOrBlank() &&
+            existing!!.clientId != DEFAULT_CLIENT_ID &&
+            existing.clientId != "cloudflare-mcp" &&
+            existing.clientId != "vercel-mcp-client") {
             return@withContext existing.clientId!!
         }
 
         val regEndpoint = metadata.registrationEndpoint
         if (!regEndpoint.isNullOrBlank()) {
-            try {
-                val dcrBody = JSONObject().apply {
-                    put("client_name", "Pencode AI Agent")
-                    put("client_uri", "https://pencode.vercel.app")
-                    val urisArray = org.json.JSONArray().apply {
-                        put(DEFAULT_REDIRECT_URI)
-                        put(CUSTOM_SCHEME_REDIRECT_URI)
-                    }
-                    put("redirect_uris", urisArray)
-                    val grantArray = org.json.JSONArray().apply {
-                        put("authorization_code")
-                        put("refresh_token")
-                    }
-                    put("grant_types", grantArray)
-                    val respArray = org.json.JSONArray().apply {
-                        put("code")
-                    }
-                    put("response_types", respArray)
-                    put("token_endpoint_auth_method", "none")
-                }
+            val redirectCandidateSets = listOf(
+                listOf(DEFAULT_REDIRECT_URI, CUSTOM_SCHEME_REDIRECT_URI),
+                listOf("http://localhost:8080/callback", "http://127.0.0.1:8080/callback")
+            )
 
-                val req = Request.Builder()
-                    .url(regEndpoint)
-                    .post(dcrBody.toString().toRequestBody("application/json".toMediaTypeOrNull()))
-                    .build()
-
-                val resp = httpClient.newCall(req).execute()
-                if (resp.isSuccessful) {
-                    val respJson = JSONObject(resp.body?.string() ?: "")
-                    val newClientId = respJson.optString("client_id")
-                    val newClientSecret = respJson.optString("client_secret").takeIf { it.isNotBlank() }
-                    if (newClientId.isNotBlank()) {
-                        val current = tokenStore.getTokens(serverId) ?: McpTokenData(serverId = serverId, accessToken = "")
-                        tokenStore.saveTokens(current.copy(clientId = newClientId, clientSecret = newClientSecret))
-                        return@withContext newClientId
+            for (redirectList in redirectCandidateSets) {
+                try {
+                    val dcrBody = JSONObject().apply {
+                        put("client_name", "Pencode AI Agent")
+                        put("client_uri", "https://pencode.vercel.app")
+                        val urisArray = org.json.JSONArray().apply {
+                            redirectList.forEach { put(it) }
+                        }
+                        put("redirect_uris", urisArray)
+                        val grantArray = org.json.JSONArray().apply {
+                            put("authorization_code")
+                            put("refresh_token")
+                        }
+                        put("grant_types", grantArray)
+                        val respArray = org.json.JSONArray().apply {
+                            put("code")
+                        }
+                        put("response_types", respArray)
+                        put("token_endpoint_auth_method", "none")
                     }
+
+                    val req = Request.Builder()
+                        .url(regEndpoint)
+                        .post(dcrBody.toString().toRequestBody("application/json".toMediaTypeOrNull()))
+                        .build()
+
+                    val resp = httpClient.newCall(req).execute()
+                    if (resp.isSuccessful) {
+                        val respJson = JSONObject(resp.body?.string() ?: "")
+                        val newClientId = respJson.optString("client_id")
+                        val newClientSecret = respJson.optString("client_secret").takeIf { it.isNotBlank() }
+                        val registeredRedirect = redirectList.first()
+                        if (newClientId.isNotBlank()) {
+                            val current = tokenStore.getTokens(serverId) ?: McpTokenData(serverId = serverId, accessToken = "")
+                            tokenStore.saveTokens(
+                                current.copy(
+                                    clientId = newClientId,
+                                    clientSecret = newClientSecret,
+                                    redirectUri = registeredRedirect
+                                )
+                            )
+                            return@withContext newClientId
+                        }
+                    }
+                } catch (e: Exception) {
+                    // Try next candidate set
                 }
-            } catch (e: Exception) {
-                // Fallback
             }
         }
 
@@ -296,7 +404,8 @@ class McpAuthManager(
         serverId: String,
         metadata: McpOAuthMetadata,
         customClientId: String? = null,
-        scopes: List<String> = emptyList()
+        scopes: List<String> = emptyList(),
+        onLocalCallback: ((Uri) -> Unit)? = null
     ): Result<String> = withContext(Dispatchers.Main) {
         try {
             val verifier = generatePkceVerifier()
@@ -308,7 +417,24 @@ class McpAuthManager(
             tokenStore.saveCodeVerifier(serverId, verifier, state)
 
             val currentTokens = tokenStore.getTokens(serverId) ?: McpTokenData(serverId = serverId, accessToken = "")
-            tokenStore.saveTokens(currentTokens.copy(clientId = clientId, codeVerifier = verifier, authState = state))
+            val chosenRedirectUri = currentTokens.redirectUri
+                ?: (if (metadata.authorizationEndpoint.contains("vercel") || serverId.contains("vercel", ignoreCase = true)) "http://localhost:8080/callback" else DEFAULT_REDIRECT_URI)
+
+            tokenStore.saveTokens(
+                currentTokens.copy(
+                    clientId = clientId,
+                    codeVerifier = verifier,
+                    authState = state,
+                    redirectUri = chosenRedirectUri
+                )
+            )
+
+            // If using localhost callback, start loopback listener
+            if (chosenRedirectUri.startsWith("http://localhost") || chosenRedirectUri.startsWith("http://127.0.0.1")) {
+                startLoopbackServer(8080) { callbackUri ->
+                    onLocalCallback?.invoke(callbackUri)
+                }
+            }
 
             val scopeString = if (scopes.isNotEmpty()) {
                 scopes.joinToString(" ")
@@ -321,13 +447,18 @@ class McpAuthManager(
             val authUriBuilder = Uri.parse(metadata.authorizationEndpoint).buildUpon()
                 .appendQueryParameter("response_type", "code")
                 .appendQueryParameter("client_id", clientId)
-                .appendQueryParameter("redirect_uri", DEFAULT_REDIRECT_URI)
+                .appendQueryParameter("redirect_uri", chosenRedirectUri)
                 .appendQueryParameter("state", state)
                 .appendQueryParameter("code_challenge", challenge)
                 .appendQueryParameter("code_challenge_method", "S256")
 
             if (scopeString.isNotBlank()) {
                 authUriBuilder.appendQueryParameter("scope", scopeString)
+            }
+
+            if (metadata.authorizationEndpoint.contains("accounts.google.com")) {
+                authUriBuilder.appendQueryParameter("access_type", "offline")
+                authUriBuilder.appendQueryParameter("prompt", "consent")
             }
 
             val authUri = authUriBuilder.build()
@@ -375,11 +506,13 @@ class McpAuthManager(
                 ?: return@withContext Result.failure(Exception("PKCE verifier missing."))
 
             val clientId = tokenData.clientId ?: DEFAULT_CLIENT_ID
+            val redirectUri = tokenData.redirectUri
+                ?: (if (metadata.tokenEndpoint.contains("vercel") || serverId.contains("vercel", ignoreCase = true)) "http://localhost:8080/callback" else DEFAULT_REDIRECT_URI)
 
             val formBuilder = FormBody.Builder()
                 .add("grant_type", "authorization_code")
                 .add("code", code)
-                .add("redirect_uri", DEFAULT_REDIRECT_URI)
+                .add("redirect_uri", redirectUri)
                 .add("code_verifier", verifier)
                 .add("client_id", clientId)
 

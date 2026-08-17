@@ -39,6 +39,7 @@ fun HomeScreen(
     projects: List<ProjectEntity>,
     gitProgress: String,
     onCreateProject: (String, String, String?, List<android.net.Uri>) -> Unit,
+    onUpdateProject: (String, String, String) -> Unit,
     onDeleteProject: (String) -> Unit,
     onSelectProject: (ProjectEntity) -> Unit,
     onCloneProject: (String, String, String?, String, (Result<Unit>) -> Unit) -> Unit
@@ -46,6 +47,7 @@ fun HomeScreen(
     var showCreateDialog by remember { mutableStateOf(false) }
     var showCloneDialog by remember { mutableStateOf(false) }
     var projectToDelete by remember { mutableStateOf<String?>(null) }
+    var projectToEdit by remember { mutableStateOf<ProjectEntity?>(null) }
 
     Scaffold(
         topBar = {
@@ -242,6 +244,7 @@ fun HomeScreen(
                             ProjectCard(
                                 project = project,
                                 onClick = { onSelectProject(project) },
+                                onEdit = { projectToEdit = project },
                                 onDelete = { projectToDelete = project.name }
                             )
                         }
@@ -249,6 +252,17 @@ fun HomeScreen(
                 }
             }
         }
+    }
+
+    if (projectToEdit != null) {
+        EditProjectDialog(
+            project = projectToEdit!!,
+            onDismiss = { projectToEdit = null },
+            onUpdate = { newName, newDesc ->
+                onUpdateProject(projectToEdit!!.name, newName, newDesc)
+                projectToEdit = null
+            }
+        )
     }
 
     if (projectToDelete != null) {
@@ -307,6 +321,7 @@ fun HomeScreen(
 fun ProjectCard(
     project: ProjectEntity,
     onClick: () -> Unit,
+    onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
     Card(
@@ -368,13 +383,114 @@ fun ProjectCard(
                 }
             }
 
-            IconButton(onClick = onDelete) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "Delete Project",
-                    tint = Color(0xFFEF4444),
-                    modifier = Modifier.size(18.dp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onEdit) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Edit Project",
+                        tint = Color(0xFF94A3B8),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete Project",
+                        tint = Color(0xFFEF4444),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun EditProjectDialog(
+    project: ProjectEntity,
+    onDismiss: () -> Unit,
+    onUpdate: (String, String) -> Unit
+) {
+    var name by remember { mutableStateOf(project.name) }
+    var description by remember { mutableStateOf(project.description) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = Color(0xFF12131A),
+            border = BorderStroke(1.dp, Color(0xFF222533)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .wrapContentHeight()
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = "Edit Workspace",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
                 )
+
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Workspace Name") },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color(0xFF6366F1),
+                        unfocusedBorderColor = Color(0xFF222533),
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("Short Description") },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color(0xFF6366F1),
+                        unfocusedBorderColor = Color(0xFF222533),
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2,
+                    maxLines = 3
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancel", color = Color(0xFF80809B))
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            if (name.isNotBlank()) {
+                                onUpdate(name.trim(), description.trim())
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF6366F1)
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        enabled = name.isNotBlank()
+                    ) {
+                        Text("Save Changes", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
         }
     }

@@ -2,6 +2,7 @@ package com.example.data
 
 import android.content.Context
 import android.net.Uri
+import com.example.data.mcp.GoogleSearchConsoleMcpService
 import com.example.data.mcp.McpAuthManager
 import com.example.data.mcp.McpClient
 import com.example.data.mcp.McpOAuthMetadata
@@ -9,10 +10,12 @@ import com.example.data.mcp.McpTokenStore
 import com.example.data.mcp.McpToolRegistry
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
@@ -29,6 +32,7 @@ class McpManager(private val context: Context) {
     val authManager = McpAuthManager(context, tokenStore)
     val mcpClient = McpClient(tokenStore, authManager)
     val toolRegistry = McpToolRegistry()
+    val gscService = GoogleSearchConsoleMcpService(tokenStore)
 
     private val prefs = context.getSharedPreferences("mcp_servers_prefs", Context.MODE_PRIVATE)
     private val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
@@ -79,6 +83,16 @@ class McpManager(private val context: Context) {
                 }
             }
         }
+        // Ensure Google Search Console preset is present
+        if (!uniqueMap.containsKey("GOOGLE_SEARCH_CONSOLE")) {
+            uniqueMap["GOOGLE_SEARCH_CONSOLE"] = McpServer(
+                id = UUID.randomUUID().toString(),
+                name = "Google Search Console",
+                url = "https://searchconsole.googleapis.com/mcp",
+                platform = "GOOGLE_SEARCH_CONSOLE",
+                status = "Disconnected"
+            )
+        }
         _servers.value = uniqueMap.values.toList()
         saveServers()
     }
@@ -110,6 +124,13 @@ class McpManager(private val context: Context) {
                 name = "Vercel MCP",
                 url = "https://mcp.vercel.com",
                 platform = "VERCEL",
+                status = "Disconnected"
+            ),
+            McpServer(
+                id = UUID.randomUUID().toString(),
+                name = "Google Search Console",
+                url = "https://searchconsole.googleapis.com/mcp",
+                platform = "GOOGLE_SEARCH_CONSOLE",
                 status = "Disconnected"
             ),
             McpServer(
@@ -220,7 +241,12 @@ class McpManager(private val context: Context) {
             activityContext = activityContext,
             serverId = server.id,
             metadata = metadata,
-            customClientId = customClientId
+            customClientId = customClientId,
+            onLocalCallback = { uri ->
+                CoroutineScope(Dispatchers.IO).launch {
+                    handleOAuthCallback(server.id, uri)
+                }
+            }
         )
 
         if (authRes.isSuccess) {
@@ -275,6 +301,13 @@ class McpManager(private val context: Context) {
         updateServer(server.copy(status = "Connecting"))
 
         try {
+            if (server.platform == "GOOGLE_SEARCH_CONSOLE" || server.url.contains("searchconsole") || server.url.contains("webmasters")) {
+                val gscTools = GoogleSearchConsoleMcpService.getAvailableTools()
+                toolRegistry.registerToolsForServer(server, gscTools)
+                updateServer(server.copy(status = "Connected", availableTools = gscTools))
+                return@withContext Result.success(gscTools)
+            }
+
             val metadata = cachedMetadata[server.id] ?: authManager.discoverOAuthMetadata(server.url).getOrNull()
             val tokenEp = metadata?.tokenEndpoint
 
@@ -368,6 +401,10 @@ class McpManager(private val context: Context) {
     ): String = withContext(Dispatchers.IO) {
         val server = _servers.value.find { it.id == serverId }
             ?: return@withContext "Error: MCP Server with ID '$serverId' not found."
+
+        if (server.platform == "GOOGLE_SEARCH_CONSOLE" || server.url.contains("searchconsole") || toolName.startsWith("gsc_")) {
+            return@withContext gscService.executeTool(serverId, toolName, argumentsJson)
+        }
 
         val metadata = cachedMetadata[server.id] ?: authManager.discoverOAuthMetadata(server.url).getOrNull()
         val tokenEp = metadata?.tokenEndpoint

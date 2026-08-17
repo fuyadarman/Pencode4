@@ -152,6 +152,9 @@ class MainActivity : ComponentActivity() {
                                 onCreateProject = { name, desc, template, uris ->
                                     viewModel.createProject(name, desc, template, uris)
                                 },
+                                onUpdateProject = { oldName, newName, newDesc ->
+                                    viewModel.updateProject(oldName, newName, newDesc)
+                                },
                                 onDeleteProject = { name ->
                                     viewModel.deleteProject(name)
                                 },

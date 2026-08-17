@@ -2604,6 +2604,16 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun updateProject(oldName: String, newName: String, newDescription: String) {
+        viewModelScope.launch {
+            repository.updateProject(oldName, newName, newDescription)
+            loadProjects()
+            if (_currentProject.value?.name == oldName) {
+                _currentProject.value = _currentProject.value?.copy(name = newName, description = newDescription)
+            }
+        }
+    }
+
     fun createProject(name: String, description: String, templateKey: String?, urisToImport: List<android.net.Uri> = emptyList()) {
         viewModelScope.launch {
             repository.createProject(name, description, templateKey)
@@ -5118,6 +5128,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                         _aiActionLogs.value = _aiActionLogs.value + failLog
                         loopCompleted = true
                     }
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    Log.d("VibeViewModel", "AI agent loop cancelled")
+                    loopCompleted = true
+                    throw e
                 } catch (e: Exception) {
                     Log.e("VibeViewModel", "Error in AI agent loop", e)
                     val failLog = AiActionLog(

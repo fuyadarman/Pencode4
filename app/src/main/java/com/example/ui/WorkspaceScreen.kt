@@ -1170,7 +1170,7 @@ fun ChatTabContent(
                     )
                 }
 
-                if (isThinking) {
+                if (isThinking || (aiActionLogs.isNotEmpty() && (messages.isEmpty() || messages.lastOrNull()?.role == "user"))) {
                     item {
                         WorkspaceOperationsTimeline(
                             displayLogs = aiActionLogs.filter { log ->
@@ -1181,7 +1181,7 @@ fun ChatTabContent(
                                                                    (title.contains("formulating", ignoreCase = true) && !isFormulatingLogic)
                                 !title.contains("finished task execution", ignoreCase = true) && (isFormulatingLogic || !hasForbiddenThinkingKeywords)
                             },
-                            isThinking = true
+                            isThinking = isThinking
                         )
                     }
                 }

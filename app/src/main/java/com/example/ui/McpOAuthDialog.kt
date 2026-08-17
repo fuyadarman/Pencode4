@@ -39,8 +39,17 @@ fun McpOAuthConnectDialog(
     var tokenValue by remember { mutableStateOf(server.apiKey ?: "") }
     var oauthClientId by remember { 
         val envClientId = com.example.BuildConfig.SUPABASE_CLIENT_ID
-        val defaultId = if (envClientId.isNotBlank() && envClientId != "null") envClientId else "0191848f-8044-4d51-b69a-296f32c4d900"
-        mutableStateOf(if (platformType == com.example.data.McpPlatformType.SUPABASE) defaultId else "") 
+        val defaultSupabaseId = if (envClientId.isNotBlank() && envClientId != "null") envClientId else "0191848f-8044-4d51-b69a-296f32c4d900"
+        val envGoogleId = try { com.example.BuildConfig.GOOGLE_OAUTH_CLIENT_ID } catch (e: Throwable) { "" }
+        val defaultGoogleId = if (envGoogleId.isNotBlank() && envGoogleId != "null") envGoogleId else "798989414934-nn16qvt7t909d7hvc73ccvr1u0t24rom.apps.googleusercontent.com"
+        val isGooglePlatform = platformType == com.example.data.McpPlatformType.GOOGLE_SEARCH_CONSOLE || platformType == com.example.data.McpPlatformType.GOOGLE_STITCH
+        mutableStateOf(
+            when {
+                platformType == com.example.data.McpPlatformType.SUPABASE -> defaultSupabaseId
+                isGooglePlatform -> defaultGoogleId
+                else -> ""
+            }
+        ) 
     }
     var showToken by remember { mutableStateOf(false) }
     var isAuthorizing by remember { mutableStateOf(false) }
@@ -223,13 +232,22 @@ fun McpOAuthConnectDialog(
                     OutlinedTextField(
                         value = oauthClientId,
                         onValueChange = { oauthClientId = it },
-                        label = { Text("OAuth Client ID / App ID (Optional)", fontSize = 11.sp) },
+                        label = {
+                            Text(
+                                if (platformType == com.example.data.McpPlatformType.GOOGLE_SEARCH_CONSOLE || platformType == com.example.data.McpPlatformType.GOOGLE_STITCH)
+                                    "Google Cloud OAuth Client ID"
+                                else
+                                    "OAuth Client ID / App ID (Optional)",
+                                fontSize = 11.sp
+                            )
+                        },
                         placeholder = { 
                             Text(
-                                if (platformType == com.example.data.McpPlatformType.SUPABASE) 
-                                    "e.g. 123e4567-e89b-12d3-a456-426614174000 (UUID)"
-                                else 
-                                    "e.g. mcp_app_${platformType.name.lowercase()}",
+                                when (platformType) {
+                                    com.example.data.McpPlatformType.SUPABASE -> "e.g. 123e4567-e89b-12d3-a456-426614174000 (UUID)"
+                                    com.example.data.McpPlatformType.GOOGLE_SEARCH_CONSOLE, com.example.data.McpPlatformType.GOOGLE_STITCH -> "e.g. 123456...apps.googleusercontent.com"
+                                    else -> "e.g. mcp_app_${platformType.name.lowercase()}"
+                                },
                                 fontSize = 11.sp,
                                 color = Color(0xFF64748B)
                             ) 

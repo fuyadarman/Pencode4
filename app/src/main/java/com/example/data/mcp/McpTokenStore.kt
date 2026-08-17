@@ -15,7 +15,8 @@ data class McpTokenData(
     val clientSecret: String? = null,
     val scope: String? = null,
     val codeVerifier: String? = null,
-    val authState: String? = null
+    val authState: String? = null,
+    val redirectUri: String? = null
 ) {
     fun isExpired(): Boolean {
         if (expiresAtMillis <= 0L) return false

@@ -542,6 +542,7 @@ fun McpServerItemCard(
         McpPlatformType.SUPABASE -> Color(0xFF3ECF8E)
         McpPlatformType.CLOUDFLARE -> Color(0xFFF38020)
         McpPlatformType.VERCEL -> Color(0xFFE2E8F0)
+        McpPlatformType.GOOGLE_SEARCH_CONSOLE -> Color(0xFF4285F4)
         McpPlatformType.GOOGLE_STITCH -> Color(0xFF60A5FA)
         McpPlatformType.CUSTOM -> Color(0xFFA78BFA)
     }

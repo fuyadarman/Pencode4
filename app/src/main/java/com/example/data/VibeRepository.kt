@@ -226,6 +226,23 @@ class VibeRepository(private val dao: VibeDao, private val context: Context) {
         }
     }
 
+    suspend fun updateProject(oldName: String, newName: String, newDescription: String) = withContext(Dispatchers.IO) {
+        if (oldName != newName) {
+            dao.updateProject(oldName, newName, newDescription)
+            dao.updateProjectFilesProjectName(oldName, newName)
+            dao.updateChatMessagesProjectName(oldName, newName)
+            
+            // Rename directory if name changed
+            val oldDir = getProjectDir(oldName)
+            val newDir = getProjectDir(newName)
+            if (oldDir.exists() && oldDir.absolutePath != newDir.absolutePath) {
+                oldDir.renameTo(newDir)
+            }
+        } else {
+            dao.updateProject(oldName, newName, newDescription)
+        }
+    }
+
     suspend fun getFilesForProject(projectName: String): List<ProjectFileEntity> = withContext(Dispatchers.IO) {
         val projectDir = getProjectDir(projectName)
         val dbFiles = dao.getFilesForProject(projectName).filter { 
