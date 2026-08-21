@@ -1,0 +1,229 @@
+package com.example.agent
+
+import com.example.data.McpServer
+import com.example.data.ProjectEntity
+import com.example.data.ProjectFileEntity
+import com.example.ui.AgentSkill
+
+/**
+ * Dynamic Intent-Aware Instruction Engine.
+ * Inspired by OpenCode, Claude Code, and Cline.
+ * Dynamically loads only relevant instruction modules and tools based on prompt intent and active context.
+ */
+object AgentInstructionEngine {
+
+    enum class PromptIntent {
+        CONVERSATIONAL_OR_EXPLANATION,
+        CODE_MODIFICATION_OR_FEATURE,
+        SEARCH_AND_EXPLORATION,
+        WEB_AND_UI_INSPECTION,
+        DATABASE_AND_MCP,
+        DEBUG_AND_ERROR_FIXING,
+        GENERAL_AGENT_TASK
+    }
+
+    /**
+     * Classifies user prompt to determine which instruction modules to load dynamically.
+     */
+    fun classifyPromptIntent(
+        userPrompt: String,
+        hasSelectedMcp: Boolean,
+        hasTaggedFiles: Boolean,
+        hasBrowserUrls: Boolean
+    ): Set<PromptIntent> {
+        val p = userPrompt.lowercase()
+        val intents = mutableSetOf<PromptIntent>()
+
+        val isGreetingOrChat = p.matches(Regex("^(hi|hello|hey|hola|kemon|kemn|kemon acho|assalamu alaikum|salam|sup|yo|good morning|good evening|thanks|thank you|dhonnobad)[.!?\\s]*$")) ||
+                (p.length < 35 && (p.contains("explain") || p.contains("what is") || p.contains("how does") || p.contains("ki eta") || p.contains("bujhiye dao") || p.contains("meaning")) && !p.contains("code") && !p.contains("create") && !p.contains("make") && !p.contains("build") && !p.contains("add") && !p.contains("fix"))
+
+        if (isGreetingOrChat && !hasSelectedMcp && !hasTaggedFiles && !hasBrowserUrls) {
+            return setOf(PromptIntent.CONVERSATIONAL_OR_EXPLANATION)
+        }
+
+        // Web / Browser / UI Clone
+        if (hasBrowserUrls || p.contains("http://") || p.contains("https://") || p.contains("clone") || p.contains("website") || p.contains("inspect") || p.contains("screenshot") || p.contains("scrape") || p.contains("dom") || p.contains("css")) {
+            intents.add(PromptIntent.WEB_AND_UI_INSPECTION)
+        }
+
+        // Database / MCP / Cloudflare / Supabase
+        if (hasSelectedMcp || p.contains("database") || p.contains("sql") || p.contains("table") || p.contains("query") || p.contains("d1") || p.contains("supabase") || p.contains("mcp") || p.contains("r2") || p.contains("kv") || p.contains("schema") || p.contains("migration") || p.contains("crud")) {
+            intents.add(PromptIntent.DATABASE_AND_MCP)
+        }
+
+        // Debug / Error fixing
+        if (p.contains("error") || p.contains("bug") || p.contains("fix") || p.contains("exception") || p.contains("failed") || p.contains("crash") || p.contains("not working") || p.contains("issue") || p.contains("build failed")) {
+            intents.add(PromptIntent.DEBUG_AND_ERROR_FIXING)
+        }
+
+        // Search / Exploration
+        if (p.contains("search") || p.contains("find") || p.contains("where is") || p.contains("locate") || p.contains("list files") || p.contains("structure")) {
+            intents.add(PromptIntent.SEARCH_AND_EXPLORATION)
+        }
+
+        // Code modification / New features
+        if (hasTaggedFiles || p.contains("create") || p.contains("add") || p.contains("build") || p.contains("implement") || p.contains("modify") || p.contains("update") || p.contains("change") || p.contains("write") || p.contains("edit") || p.contains("screen") || p.contains("ui") || p.contains("button") || p.contains("feature") || p.contains("design") || p.contains("code") || p.contains("refactor") || p.contains("make")) {
+            intents.add(PromptIntent.CODE_MODIFICATION_OR_FEATURE)
+        }
+
+        if (intents.isEmpty()) {
+            intents.add(PromptIntent.GENERAL_AGENT_TASK)
+            intents.add(PromptIntent.CODE_MODIFICATION_OR_FEATURE)
+        }
+
+        return intents
+    }
+
+    /**
+     * Builds dynamic, ultra-lean System Instruction matching the classified intents.
+     */
+    fun buildDynamicSystemInstruction(
+        userPrompt: String,
+        project: ProjectEntity,
+        allFiles: List<ProjectFileEntity>,
+        fileTreeSummary: String,
+        activeSkills: List<AgentSkill>,
+        effectiveMcpServers: List<McpServer>,
+        mcpToolsPrompt: String,
+        activeTemplateInfo: String,
+        maxActionSteps: Int,
+        allowBuildPush: Boolean
+    ): String {
+        val intents = classifyPromptIntent(
+            userPrompt = userPrompt,
+            hasSelectedMcp = effectiveMcpServers.isNotEmpty(),
+            hasTaggedFiles = false,
+            hasBrowserUrls = userPrompt.contains("http://") || userPrompt.contains("https://")
+        )
+
+        val isPureChat = intents.contains(PromptIntent.CONVERSATIONAL_OR_EXPLANATION) && intents.size == 1
+
+        val sb = StringBuilder()
+
+        // 1. Core Agent Identity
+        sb.append("You are PenCode AI, an elite Autonomous Development Agent.\n\n")
+
+        // Pure Chat Mode: Ultra-lightweight ~200 tokens
+        if (isPureChat) {
+            sb.append("""
+                === CONVERSATION MODE ===
+                - Respond directly, helpfully, and conversationally to the user in their language.
+                - If no workspace tool actions are needed, return your final response or invoke 'complete'.
+                
+                === TOOLS ===
+                - 'ai_think'(message) [Optional: analyze concept], 'complete'(message) [Finish response]
+                
+                === MANDATORY FORMAT ===
+                {"thought":"Short reasoning","tool":"complete","arguments":{"message":"Your helpful response"}}
+            """.trimIndent())
+            return sb.toString()
+        }
+
+        // 2. Workspace Context (File Tree & Framework)
+        sb.append(fileTreeSummary).append("\n\n")
+        sb.append("FRAMEWORK: ").append(activeTemplateInfo).append("\n\n")
+
+        // 3. Dynamic Core Directives
+        sb.append("=== CORE DIRECTIVES ===\n")
+        sb.append("1. FIDELITY & SCOPE: Execute EXACTLY what user requested. Do not add unsolicited features. Never ignore any requirement. If impossible, explain why.\n")
+        sb.append("2. STEP BUDGET: Step limit: $maxActionSteps. Call 'complete' IMMEDIATELY after finishing with a structured summary.\n")
+        sb.append("3. LANGUAGE: Mirror user language, script, and tone exactly (Bangla, English, Hindi, etc.).\n")
+
+        if (intents.contains(PromptIntent.CODE_MODIFICATION_OR_FEATURE) || intents.contains(PromptIntent.DEBUG_AND_ERROR_FIXING) || intents.contains(PromptIntent.GENERAL_AGENT_TASK)) {
+            sb.append("4. SURGICAL EDIT MANDATE: Overwriting files >30 lines with 'write_file' is REJECTED. Use 'edit_file', 'multi_edit_file', or 'patch_file'. Read target file ONCE first with 'read_file'/'read_file_range'/'multi_read_file'. Re-reading right after edits is FORBIDDEN.\n")
+            sb.append("5. SEPARATION OF CONCERNS: Put new features, functions, and systems in dedicated new files ('create_file').\n")
+        }
+
+        if (intents.contains(PromptIntent.SEARCH_AND_EXPLORATION) || intents.contains(PromptIntent.CODE_MODIFICATION_OR_FEATURE) || intents.contains(PromptIntent.DEBUG_AND_ERROR_FIXING)) {
+            sb.append("6. EXPLORATION: Use 'scan_dir' with specific folder names (e.g. 'app', 'src'). Scanning root '.' is FORBIDDEN. Search first ('global_search', 'scan_dir') before targeted reads.\n")
+        }
+
+        if (intents.contains(PromptIntent.DATABASE_AND_MCP)) {
+            sb.append("7. DATABASE SCHEMAS & QUERIES: Put DB schemas, entities, and queries in separate dedicated files. List all created/updated DB queries and schemas in final 'complete' summary.\n")
+        }
+
+        // 4. Skills Module (Only if skills are active)
+        if (activeSkills.isNotEmpty()) {
+            sb.append("\n=== ACTIVE AGENT SKILLS ===\n")
+            activeSkills.forEach { skill ->
+                sb.append("• [${skill.name}]: ${skill.description}\n")
+                if (skill.skillPrompt.isNotBlank()) {
+                    sb.append("  Instructions: ${skill.skillPrompt.take(300)}\n")
+                }
+            }
+            sb.append("\n")
+        }
+
+        // 5. MCP & Remote Backend Module (Only if MCP active)
+        if (mcpToolsPrompt.isNotBlank()) {
+            sb.append("\n=== ATTACHED MCP TOOLS ===\n")
+            sb.append(mcpToolsPrompt).append("\n\n")
+        }
+
+        // 6. Dynamic Tools Selection
+        sb.append("=== AVAILABLE TOOLS ===\n")
+        val tools = mutableListOf<String>()
+        
+        // Base / Universal tools
+        tools.add("'ai_think'(message [MANDATORY before operations/debug])")
+        tools.add("'complete'(message [Final task summary])")
+        tools.add("'ai_response'(message)")
+
+        // Code / File tools
+        if (intents.contains(PromptIntent.CODE_MODIFICATION_OR_FEATURE) || intents.contains(PromptIntent.DEBUG_AND_ERROR_FIXING) || intents.contains(PromptIntent.GENERAL_AGENT_TASK) || intents.contains(PromptIntent.SEARCH_AND_EXPLORATION)) {
+            tools.add("'read_file'(path)")
+            tools.add("'read_file_range'(path, startLine, endLine)")
+            tools.add("'multi_read_file'(path, ranges:[{startLine,endLine}])")
+            tools.add("'create_file'(path, content)")
+            tools.add("'edit_file'(path, search, replace)")
+            tools.add("'multi_edit_file'(path, chunks:[{search,replace}])")
+            tools.add("'patch_file'(path, search, replace)")
+            tools.add("'append'(path, content)")
+            tools.add("'delete_file'(path)")
+            tools.add("'move_file'(path, destinationPath)")
+            tools.add("'scan_dir'(path: folder name)")
+            tools.add("'global_search'(query)")
+            tools.add("'create_todo_list'(query)")
+            tools.add("'complete_todo_task'(query)")
+        }
+
+        // Web / Browser inspection tools
+        if (intents.contains(PromptIntent.WEB_AND_UI_INSPECTION)) {
+            tools.add("'browser_search'(query)")
+            tools.add("'open_url'(url)")
+            tools.add("'inspect_dom'(selector)")
+            tools.add("'inspect_css'(selector)")
+            tools.add("'get_computed_styles'(selector, properties)")
+            tools.add("'take_screenshot'(path)")
+            tools.add("'click'(selector)")
+            tools.add("'type'(selector, text)")
+            tools.add("'scroll'(direction, amount)")
+            tools.add("'get_links'()")
+            tools.add("'get_images'()")
+            tools.add("'get_fonts'()")
+            tools.add("'run_javascript'(script)")
+            tools.add("'compare_screenshot'(targetImage)")
+        }
+
+        // MCP Tools
+        if (intents.contains(PromptIntent.DATABASE_AND_MCP) || effectiveMcpServers.isNotEmpty()) {
+            tools.add("'mcp_call_tool'(mcpServerId/mcpServerName, toolName, mcpArgsJson)")
+            tools.add("'mcp_list_tools'(mcpServerId)")
+            tools.add("'mcp_read_resource'(mcpServerId, resourceUri)")
+        }
+
+        tools.forEach { t -> sb.append("- ").append(t).append("\n") }
+
+        // 7. Output Format
+        sb.append("""
+
+=== MANDATORY FORMAT ===
+Return ONLY raw JSON object:
+{"thought":"Short reasoning (1-2 sentences)","tool":"tool_name","arguments":{"path":"...","search":"...","replace":"...","message":"..."}}
+- MANDATORY: Invoke 'ai_think' before starting tasks or error fixes.
+- Call 'complete' with Markdown summary to finish.
+        """.trimIndent())
+
+        return sb.toString()
+    }
+}
