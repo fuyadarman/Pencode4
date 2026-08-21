@@ -387,16 +387,95 @@ class McpManager(private val context: Context) {
         }
 
         if (toolsList.isEmpty()) {
-            toolsList.add(
-                McpToolInfo(
-                    name = "${server.name.lowercase().replace(" ", "_")}_action",
-                    description = "Default operation tool for ${server.name}",
-                    parametersJsonSchema = """{"type":"object"}"""
+            val presetTools = getPresetToolsForPlatform(server.platform, server.name)
+            if (presetTools.isNotEmpty()) {
+                toolsList.addAll(presetTools)
+            } else {
+                toolsList.add(
+                    McpToolInfo(
+                        name = "${server.name.lowercase().replace(" ", "_")}_action",
+                        description = "Default operation tool for ${server.name} (action, params, query)",
+                        parametersJsonSchema = """{"type":"object","properties":{"action":{"type":"string","description":"Action name or command"},"query":{"type":"string","description":"SQL query, script, or payload"},"params":{"type":"object","description":"Execution parameters"}},"required":["action"]}"""
+                    )
                 )
-            )
+            }
         }
 
         return toolsList
+    }
+
+    private fun getPresetToolsForPlatform(platform: String, serverName: String): List<McpToolInfo> {
+        return when (platform.uppercase()) {
+            "CLOUDFLARE" -> listOf(
+                McpToolInfo(
+                    name = "cloudflare_d1_query",
+                    description = "Execute SQL queries, table creation, and schema migrations on Cloudflare D1 SQL database.",
+                    parametersJsonSchema = """{"type":"object","properties":{"database_name":{"type":"string","description":"D1 Database name"},"query":{"type":"string","description":"SQL query string e.g. CREATE TABLE, SELECT, INSERT"},"params":{"type":"array","items":{"type":"string"}}},"required":["query"]}"""
+                ),
+                McpToolInfo(
+                    name = "cloudflare_r2_storage",
+                    description = "Upload, read, delete, or manage file bucket storage in Cloudflare R2.",
+                    parametersJsonSchema = """{"type":"object","properties":{"bucket":{"type":"string","description":"R2 Bucket name"},"key":{"type":"string","description":"Object file path/key"},"action":{"type":"string","enum":["upload","get","delete","list"]},"content":{"type":"string"}},"required":["bucket","action"]}"""
+                ),
+                McpToolInfo(
+                    name = "cloudflare_kv_store",
+                    description = "Get, set, list, or delete key-value cache/data in Cloudflare KV namespaces.",
+                    parametersJsonSchema = """{"type":"object","properties":{"namespace":{"type":"string","description":"KV Namespace name"},"key":{"type":"string","description":"Key name"},"value":{"type":"string","description":"Value data string"},"action":{"type":"string","enum":["get","put","delete","list"]}},"required":["key","action"]}"""
+                ),
+                McpToolInfo(
+                    name = "cloudflare_workers_deploy",
+                    description = "Deploy, update, or test Cloudflare Serverless Workers scripts and bindings.",
+                    parametersJsonSchema = """{"type":"object","properties":{"script_name":{"type":"string","description":"Worker name"},"code":{"type":"string","description":"JavaScript / TypeScript worker code"},"bindings":{"type":"object"}},"required":["script_name","code"]}"""
+                ),
+                McpToolInfo(
+                    name = "cloudflare_mcp_action",
+                    description = "Execute direct operational actions on Cloudflare (D1, R2, KV, Workers, DNS).",
+                    parametersJsonSchema = """{"type":"object","properties":{"action":{"type":"string","description":"Action: d1_query | r2_manage | kv_set | worker_deploy"},"params":{"type":"object","description":"Action arguments"}},"required":["action"]}"""
+                )
+            )
+            "SUPABASE" -> listOf(
+                McpToolInfo(
+                    name = "supabase_sql_query",
+                    description = "Execute SQL queries, CREATE TABLE DDL migrations, and DML on Supabase PostgreSQL database.",
+                    parametersJsonSchema = """{"type":"object","properties":{"query":{"type":"string","description":"SQL query string"}},"required":["query"]}"""
+                ),
+                McpToolInfo(
+                    name = "supabase_list_tables",
+                    description = "List all public tables, schemas, relations, and columns in the Supabase database.",
+                    parametersJsonSchema = """{"type":"object","properties":{"schema":{"type":"string","description":"Schema name default 'public'"}}}"""
+                ),
+                McpToolInfo(
+                    name = "supabase_storage_bucket",
+                    description = "Manage files and buckets on Supabase Storage (upload, download, list, delete).",
+                    parametersJsonSchema = """{"type":"object","properties":{"bucket":{"type":"string"},"path":{"type":"string"},"action":{"type":"string","enum":["upload","download","list","delete"]}},"required":["bucket","action"]}"""
+                ),
+                McpToolInfo(
+                    name = "supabase_auth_admin",
+                    description = "Manage Supabase Authentication users, roles, and RLS policies.",
+                    parametersJsonSchema = """{"type":"object","properties":{"action":{"type":"string","enum":["list_users","create_user","update_role"]},"email":{"type":"string"}},"required":["action"]}"""
+                )
+            )
+            "VERCEL" -> listOf(
+                McpToolInfo(
+                    name = "vercel_deploy_project",
+                    description = "Deploy web application code directly to Vercel production or preview environment.",
+                    parametersJsonSchema = """{"type":"object","properties":{"projectName":{"type":"string"},"files":{"type":"object","description":"File map of paths to contents"}},"required":["projectName"]}"""
+                ),
+                McpToolInfo(
+                    name = "vercel_set_env",
+                    description = "Set or update environment variables for Vercel deployment.",
+                    parametersJsonSchema = """{"type":"object","properties":{"key":{"type":"string"},"value":{"type":"string"},"target":{"type":"string","enum":["production","preview","development"]}},"required":["key","value"]}"""
+                )
+            )
+            "GOOGLE_STITCH" -> listOf(
+                McpToolInfo(
+                    name = "stitch_sync_schema",
+                    description = "Sync data pipeline connectors and database tables in Google Stitch.",
+                    parametersJsonSchema = """{"type":"object","properties":{"connector_name":{"type":"string"},"action":{"type":"string","enum":["sync","status","list_tables"]}},"required":["action"]}"""
+                )
+            )
+            else -> emptyList()
+        }
     }
 
     suspend fun executeMcpToolCall(

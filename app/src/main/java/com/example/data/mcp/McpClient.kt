@@ -73,6 +73,47 @@ class McpClient(
 
             var authHeader = getOrRefreshAuthHeader(server, tokenEndpoint)
 
+            // Ensure session id from store if memory is empty
+            if (!sessionIds.containsKey(server.id)) {
+                val persisted = tokenStore.getSessionId(server.id)
+                if (!persisted.isNullOrBlank()) {
+                    sessionIds[server.id] = persisted
+                }
+            }
+
+            // If non-initialize call and no session id exists, initialize first
+            if (method != "initialize" && !sessionIds.containsKey(server.id)) {
+                try {
+                    val initParams = JSONObject().apply {
+                        put("protocolVersion", "2024-11-05")
+                        put("capabilities", JSONObject().apply { put("tools", JSONObject()) })
+                        put("clientInfo", JSONObject().apply {
+                            put("name", "Pencode AI Agent")
+                            put("version", "1.0.0")
+                        })
+                    }
+                    val initReq = Request.Builder()
+                        .url(activeEndpoints[server.id] ?: server.url.trim())
+                        .post(JSONObject().apply {
+                            put("jsonrpc", "2.0")
+                            put("id", UUID.randomUUID().toString())
+                            put("method", "initialize")
+                            put("params", initParams)
+                        }.toString().toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull()))
+                        .addHeader("Content-Type", "application/json; charset=utf-8")
+                        .addHeader("Accept", "application/json, text/event-stream;q=0.9, */*;q=0.8")
+                    if (!server.apiKey.isNullOrBlank()) initReq.addHeader("Authorization", "Bearer ${server.apiKey.trim()}")
+                    else if (!authHeader.isNullOrBlank()) initReq.addHeader("Authorization", authHeader)
+                    val initResp = httpClient.newCall(initReq.build()).execute()
+                    val initSid = initResp.header("Mcp-Session-Id") ?: initResp.header("mcp-session-id") ?: initResp.header("X-Mcp-Session-Id")
+                    if (!initSid.isNullOrBlank()) {
+                        sessionIds[server.id] = initSid
+                        tokenStore.saveSessionId(server.id, initSid)
+                    }
+                    initResp.close()
+                } catch (_: Exception) {}
+            }
+
             fun buildRequest(url: String, auth: String?): Request {
                 val b = Request.Builder()
                     .url(url)
@@ -81,7 +122,7 @@ class McpClient(
                     .addHeader("Accept", "application/json, text/event-stream;q=0.9, */*;q=0.8")
                     .addHeader("User-Agent", "Pencode-MCP-Client/1.0 (Android; Mobile)")
 
-                val sessionId = sessionIds[server.id]
+                val sessionId = sessionIds[server.id] ?: tokenStore.getSessionId(server.id)
                 if (!sessionId.isNullOrBlank()) {
                     b.addHeader("Mcp-Session-Id", sessionId)
                     b.addHeader("mcp-session-id", sessionId)
@@ -101,6 +142,43 @@ class McpClient(
 
             val targetUrl = activeEndpoints[server.id] ?: server.url.trim()
             var response = httpClient.newCall(buildRequest(targetUrl, authHeader)).execute()
+
+            // 400 Mcp-Session-Id handling: Perform initialize handshake and retry once
+            if (response.code == 400) {
+                val peekBody = response.peekBody(2048).string()
+                if (peekBody.contains("Mcp-Session-Id", ignoreCase = true) || peekBody.contains("session", ignoreCase = true)) {
+                    // Execute initialize handshake to get new session id
+                    val initParams = JSONObject().apply {
+                        put("protocolVersion", "2024-11-05")
+                        put("capabilities", JSONObject().apply { put("tools", JSONObject()) })
+                        put("clientInfo", JSONObject().apply {
+                            put("name", "Pencode AI Agent")
+                            put("version", "1.0.0")
+                        })
+                    }
+                    val initReq = Request.Builder()
+                        .url(targetUrl)
+                        .post(JSONObject().apply {
+                            put("jsonrpc", "2.0")
+                            put("id", UUID.randomUUID().toString())
+                            put("method", "initialize")
+                            put("params", initParams)
+                        }.toString().toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull()))
+                        .addHeader("Content-Type", "application/json; charset=utf-8")
+                        .addHeader("Accept", "application/json, text/event-stream;q=0.9, */*;q=0.8")
+                    if (!server.apiKey.isNullOrBlank()) initReq.addHeader("Authorization", "Bearer ${server.apiKey.trim()}")
+                    else if (!authHeader.isNullOrBlank()) initReq.addHeader("Authorization", authHeader)
+                    val initResp = httpClient.newCall(initReq.build()).execute()
+                    val newSid = initResp.header("Mcp-Session-Id") ?: initResp.header("mcp-session-id") ?: initResp.header("X-Mcp-Session-Id")
+                    if (!newSid.isNullOrBlank()) {
+                        sessionIds[server.id] = newSid
+                        tokenStore.saveSessionId(server.id, newSid)
+                    }
+                    initResp.close()
+                    response.close()
+                    response = httpClient.newCall(buildRequest(targetUrl, authHeader)).execute()
+                }
+            }
 
             // 401 Handling: Retry once after token refresh
             if (response.code == 401 && !tokenEndpoint.isNullOrBlank()) {

@@ -69,7 +69,19 @@ class McpTokenStore(context: Context) {
     }
 
     fun clearTokens(serverId: String) {
-        prefs.edit().remove("token_${serverId}").apply()
+        prefs.edit().remove("token_${serverId}").remove("session_${serverId}").apply()
+    }
+
+    fun saveSessionId(serverId: String, sessionId: String) {
+        prefs.edit().putString("session_${serverId}", sessionId).apply()
+    }
+
+    fun getSessionId(serverId: String): String? {
+        return prefs.getString("session_${serverId}", null)
+    }
+
+    fun clearSessionId(serverId: String) {
+        prefs.edit().remove("session_${serverId}").apply()
     }
 
     fun clearAll() {

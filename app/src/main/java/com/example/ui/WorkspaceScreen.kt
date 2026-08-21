@@ -201,13 +201,18 @@ fun WorkspaceScreen(
     liveUserTokens: Int = 0,
     liveToolTokens: Int = 0,
     liveTotalInputTokens: Int = 0,
-    liveTotalOutputTokens: Int = 0
+    liveTotalOutputTokens: Int = 0,
+    selectedMcpServerIds: Set<String> = emptySet(),
+    onToggleSelectMcpServer: (String) -> Unit = {},
+    onSelectAllConnectedMcpServers: () -> Unit = {},
+    onClearSelectedMcpServers: () -> Unit = {}
 ) {
     var showExplorer by remember { mutableStateOf(false) }
     var showCreateFileDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showAgentSkillsDialog by remember { mutableStateOf(false) }
     var showMcpDialog by remember { mutableStateOf(false) }
+    var showSelectMcpDialog by remember { mutableStateOf(false) }
     var showPushDialog by remember { mutableStateOf(false) }
     var showSearchDialog by remember { mutableStateOf(false) }
     var showRestoreDialog by remember { mutableStateOf(false) }
@@ -452,7 +457,11 @@ fun WorkspaceScreen(
                                 liveUserTokens = liveUserTokens,
                                 liveToolTokens = liveToolTokens,
                                 liveTotalInputTokens = liveTotalInputTokens,
-                                liveTotalOutputTokens = liveTotalOutputTokens
+                                liveTotalOutputTokens = liveTotalOutputTokens,
+                                mcpServers = mcpServers,
+                                selectedMcpServerIds = selectedMcpServerIds,
+                                onToggleSelectMcpServer = onToggleSelectMcpServer,
+                                onOpenSelectMcpDialog = { showSelectMcpDialog = true }
                             )
                         }
                         WorkspaceTab.CODE -> {
@@ -740,6 +749,18 @@ fun WorkspaceScreen(
         )
     }
 
+    if (showSelectMcpDialog) {
+        SelectMcpDialog(
+            servers = mcpServers,
+            selectedServerIds = selectedMcpServerIds,
+            onToggleSelect = onToggleSelectMcpServer,
+            onSelectAll = onSelectAllConnectedMcpServers,
+            onClearAll = onClearSelectedMcpServers,
+            onOpenManageMcp = { showMcpDialog = true },
+            onDismiss = { showSelectMcpDialog = false }
+        )
+    }
+
     if (showPushDialog) {
         PushProjectDialog(
             gitProgress = gitProgress,
@@ -964,7 +985,11 @@ fun ChatTabContent(
     liveUserTokens: Int = 0,
     liveToolTokens: Int = 0,
     liveTotalInputTokens: Int = 0,
-    liveTotalOutputTokens: Int = 0
+    liveTotalOutputTokens: Int = 0,
+    mcpServers: List<com.example.data.McpServer> = emptyList(),
+    selectedMcpServerIds: Set<String> = emptySet(),
+    onToggleSelectMcpServer: (String) -> Unit = {},
+    onOpenSelectMcpDialog: () -> Unit = {}
 ) {
     var taggedFiles by remember { mutableStateOf<List<ProjectFileEntity>>(emptyList()) }
     var taggedSkills by remember { mutableStateOf<List<com.example.ui.AgentSkill>>(emptyList()) }
@@ -1752,11 +1777,41 @@ fun ChatTabContent(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "Workspace Context Included",
-                            color = Color(0xFF64748B),
-                            fontSize = 11.sp
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "Workspace Context Included",
+                                color = Color(0xFF64748B),
+                                fontSize = 11.sp
+                            )
+                            Surface(
+                                onClick = onOpenSelectMcpDialog,
+                                shape = RoundedCornerShape(6.dp),
+                                color = if (selectedMcpServerIds.isNotEmpty()) Color(0xFF6366F1).copy(alpha = 0.2f) else Color(0xFF1E2130),
+                                border = BorderStroke(1.dp, if (selectedMcpServerIds.isNotEmpty()) Color(0xFF6366F1).copy(alpha = 0.6f) else Color(0xFF30363D))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Hub,
+                                        contentDescription = "MCP",
+                                        tint = if (selectedMcpServerIds.isNotEmpty()) Color(0xFF818CF8) else Color(0xFF94A3B8),
+                                        modifier = Modifier.size(11.dp)
+                                    )
+                                    Text(
+                                        text = if (selectedMcpServerIds.isNotEmpty()) "MCP (${selectedMcpServerIds.size})" else "Select MCP",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (selectedMcpServerIds.isNotEmpty()) Color(0xFF818CF8) else Color(0xFF94A3B8)
+                                    )
+                                }
+                            }
+                        }
                         Text(
                             text = "Prompt: ${chatInputText.length / 4} tokens",
                             color = Color(0xFF64748B),
@@ -1839,11 +1894,33 @@ fun ChatTabContent(
                         Spacer(modifier = Modifier.height(8.dp))
                     }
 
-                    if (attachedFiles.isNotEmpty() || taggedFiles.isNotEmpty() || taggedSkills.isNotEmpty()) {
+                    if (attachedFiles.isNotEmpty() || taggedFiles.isNotEmpty() || taggedSkills.isNotEmpty() || selectedMcpServerIds.isNotEmpty()) {
                         Row(
                             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
+                            val activeSelectedMcpServers = mcpServers.filter { selectedMcpServerIds.contains(it.id) }
+                            activeSelectedMcpServers.forEach { server ->
+                                AssistChip(
+                                    onClick = { onOpenSelectMcpDialog() },
+                                    label = {
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            Icon(Icons.Default.Hub, contentDescription = null, tint = Color(0xFF818CF8), modifier = Modifier.size(14.dp))
+                                            Text("MCP: ${server.name}", color = Color(0xFF818CF8))
+                                        }
+                                    },
+                                    trailingIcon = {
+                                        IconButton(
+                                            onClick = { onToggleSelectMcpServer(server.id) },
+                                            modifier = Modifier.size(16.dp)
+                                        ) {
+                                            Icon(Icons.Default.Close, contentDescription = "Remove", tint = Color.White)
+                                        }
+                                    },
+                                    colors = AssistChipDefaults.assistChipColors(containerColor = Color(0xFF1E2130)),
+                                    border = BorderStroke(1.dp, Color(0xFF6366F1).copy(alpha = 0.5f))
+                                )
+                            }
                             attachedFiles.forEach { file ->
                                 AssistChip(
                                     onClick = { },
@@ -1926,6 +2003,14 @@ fun ChatTabContent(
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                                 modifier = Modifier.padding(end = 8.dp)
                             ) {
+                                IconButton(onClick = { onOpenSelectMcpDialog() }, modifier = Modifier.size(36.dp)) {
+                                    Icon(
+                                        Icons.Default.Hub,
+                                        contentDescription = "Select MCP",
+                                        tint = if (selectedMcpServerIds.isNotEmpty()) Color(0xFF818CF8) else Color(0xFF8D96A0),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
                                 IconButton(onClick = { onOpenSettings() }, modifier = Modifier.size(36.dp)) {
                                     Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color(0xFF8D96A0), modifier = Modifier.size(18.dp))
                                 }
