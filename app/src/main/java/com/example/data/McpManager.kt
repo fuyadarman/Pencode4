@@ -63,6 +63,11 @@ class McpManager(private val context: Context) {
             try {
                 val wrapper = serverListAdapter.fromJson(json)
                 _servers.value = wrapper?.servers ?: emptyList()
+                for (server in _servers.value) {
+                    if (server.availableTools.isNotEmpty()) {
+                        toolRegistry.registerToolsForServer(server, server.availableTools)
+                    }
+                }
             } catch (e: Exception) {
                 _servers.value = emptyList()
             }
@@ -399,11 +404,21 @@ class McpManager(private val context: Context) {
         toolName: String,
         argumentsJson: String?
     ): String = withContext(Dispatchers.IO) {
-        val server = _servers.value.find { it.id == serverId }
-            ?: return@withContext "Error: MCP Server with ID '$serverId' not found."
+        val server = _servers.value.find { 
+            it.id == serverId || 
+            it.name.equals(serverId, ignoreCase = true) ||
+            it.platform.equals(serverId, ignoreCase = true) ||
+            it.name.replace(" ", "_").equals(serverId, ignoreCase = true)
+        } ?: _servers.value.find { s -> 
+            s.availableTools.any { 
+                it.name.equals(toolName, ignoreCase = true) || 
+                it.name.equals(toolName.substringAfterLast("__"), ignoreCase = true) 
+            } 
+        } ?: _servers.value.firstOrNull { it.status.startsWith("Connected") }
+          ?: return@withContext "Error: MCP Server '$serverId' not found or no connected MCP server available."
 
         if (server.platform == "GOOGLE_SEARCH_CONSOLE" || server.url.contains("searchconsole") || toolName.startsWith("gsc_")) {
-            return@withContext gscService.executeTool(serverId, toolName, argumentsJson)
+            return@withContext gscService.executeTool(server.id, toolName, argumentsJson)
         }
 
         val metadata = cachedMetadata[server.id] ?: authManager.discoverOAuthMetadata(server.url).getOrNull()

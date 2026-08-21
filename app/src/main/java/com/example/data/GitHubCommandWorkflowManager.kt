@@ -6,6 +6,7 @@ enum class FrameworkType(val displayName: String, val defaultTestCommand: String
     ANDROID_KOTLIN("Android Kotlin", "gradle :app:testDebugUnitTest"),
     FLUTTER("Flutter", "flutter test"),
     REACT_VITE("React / Vite", "npm test -- --watchAll=false"),
+    CHROME_EXTENSION("Chrome Extension", "echo 'Validating Chrome Extension package'"),
     GENERIC("Generic Environment", "echo 'Generic workspace runner'")
 }
 
@@ -68,12 +69,14 @@ class GitHubCommandWorkflowManager {
      * Automatically detects workspace framework based on project configuration files.
      */
     fun detectFramework(workspaceRoot: File): FrameworkType {
+        val manifestJson = File(workspaceRoot, "manifest.json")
         val pubspec = File(workspaceRoot, "pubspec.yaml")
         val packageJson = File(workspaceRoot, "package.json")
         val gradleKts = File(workspaceRoot, "build.gradle.kts")
         val gradle = File(workspaceRoot, "build.gradle")
 
         return when {
+            manifestJson.exists() -> FrameworkType.CHROME_EXTENSION
             pubspec.exists() -> FrameworkType.FLUTTER
             gradleKts.exists() || gradle.exists() -> FrameworkType.ANDROID_KOTLIN
             packageJson.exists() -> FrameworkType.REACT_VITE
@@ -147,8 +150,8 @@ jobs:
           git diff-index --quiet HEAD || (git commit -m "auto: sync terminal command outputs [ci skip]" && git push --force)
 """.trimIndent()
 
-            FrameworkType.REACT_VITE -> """
-name: Command Execution Workflow (React Vite)
+            FrameworkType.REACT_VITE, FrameworkType.CHROME_EXTENSION -> """
+name: Command Execution Workflow (${framework.displayName})
 
 on:
   workflow_dispatch:

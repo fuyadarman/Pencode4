@@ -517,6 +517,7 @@ fun CreateProjectDialog(
         TemplateOption("android_kotlin", "Android Kotlin", "Native Android App scaffold with Jetpack Compose & Github Action Build."),
         TemplateOption("flutter", "Flutter", "Flutter App scaffold with main.dart, pubspec.yaml & Github Action Build."),
         TemplateOption("react_vite", "React Vite", "React + Vite App scaffold with Tailwind, package.json & GitHub Action Build."),
+        TemplateOption("chrome_extension", "Chrome Extension", "Manifest V3 extension with popup, background worker, content scripts, live preview hub & GitHub Actions build."),
         TemplateOption("react", "React CDN", "Babel-powered interactive React Hello World with count state."),
         TemplateOption("vanilla", "Vanilla JS", "Pure HTML, CSS & JS centered Hello World screen."),
         TemplateOption("vanilla_three", "Vanilla Three.js", "Interactive 3D Globe canvas powered by Three.js for 3D models, games, websites & objects.")
@@ -1084,6 +1085,25 @@ fun TemplateIcon(key: String, modifier: Modifier = Modifier) {
                             )
                         )
                     }
+                }
+            }
+            "chrome_extension" -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(Color(0xFF38BDF8).copy(alpha = 0.2f), Color(0xFF0D0F14))
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Extension,
+                        contentDescription = "Chrome Extension",
+                        tint = Color(0xFF38BDF8),
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
             }
         }

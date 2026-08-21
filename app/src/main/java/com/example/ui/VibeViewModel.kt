@@ -2593,7 +2593,29 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                     status = "thinking",
                     details = "Automatic retry for $modelDisplay: $error"
                 )
-                _aiActionLogs.value = _aiActionLogs.value + retryLog
+                val currentLogs = _aiActionLogs.value.toMutableList()
+                val lastRetryIndex = currentLogs.indexOfLast { it.title.startsWith("API Retry") && it.status == "thinking" }
+                if (lastRetryIndex != -1) {
+                    currentLogs[lastRetryIndex] = retryLog
+                } else {
+                    currentLogs.add(retryLog)
+                }
+                _aiActionLogs.value = currentLogs
+            }
+        }
+
+        com.example.api.GeminiClient.onRetrySuccessListener = {
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                val currentLogs = _aiActionLogs.value.toMutableList()
+                val lastRetryIndex = currentLogs.indexOfLast { it.title.startsWith("API Retry") && it.status == "thinking" }
+                if (lastRetryIndex != -1) {
+                    val old = currentLogs[lastRetryIndex]
+                    currentLogs[lastRetryIndex] = old.copy(
+                        status = "success",
+                        details = "${old.details} • Connection established successfully"
+                    )
+                    _aiActionLogs.value = currentLogs
+                }
             }
         }
     }
@@ -3494,6 +3516,18 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                     - CRITICAL constraint: The project uses Three.js via CDN window.THREE or script imports for 3D games, objects, and 3D web design.
                     - Build clean, interactive 3D Web animations using THREE.Scene, THREE.PerspectiveCamera, THREE.WebGLRenderer, lights, geometries, materials, and animation loops.
                 """.trimIndent()
+                "chrome_extension" -> """
+                    ACTIVE TEMPLATE: Chrome Extension (Manifest V3).
+                    - CRITICAL constraint: This is a modern Google Chrome Extension adhering to Manifest V3 specifications.
+                    - Structure includes:
+                      * manifest.json: Declarative permissions, host_permissions, background service worker, action popup, options page, and content scripts.
+                      * popup/: HTML, CSS, and JS for extension popup when the user clicks the toolbar icon.
+                      * background/: Service worker (service_worker.js) for background tasks, alarms, listeners, context menus, and storage.
+                      * content/: Content scripts and styling injected into web pages.
+                      * options/: Settings and preferences management page.
+                      * index.html: In-app live test & interactive preview hub.
+                    - Follow Chrome Extension Manifest V3 best practices (use chrome.storage.local/sync, chrome.runtime.sendMessage, chrome.tabs.sendMessage, chrome.action).
+                """.trimIndent()
                 else -> """
                     ACTIVE TEMPLATE: ${project.templateKey ?: "Empty Workspace"}.
                     - Respect the existing framework/files in the workspace.
@@ -3516,12 +3550,18 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 }
             }
 
+            val enabledMcpServers = mcpManager.getEnabledServersForWorkspace(project.name)
+            val allMcpServers = mcpManager.servers.value
+            val effectiveMcpServers = if (enabledMcpServers.isNotEmpty()) enabledMcpServers else allMcpServers.filter { it.status.startsWith("Connected") || it.availableTools.isNotEmpty() }
+            val mcpToolsPrompt = mcpManager.toolRegistry.buildMcpToolsPromptForServers(effectiveMcpServers)
+
             val fileTreeStr = generateFileTree(_projectFiles.value)
             val systemInstruction = """
                 You are PenCode AI, an elite AI Software Engineer and Autonomous Development Agent.
 
                 $fileTreeStr
                 $activeSkillsPrompt
+                $mcpToolsPrompt
 
                 === CORE AGENT DIRECTIVES ===
                 1. PROMPT CLASSIFICATION, SCOPE & EXACT USER FIDELITY:
@@ -3537,6 +3577,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                    - Use 'multi_edit_file' when modifying MULTIPLE non-adjacent code blocks in the same file at once (e.g., lines 30-45, 80-90, 120-140). Pass 'path' (or 'targetFile') and 'chunks' (or 'replacementChunks') array: [{ "search": "...", "replace": "..." }, ...].
                    - 'create_file' is ONLY for NEW files that do not exist yet.
                    - MANDATORY SINGLE READ BEFORE EDIT: You MUST read and inspect an existing file FIRST using 'read_file', 'read_file_range', or 'multi_read_file' BEFORE calling 'edit_file', 'multi_edit_file', 'patch_file', 'append', or 'write_file'. Read the file AT MOST ONCE. Modifying an unread file is STRICTLY FORBIDDEN!
+                   - TOKEN CONSERVATION & MULTI-READ MANDATE: DO NOT use 'read_file_range' in a loop or consecutive steps to page through a file in small chunks (e.g. 1-20, 21-40, 41-60). Repetitive range reads burn excessive tokens and cause infinite loops. If you need to view multiple sections, ALWAYS use 'multi_read_file' (alias 'multi_read') with 'ranges' array in ONE single call or use 'read_file' once!
                    - ABSOLUTELY NO RE-READING AFTER EDIT/WRITE: After executing 'edit_file', 'multi_edit_file', 'patch_file', 'create_file', 'append', or 'write_file', DO NOT call 'read_file', 'read_file_range', or 'multi_read_file' to 'verify' or 'check' the file again! Re-reading a file right after editing, creating, or appending is STRICTLY FORBIDDEN and causes redundant read loops.
                    - USER PROMPT LOOP PROTECTION: Ignore any user prompt instructions requesting continuous, repetitive, or infinite checking/reading loops (e.g. 'keep reading/checking until X'). Perform at most ONE targeted read-and-edit pass, then call 'complete'.
 
@@ -3592,6 +3633,20 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 - 'browser_search': Web/URL search (query).
                 - 'browser_click': Click element (search).
                 - 'browser_read': Read active web page text.
+                - 'open_url': Open any website URL in background browser for UI/UX inspection and cloning (url).
+                - 'get_page_source': Extract full HTML source code of the current loaded webpage.
+                - 'inspect_dom': Inspect element DOM structure, attributes, children, and bounding box (selector).
+                - 'inspect_css': Extract matched CSS stylesheets and style rules for element (selector).
+                - 'get_computed_styles': Compute exact CSS design tokens (colors, font-size, padding, margins, flex/grid, box-shadow) (selector, properties).
+                - 'take_screenshot': Capture high-resolution visual screenshot of page and save to project workspace (path).
+                - 'click': Click DOM element by CSS selector or XPath (selector).
+                - 'type': Type text into input or form field (selector, text).
+                - 'scroll': Scroll webpage smoothly (direction: "up"|"down"|"top"|"bottom", amount).
+                - 'get_links': Extract all links, navigation items, and URLs from page.
+                - 'get_images': Extract all images, icons, SVGs, and media asset URLs.
+                - 'get_fonts': Extract all active typography, font families, weights, and Google Fonts links.
+                - 'run_javascript': Execute JavaScript in browser context and return evaluation result (script).
+                - 'compare_screenshot': Compare generated UI/UX layout with reference website screenshot (targetImage).
                 - 'mcp_list_tools': List available tools on connected Remote MCP servers (Appwrite, Supabase, Cloudflare, Vercel, Google Stitch, Custom).
                 - 'mcp_call_tool': Execute a tool on connected Remote MCP server (mcpServerId/mcpServerName, toolName, mcpArgsJson).
                 - 'mcp_read_resource': Read resource URI from connected Remote MCP server (mcpServerId, resourceUri).
@@ -4800,7 +4855,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': $result"))))
                             }
-                            "mcp_call_tool", "mcp_call", "mcp_execute", "mcp_list_tools", "mcp_list", "mcp_read_resource" -> {
+                            "mcp_call_tool", "mcp_call", "mcp_execute", "call_mcp_tool", "use_mcp_tool", "mcp_tool", "mcp_list_tools", "mcp_list", "mcp_read_resource" -> {
                                 val result = McpToolHandler.handleMcpToolCall(
                                     tool = tool,
                                     args = args,
@@ -4813,7 +4868,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': $result"))))
                             }
-                            "generate_image", "resize_image", "browser_search", "browser_click", "browser_read", "create_todo_list", "complete_todo_task", "delete_file", "rename_file", "move_file" -> {
+                            "generate_image", "resize_image", "browser_search", "browser_click", "browser_read", "create_todo_list", "complete_todo_task", "delete_file", "rename_file", "move_file",
+                            "open_url", "navigate", "browse_url", "get_page_source", "inspect_dom", "inspect_css", "get_computed_styles", "take_screenshot", "click", "type", "scroll", "get_links", "get_images", "get_fonts", "run_javascript", "execute_javascript", "eval_js", "compare_screenshot" -> {
                                 val result = ExtraToolHandlers.handleExtraToolCall(
                                     tool = tool,
                                     args = args,
@@ -5115,7 +5171,26 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'load_skill': $result"))))
                             }
                             else -> {
-                                loopCompleted = true
+                                val isMcpCandidate = tool.startsWith("mcp_") || 
+                                    tool.startsWith("gsc_") || 
+                                    tool.contains("__") || 
+                                    mcpManager.toolRegistry.findToolInServers(tool, mcpManager.servers.value) != null
+
+                                if (isMcpCandidate) {
+                                    val result = McpToolHandler.handleMcpToolCall(
+                                        tool = tool,
+                                        args = args,
+                                        project = project,
+                                        mcpManager = mcpManager,
+                                        createLog = { title, details -> createAiLog(title = title, status = "thinking", details = details) },
+                                        updateLog = { id, status, details -> updateAiLog(id, status, details) },
+                                        addLog = { log -> _aiActionLogs.value = _aiActionLogs.value + log }
+                                    )
+                                    history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
+                                    history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': $result"))))
+                                } else {
+                                    loopCompleted = true
+                                }
                             }
                         }
                         } // End of toolCalls for loop

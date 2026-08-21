@@ -115,7 +115,15 @@ data class ToolArguments(
     val mcpServerName: String? = null,
     val toolName: String? = null,
     val mcpArgsJson: String? = null,
-    val resourceUri: String? = null
+    val resourceUri: String? = null,
+    val url: String? = null,
+    val selector: String? = null,
+    val properties: String? = null,
+    val script: String? = null,
+    val direction: String? = null,
+    val amount: Int? = null,
+    val text: String? = null,
+    val targetImage: String? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -138,6 +146,7 @@ object GeminiClient {
     private const val MODEL_NAME = "gemini-2.0-flash" // Standard fast model
 
     var onRetryListener: ((provider: String, attempt: Int, maxAttempts: Int, error: String) -> Unit)? = null
+    var onRetrySuccessListener: (() -> Unit)? = null
 
     private val moshi = Moshi.Builder()
         .addLast(KotlinJsonAdapterFactory())
@@ -263,6 +272,14 @@ object GeminiClient {
             val startLine = argMap["startline"]?.toIntOrNull()
             val endLine = argMap["endline"]?.toIntOrNull()
             val prompt = argMap["prompt"]
+            val url = argMap["url"] ?: argMap["link"] ?: argMap["href"]
+            val selector = argMap["selector"] ?: argMap["css"] ?: argMap["target"]
+            val properties = argMap["properties"] ?: argMap["props"] ?: argMap["property"]
+            val script = argMap["script"] ?: argMap["code"] ?: argMap["js"]
+            val direction = argMap["direction"] ?: argMap["dir"]
+            val amount = argMap["amount"]?.toIntOrNull()
+            val text = argMap["text"] ?: argMap["value"]
+            val targetImage = argMap["targetimage"] ?: argMap["image"]
 
             val thoughtText = rawText.substringBefore("<arg_key>").substringBefore(".$inferredTool").replace(Regex("<[^>]+>"), "").trim()
 
@@ -282,7 +299,15 @@ object GeminiClient {
                     lineRange = lineRange,
                     startLine = startLine,
                     endLine = endLine,
-                    prompt = prompt
+                    prompt = prompt,
+                    url = url,
+                    selector = selector,
+                    properties = properties,
+                    script = script,
+                    direction = direction,
+                    amount = amount,
+                    text = text,
+                    targetImage = targetImage
                 ),
                 finishReason = finishReason
             )
@@ -442,6 +467,9 @@ object GeminiClient {
                                     Thread.sleep(backoff)
                                     continue
                                 }
+                            }
+                            if (attempt > 0 && response.isSuccessful) {
+                                onRetrySuccessListener?.invoke()
                             }
                             break
                         } catch (e: Exception) {
@@ -629,6 +657,9 @@ object GeminiClient {
                                     continue
                                 }
                             }
+                            if (attempt > 0 && response.isSuccessful) {
+                                onRetrySuccessListener?.invoke()
+                            }
                             break
                         } catch (e: Exception) {
                             Log.e(TAG, "Exception during $provider call execution", e)
@@ -806,6 +837,9 @@ object GeminiClient {
                                     continue
                                 }
                             }
+                            if (attempt > 0 && response.isSuccessful) {
+                                onRetrySuccessListener?.invoke()
+                            }
                             break
                         } catch (e: Exception) {
                             Log.e(TAG, "Exception during Claude execute", e)
@@ -960,6 +994,9 @@ object GeminiClient {
                                     Thread.sleep(backoff)
                                     continue
                                 }
+                            }
+                            if (attempt > 0 && response.isSuccessful) {
+                                onRetrySuccessListener?.invoke()
                             }
                             break
                         } catch (e: Exception) {
@@ -1124,6 +1161,9 @@ object GeminiClient {
                             Thread.sleep(backoff)
                             continue
                         }
+                    }
+                    if (attempt > 0 && response.isSuccessful) {
+                        onRetrySuccessListener?.invoke()
                     }
                     break
                 } catch (e: Exception) {

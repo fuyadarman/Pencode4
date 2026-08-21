@@ -52,22 +52,65 @@ class McpToolRegistry {
      * Build system prompt documentation string for registered MCP tools
      */
     fun buildMcpToolsSystemPrompt(): String {
-        val tools = _registeredTools.value
-        if (tools.isEmpty()) return ""
+        return buildMcpToolsPromptForServers(emptyList())
+    }
+
+    /**
+     * Build system prompt documentation string for specific enabled MCP servers
+     */
+    fun buildMcpToolsPromptForServers(servers: List<McpServer>): String {
+        val toolsFromRegistered = _registeredTools.value
+        val allTools = mutableListOf<RegisteredMcpTool>()
+        allTools.addAll(toolsFromRegistered)
+
+        for (s in servers) {
+            for (t in s.availableTools) {
+                if (allTools.none { it.serverId == s.id && it.tool.name == t.name }) {
+                    allTools.add(RegisteredMcpTool(serverId = s.id, serverName = s.name, tool = t))
+                }
+            }
+        }
+
+        if (allTools.isEmpty()) return ""
 
         val sb = StringBuilder()
-        sb.append("\n=== EXTERNAL MCP (MODEL CONTEXT PROTOCOL) REMOTE TOOLS ===\n")
-        sb.append("(Note: These remote MCP tools are separate from your local system tools like terminal, file_editor, apk_builder).\n")
+        sb.append("\n\n=== CONNECTED REMOTE MCP (MODEL CONTEXT PROTOCOL) TOOLS ===\n")
+        sb.append("You have active access to the following live Remote MCP servers and tools. You can invoke them either using 'mcp_call_tool' (with mcpServerName, toolName, mcpArgsJson) or by directly specifying the tool name as the 'tool' in your JSON action:\n\n")
 
-        for (reg in tools) {
-            sb.append("- Tool: ${reg.globalToolName} (Server: ${reg.serverName})\n")
+        for (reg in allTools) {
+            sb.append("• Tool: '${reg.globalToolName}' (Alias: '${reg.tool.name}')\n")
+            sb.append("  Server: ${reg.serverName}\n")
             if (!reg.tool.description.isNullOrBlank()) {
                 sb.append("  Description: ${reg.tool.description}\n")
             }
             if (!reg.tool.parametersJsonSchema.isNullOrBlank()) {
-                sb.append("  Parameters Schema: ${reg.tool.parametersJsonSchema}\n")
+                sb.append("  Input Schema: ${reg.tool.parametersJsonSchema}\n")
             }
+            sb.append("\n")
         }
         return sb.toString()
+    }
+
+    /**
+     * Find target server & tool across registered and enabled server instances
+     */
+    fun findToolInServers(toolNameOrGlobalName: String, servers: List<McpServer>): Pair<McpServer, McpToolInfo>? {
+        val reg = findTool(toolNameOrGlobalName)
+        if (reg != null) {
+            val server = servers.find { it.id == reg.serverId } ?: McpServer(id = reg.serverId, name = reg.serverName, url = "")
+            return Pair(server, reg.tool)
+        }
+
+        val cleanName = if (toolNameOrGlobalName.contains("__")) toolNameOrGlobalName.substringAfterLast("__") else toolNameOrGlobalName
+        for (server in servers) {
+            val tool = server.availableTools.find { 
+                it.name.equals(toolNameOrGlobalName, ignoreCase = true) ||
+                it.name.equals(cleanName, ignoreCase = true)
+            }
+            if (tool != null) {
+                return Pair(server, tool)
+            }
+        }
+        return null
     }
 }

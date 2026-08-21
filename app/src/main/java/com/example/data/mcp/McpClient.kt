@@ -17,6 +17,7 @@ class McpClient(
     private val authManager: McpAuthManager
 ) {
     private val sessionIds = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val activeEndpoints = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -53,7 +54,7 @@ class McpClient(
     }
 
     /**
-     * Send JSON-RPC 2.0 Request
+     * Send JSON-RPC 2.0 Request with automatic 404/406 fallback discovery & SSE endpoint support
      */
     suspend fun sendJsonRpc(
         server: McpServer,
@@ -72,17 +73,19 @@ class McpClient(
 
             var authHeader = getOrRefreshAuthHeader(server, tokenEndpoint)
 
-            fun buildRequest(auth: String?): Request {
+            fun buildRequest(url: String, auth: String?): Request {
                 val b = Request.Builder()
-                    .url(server.url)
-                    .post(jsonRpcPayload.toString().toRequestBody("application/json".toMediaTypeOrNull()))
-                    .addHeader("Content-Type", "application/json")
-                    .addHeader("Accept", "application/json")
+                    .url(url)
+                    .post(jsonRpcPayload.toString().toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull()))
+                    .addHeader("Content-Type", "application/json; charset=utf-8")
+                    .addHeader("Accept", "application/json, text/event-stream;q=0.9, */*;q=0.8")
+                    .addHeader("User-Agent", "Pencode-MCP-Client/1.0 (Android; Mobile)")
 
                 val sessionId = sessionIds[server.id]
                 if (!sessionId.isNullOrBlank()) {
                     b.addHeader("Mcp-Session-Id", sessionId)
                     b.addHeader("mcp-session-id", sessionId)
+                    b.addHeader("X-Mcp-Session-Id", sessionId)
                 }
 
                 if (!server.apiKey.isNullOrBlank()) {
@@ -96,7 +99,8 @@ class McpClient(
                 return b.build()
             }
 
-            var response = httpClient.newCall(buildRequest(authHeader)).execute()
+            val targetUrl = activeEndpoints[server.id] ?: server.url.trim()
+            var response = httpClient.newCall(buildRequest(targetUrl, authHeader)).execute()
 
             // 401 Handling: Retry once after token refresh
             if (response.code == 401 && !tokenEndpoint.isNullOrBlank()) {
@@ -105,8 +109,46 @@ class McpClient(
                     val freshToken = refreshRes.getOrNull()
                     if (freshToken != null) {
                         authHeader = "${freshToken.tokenType} ${freshToken.accessToken}"
-                        response = httpClient.newCall(buildRequest(authHeader)).execute()
+                        response.close()
+                        response = httpClient.newCall(buildRequest(targetUrl, authHeader)).execute()
                     }
+                }
+            }
+
+            // 404 / 405 / 406 Auto-discovery fallback for alternative MCP endpoints
+            if ((response.code == 404 || response.code == 405 || response.code == 406) && activeEndpoints[server.id] == null) {
+                val rawBase = server.url.trim().trimEnd('/')
+                val candidates = mutableListOf<String>()
+                
+                if (rawBase.endsWith("/sse")) {
+                    candidates.add(rawBase.removeSuffix("/sse"))
+                    candidates.add(rawBase.removeSuffix("/sse") + "/mcp")
+                    candidates.add(rawBase.removeSuffix("/sse") + "/messages")
+                } else if (rawBase.endsWith("/mcp")) {
+                    candidates.add(rawBase.removeSuffix("/mcp"))
+                    candidates.add(rawBase.removeSuffix("/mcp") + "/sse")
+                } else {
+                    candidates.add("$rawBase/mcp")
+                    candidates.add("$rawBase/sse")
+                    candidates.add("$rawBase/rpc")
+                    candidates.add("$rawBase/api/mcp")
+                    candidates.add(rawBase)
+                }
+
+                for (cand in candidates) {
+                    if (cand == targetUrl) continue
+                    try {
+                        val testReq = buildRequest(cand, authHeader)
+                        val testResp = httpClient.newCall(testReq).execute()
+                        val testBody = testResp.body?.string() ?: ""
+                        if (testResp.isSuccessful || (testBody.contains("\"jsonrpc\"") && testResp.code != 404)) {
+                            activeEndpoints[server.id] = cand
+                            response.close()
+                            response = testResp
+                            break
+                        }
+                        testResp.close()
+                    } catch (ignored: Exception) {}
                 }
             }
 
@@ -122,7 +164,16 @@ class McpClient(
 
             val respBody = response.body?.string() ?: ""
             if (!response.isSuccessful) {
-                return@withContext Result.failure(Exception("MCP HTTP ${response.code}: $respBody"))
+                val parsedError = try {
+                    val errJson = JSONObject(respBody)
+                    if (errJson.has("error")) {
+                        val errObj = errJson.optJSONObject("error")
+                        errObj?.optString("message") ?: errJson.optString("error")
+                    } else respBody
+                } catch (e: Exception) {
+                    respBody
+                }
+                return@withContext Result.failure(Exception("MCP Server HTTP ${response.code}: $parsedError"))
             }
 
             val jsonRes = JSONObject(respBody)
@@ -213,17 +264,30 @@ class McpClient(
         toolName: String,
         argumentsJson: String?
     ): Result<String> = withContext(Dispatchers.IO) {
-        val params = JSONObject().apply {
-            put("name", toolName)
+        val actualToolName = if (toolName.contains("__")) toolName.substringAfterLast("__") else toolName
+        val parsedArgs = JSONObject().apply {
             if (!argumentsJson.isNullOrBlank()) {
                 try {
-                    put("arguments", JSONObject(argumentsJson))
+                    val rawObj = JSONObject(argumentsJson)
+                    // If model wrapped arguments inside {"arguments": {...}} or {"params": {...}}
+                    if (rawObj.has("arguments") && rawObj.optJSONObject("arguments") != null) {
+                        val inner = rawObj.getJSONObject("arguments")
+                        inner.keys().forEach { k -> put(k, inner.get(k)) }
+                    } else if (rawObj.has("params") && rawObj.optJSONObject("params") != null) {
+                        val inner = rawObj.getJSONObject("params")
+                        inner.keys().forEach { k -> put(k, inner.get(k)) }
+                    } else {
+                        rawObj.keys().forEach { k -> put(k, rawObj.get(k)) }
+                    }
                 } catch (e: Exception) {
-                    put("arguments", JSONObject().put("raw", argumentsJson))
+                    put("query", argumentsJson)
                 }
-            } else {
-                put("arguments", JSONObject())
             }
+        }
+
+        val params = JSONObject().apply {
+            put("name", actualToolName)
+            put("arguments", parsedArgs)
         }
 
         val res = sendJsonRpc(server, tokenEndpoint, "tools/call", params)
@@ -233,9 +297,26 @@ class McpClient(
 
         val json = res.getOrNull() ?: JSONObject()
         if (json.has("result")) {
-            return@withContext Result.success("MCP Tool Result ($toolName):\n${json.get("result")}")
+            val resultObj = json.optJSONObject("result")
+            if (resultObj != null && resultObj.has("content")) {
+                val contentArr = resultObj.optJSONArray("content")
+                if (contentArr != null && contentArr.length() > 0) {
+                    val sb = StringBuilder()
+                    for (i in 0 until contentArr.length()) {
+                        val item = contentArr.optJSONObject(i)
+                        val text = item?.optString("text") ?: item?.toString() ?: ""
+                        if (text.isNotBlank()) sb.append(text).append("\n")
+                    }
+                    if (sb.isNotBlank()) {
+                        return@withContext Result.success(sb.toString().trim())
+                    }
+                }
+            }
+            return@withContext Result.success("MCP Tool Result ($actualToolName):\n${json.get("result")}")
         } else if (json.has("error")) {
-            return@withContext Result.failure(Exception("MCP Error ($toolName):\n${json.get("error")}"))
+            val errObj = json.optJSONObject("error")
+            val errMsg = errObj?.optString("message") ?: json.optString("error")
+            return@withContext Result.failure(Exception("MCP Server Error ($actualToolName): $errMsg"))
         }
 
         Result.success("MCP Execution Completed:\n$json")

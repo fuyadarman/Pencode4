@@ -2520,6 +2520,7 @@ fun Greeting(name: String, modifier: Modifier = Modifier) {
 """
                 )
             )
+            "chrome_extension" -> com.example.data.generators.ChromeExtensionGenerator.getStarterFiles(projectName)
             else -> listOf(
                 ProjectFileEntity(
                     projectName = projectName,

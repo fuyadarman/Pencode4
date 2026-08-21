@@ -378,6 +378,343 @@ object ExtraToolHandlers {
                 updateLog(moveLog.id, if (result.startsWith("Successfully")) "success" else "failed", result)
                 result
             }
+            "open_url", "navigate", "browse_url" -> {
+                val targetUrl = (if (!args?.url.isNullOrBlank()) args.url else if (!args?.query.isNullOrBlank()) args.query else args?.path ?: "").trim()
+                val navLog = createLog(
+                    "Open Web URL",
+                    "thinking",
+                    "Navigating to URL: $targetUrl",
+                    "web-clone"
+                )
+                addLog(navLog)
+                setAgentStatus("Navigating to URL: $targetUrl...")
+
+                val result = if (targetUrl.isBlank()) {
+                    "Error: 'url' parameter cannot be empty for open_url."
+                } else {
+                    when (val browserResult = backgroundBrowser.navigate(targetUrl)) {
+                        is BrowserResult.Success -> {
+                            "Successfully opened URL: ${browserResult.url}\nTitle: ${browserResult.title}\n\nContent Overview:\n${browserResult.content.take(800)}"
+                        }
+                        is BrowserResult.Error -> {
+                            "Error opening URL: ${browserResult.message}"
+                        }
+                    }
+                }
+
+                val isSuccess = result.startsWith("Successfully")
+                updateLog(navLog.id, if (isSuccess) "success" else "failed", result.take(300))
+                result
+            }
+            "get_page_source" -> {
+                val sourceLog = createLog(
+                    "Get Page Source",
+                    "thinking",
+                    "Extracting complete HTML source code...",
+                    "web-clone"
+                )
+                addLog(sourceLog)
+                setAgentStatus("Extracting HTML page source...")
+
+                val result = when (val browserResult = backgroundBrowser.getPageSource()) {
+                    is BrowserResult.Success -> {
+                        "HTML Source of ${browserResult.url} (Title: ${browserResult.title}):\n${browserResult.content}"
+                    }
+                    is BrowserResult.Error -> {
+                        "Error extracting page source: ${browserResult.message}"
+                    }
+                }
+
+                val isSuccess = !result.startsWith("Error")
+                updateLog(sourceLog.id, if (isSuccess) "success" else "failed", if (isSuccess) "Extracted ${result.length} characters of HTML source" else result)
+                result
+            }
+            "inspect_dom" -> {
+                val targetSelector = args?.selector ?: args?.search ?: args?.query ?: "body"
+                val domLog = createLog(
+                    "Inspect DOM",
+                    "thinking",
+                    "Inspecting DOM structure for '$targetSelector'",
+                    "web-clone"
+                )
+                addLog(domLog)
+                setAgentStatus("Inspecting DOM element hierarchy: $targetSelector...")
+
+                val result = when (val browserResult = backgroundBrowser.inspectDom(targetSelector)) {
+                    is BrowserResult.Success -> {
+                        "DOM Inspection for '$targetSelector':\n${browserResult.content}"
+                    }
+                    is BrowserResult.Error -> {
+                        "Error inspecting DOM: ${browserResult.message}"
+                    }
+                }
+
+                val isSuccess = !result.startsWith("Error")
+                updateLog(domLog.id, if (isSuccess) "success" else "failed", if (isSuccess) "Inspected DOM node hierarchy for '$targetSelector'" else result)
+                result
+            }
+            "inspect_css" -> {
+                val targetSelector = args?.selector ?: args?.search ?: args?.query ?: "body"
+                val cssLog = createLog(
+                    "Inspect CSS",
+                    "thinking",
+                    "Extracting CSS rules and stylesheets for '$targetSelector'",
+                    "web-clone"
+                )
+                addLog(cssLog)
+                setAgentStatus("Inspecting CSS stylesheets & rules for $targetSelector...")
+
+                val result = when (val browserResult = backgroundBrowser.inspectCss(targetSelector)) {
+                    is BrowserResult.Success -> {
+                        "CSS Inspection for '$targetSelector':\n${browserResult.content}"
+                    }
+                    is BrowserResult.Error -> {
+                        "Error inspecting CSS: ${browserResult.message}"
+                    }
+                }
+
+                val isSuccess = !result.startsWith("Error")
+                updateLog(cssLog.id, if (isSuccess) "success" else "failed", if (isSuccess) "Extracted matched CSS rules for '$targetSelector'" else result)
+                result
+            }
+            "get_computed_styles" -> {
+                val targetSelector = args?.selector ?: args?.search ?: args?.query ?: "body"
+                val properties = args?.properties ?: args?.query
+                val styleLog = createLog(
+                    "Get Computed Styles",
+                    "thinking",
+                    "Computing precise styles (colors, fonts, box model) for '$targetSelector'",
+                    "web-clone"
+                )
+                addLog(styleLog)
+                setAgentStatus("Computing exact CSS styles for $targetSelector...")
+
+                val result = when (val browserResult = backgroundBrowser.getComputedStyles(targetSelector, properties)) {
+                    is BrowserResult.Success -> {
+                        "Computed Styles for '$targetSelector':\n${browserResult.content}"
+                    }
+                    is BrowserResult.Error -> {
+                        "Error computing styles: ${browserResult.message}"
+                    }
+                }
+
+                val isSuccess = !result.startsWith("Error")
+                updateLog(styleLog.id, if (isSuccess) "success" else "failed", if (isSuccess) "Computed box model and design tokens for '$targetSelector'" else result)
+                result
+            }
+            "take_screenshot" -> {
+                val targetPath = normalizePath(if (!args?.path.isNullOrBlank()) args.path else "screenshots/web_preview.png")
+                val shotLog = createLog(
+                    "Take Web Screenshot",
+                    "thinking",
+                    "Capturing visual rendering of loaded web page -> $targetPath",
+                    "web-clone"
+                )
+                addLog(shotLog)
+                setAgentStatus("Capturing web page screenshot...")
+
+                val bitmap = backgroundBrowser.captureScreenshot()
+                val result = if (bitmap != null) {
+                    try {
+                        val stream = java.io.ByteArrayOutputStream()
+                        bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 95, stream)
+                        val bytes = stream.toByteArray()
+                        val base64Content = "data:image/png;base64," + android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                        repository.saveFile(project.name, targetPath, base64Content)
+                        bitmap.recycle()
+                        "Successfully captured screenshot (${bytes.size / 1024} KB) and saved to workspace: '$targetPath'"
+                    } catch (e: Exception) {
+                        "Error saving screenshot: ${e.localizedMessage}"
+                    }
+                } else {
+                    "Error: Failed to capture WebView screenshot. Ensure page is loaded."
+                }
+
+                val isSuccess = result.startsWith("Successfully")
+                updateLog(shotLog.id, if (isSuccess) "success" else "failed", result)
+                result
+            }
+            "click" -> {
+                val targetSelector = (args?.selector ?: args?.search ?: args?.query ?: "").trim()
+                val clickLog = createLog(
+                    "Click Element",
+                    "thinking",
+                    "Clicking element: '$targetSelector'",
+                    "web-clone"
+                )
+                addLog(clickLog)
+                setAgentStatus("Clicking element '$targetSelector'...")
+
+                val result = if (targetSelector.isBlank()) {
+                    "Error: 'selector' cannot be empty for click."
+                } else {
+                    when (val browserResult = backgroundBrowser.clickElement(targetSelector)) {
+                        is BrowserResult.Success -> browserResult.content
+                        is BrowserResult.Error -> "Error clicking element: ${browserResult.message}"
+                    }
+                }
+
+                val isSuccess = !result.startsWith("Error")
+                updateLog(clickLog.id, if (isSuccess) "success" else "failed", result.take(200))
+                result
+            }
+            "type" -> {
+                val targetSelector = (args?.selector ?: args?.search ?: args?.query ?: "").trim()
+                val inputText = args?.text ?: args?.content ?: args?.message ?: ""
+                val typeLog = createLog(
+                    "Type Text",
+                    "thinking",
+                    "Typing into '$targetSelector': \"$inputText\"",
+                    "web-clone"
+                )
+                addLog(typeLog)
+                setAgentStatus("Typing into '$targetSelector'...")
+
+                val result = if (targetSelector.isBlank()) {
+                    "Error: 'selector' cannot be empty for type."
+                } else {
+                    when (val browserResult = backgroundBrowser.typeText(targetSelector, inputText)) {
+                        is BrowserResult.Success -> browserResult.content
+                        is BrowserResult.Error -> "Error typing: ${browserResult.message}"
+                    }
+                }
+
+                val isSuccess = !result.startsWith("Error")
+                updateLog(typeLog.id, if (isSuccess) "success" else "failed", result)
+                result
+            }
+            "scroll" -> {
+                val direction = args?.direction ?: args?.query ?: "down"
+                val amount = args?.amount ?: 600
+                val scrollLog = createLog(
+                    "Scroll Web Page",
+                    "thinking",
+                    "Scrolling $direction by $amount px",
+                    "web-clone"
+                )
+                addLog(scrollLog)
+                setAgentStatus("Scrolling web page $direction...")
+
+                val result = when (val browserResult = backgroundBrowser.scrollPage(direction, amount)) {
+                    is BrowserResult.Success -> browserResult.content
+                    is BrowserResult.Error -> "Error scrolling: ${browserResult.message}"
+                }
+
+                updateLog(scrollLog.id, "success", result)
+                result
+            }
+            "get_links" -> {
+                val linksLog = createLog(
+                    "Get Links",
+                    "thinking",
+                    "Extracting all navigation and hyperlinks from page...",
+                    "web-clone"
+                )
+                addLog(linksLog)
+                setAgentStatus("Extracting links and navigation map...")
+
+                val result = when (val browserResult = backgroundBrowser.getLinks()) {
+                    is BrowserResult.Success -> {
+                        "Page Links & Navigation Elements:\n${browserResult.content}"
+                    }
+                    is BrowserResult.Error -> {
+                        "Error extracting links: ${browserResult.message}"
+                    }
+                }
+
+                val isSuccess = !result.startsWith("Error")
+                updateLog(linksLog.id, if (isSuccess) "success" else "failed", if (isSuccess) "Extracted links from active page" else result)
+                result
+            }
+            "get_images" -> {
+                val imagesLog = createLog(
+                    "Get Images",
+                    "thinking",
+                    "Extracting image URLs, icons, SVGs, and visual assets...",
+                    "web-clone"
+                )
+                addLog(imagesLog)
+                setAgentStatus("Extracting images, icons & SVGs...")
+
+                val result = when (val browserResult = backgroundBrowser.getImages()) {
+                    is BrowserResult.Success -> {
+                        "Page Images & Visual Assets:\n${browserResult.content}"
+                    }
+                    is BrowserResult.Error -> {
+                        "Error extracting images: ${browserResult.message}"
+                    }
+                }
+
+                val isSuccess = !result.startsWith("Error")
+                updateLog(imagesLog.id, if (isSuccess) "success" else "failed", if (isSuccess) "Extracted images and visual media assets" else result)
+                result
+            }
+            "get_fonts" -> {
+                val fontsLog = createLog(
+                    "Get Fonts & Typography",
+                    "thinking",
+                    "Extracting font families, weights, and Google Fonts...",
+                    "web-clone"
+                )
+                addLog(fontsLog)
+                setAgentStatus("Extracting fonts & typography tokens...")
+
+                val result = when (val browserResult = backgroundBrowser.getFonts()) {
+                    is BrowserResult.Success -> {
+                        "Page Fonts & Typography Tokens:\n${browserResult.content}"
+                    }
+                    is BrowserResult.Error -> {
+                        "Error extracting fonts: ${browserResult.message}"
+                    }
+                }
+
+                val isSuccess = !result.startsWith("Error")
+                updateLog(fontsLog.id, if (isSuccess) "success" else "failed", if (isSuccess) "Extracted font tokens" else result)
+                result
+            }
+            "run_javascript", "execute_javascript", "eval_js" -> {
+                val script = args?.script ?: args?.content ?: args?.command ?: args?.query ?: ""
+                val jsLog = createLog(
+                    "Run JavaScript",
+                    "thinking",
+                    "Executing JavaScript snippet in page context...",
+                    "web-clone"
+                )
+                addLog(jsLog)
+                setAgentStatus("Running JavaScript in browser context...")
+
+                val result = if (script.isBlank()) {
+                    "Error: 'script' argument cannot be empty."
+                } else {
+                    backgroundBrowser.runJavascript(script)
+                }
+
+                val isSuccess = !result.startsWith("Error")
+                updateLog(jsLog.id, if (isSuccess) "success" else "failed", result.take(300))
+                result
+            }
+            "compare_screenshot" -> {
+                val targetImg = args?.targetImage ?: args?.path ?: args?.query ?: "screenshots/web_preview.png"
+                val compLog = createLog(
+                    "Compare Screenshot / UI Alignment",
+                    "thinking",
+                    "Comparing visual alignment with reference '$targetImg'",
+                    "web-clone"
+                )
+                addLog(compLog)
+                setAgentStatus("Comparing visual screenshots for UI/UX accuracy...")
+
+                val files = repository.getFilesForProject(project.name)
+                val targetFile = files.find { it.path == targetImg || it.path.endsWith(targetImg) }
+                val result = if (targetFile != null) {
+                    "Visual Reference '$targetImg' is loaded. Ready for UI/UX pixel-perfect comparison. Ensure color palette, font sizes, margins, responsive breakpoints and layout match the captured DOM and styles."
+                } else {
+                    "Reference screenshot '$targetImg' not found yet. Please run 'take_screenshot' first."
+                }
+
+                updateLog(compLog.id, "success", result)
+                result
+            }
             else -> "Error: Unknown tool '$tool'"
         }
     }
