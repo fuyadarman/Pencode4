@@ -33,7 +33,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.data.ProjectEntity
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun HomeScreen(
     projects: List<ProjectEntity>,
@@ -105,13 +105,15 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .background(Color(0xFF0D1117))
+                .background(Color(0xFF0D1117)),
+            contentAlignment = Alignment.TopCenter
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp)
+                    .widthIn(max = 1100.dp)
+                    .padding(horizontal = 16.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 // Intro Hero Banner - Professional Slate Developer Card
                 Card(
@@ -123,7 +125,7 @@ fun HomeScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(20.dp),
+                            .padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Row(
@@ -138,20 +140,21 @@ fun HomeScreen(
                             )
                             Text(
                                 text = "Autonomous Software Agent Workspace",
-                                fontSize = 15.sp,
+                                fontSize = 14.5.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color(0xFFE6EDF3)
                             )
                         }
                         Text(
                             text = "Develop web applications, Android packages, and services using direct file operations, embedded terminal tools, and automated compilation pipelines.",
-                            fontSize = 12.5.sp,
+                            fontSize = 12.sp,
                             color = Color(0xFF8D96A0),
-                            lineHeight = 18.sp
+                            lineHeight = 17.sp
                         )
-                        Row(
+                        FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier.padding(top = 6.dp)
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.padding(top = 4.dp)
                         ) {
                             Button(
                                 onClick = { showCreateDialog = true },
@@ -192,7 +195,7 @@ fun HomeScreen(
                 ) {
                     Text(
                         text = "Your Projects",
-                        fontSize = 18.sp,
+                        fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
@@ -236,9 +239,10 @@ fun HomeScreen(
                     }
                 } else {
                     LazyVerticalGrid(
-                        columns = GridCells.Fixed(1), // Large vertical cards
+                        columns = GridCells.Adaptive(minSize = 320.dp),
                         modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         items(projects) { project ->
                             ProjectCard(

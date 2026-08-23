@@ -889,13 +889,15 @@ fun WorkspaceBottomNavigation(
         NavigationBar(
             containerColor = Color(0xFF0D1117),
             tonalElevation = 0.dp,
+            windowInsets = WindowInsets.navigationBars,
             modifier = Modifier.height(64.dp)
         ) {
             NavigationBarItem(
                 selected = currentTab == WorkspaceTab.CHAT,
                 onClick = { onTabSelected(WorkspaceTab.CHAT) },
                 icon = { Icon(Icons.Default.ChatBubble, contentDescription = "Agent Chat", modifier = Modifier.size(20.dp)) },
-                label = { Text("Agent", fontWeight = FontWeight.Medium, fontSize = 11.sp) },
+                label = { Text("Agent", fontWeight = FontWeight.Medium, fontSize = 11.sp, maxLines = 1) },
+                alwaysShowLabel = true,
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = Color(0xFF58A6FF),
                     selectedTextColor = Color(0xFF58A6FF),
@@ -908,7 +910,8 @@ fun WorkspaceBottomNavigation(
                 selected = currentTab == WorkspaceTab.CODE,
                 onClick = { onTabSelected(WorkspaceTab.CODE) },
                 icon = { Icon(Icons.Default.Code, contentDescription = "Editor", modifier = Modifier.size(20.dp)) },
-                label = { Text("Editor", fontWeight = FontWeight.Medium, fontSize = 11.sp) },
+                label = { Text("Editor", fontWeight = FontWeight.Medium, fontSize = 11.sp, maxLines = 1) },
+                alwaysShowLabel = true,
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = Color(0xFF58A6FF),
                     selectedTextColor = Color(0xFF58A6FF),
@@ -921,7 +924,8 @@ fun WorkspaceBottomNavigation(
                 selected = currentTab == WorkspaceTab.PREVIEW,
                 onClick = { onTabSelected(WorkspaceTab.PREVIEW) },
                 icon = { Icon(Icons.Default.Language, contentDescription = "Preview", modifier = Modifier.size(20.dp)) },
-                label = { Text("Preview", fontWeight = FontWeight.Medium, fontSize = 11.sp) },
+                label = { Text("Preview", fontWeight = FontWeight.Medium, fontSize = 11.sp, maxLines = 1) },
+                alwaysShowLabel = true,
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = Color(0xFF3FB950),
                     selectedTextColor = Color(0xFF3FB950),
@@ -934,7 +938,8 @@ fun WorkspaceBottomNavigation(
                 selected = currentTab == WorkspaceTab.TERMINAL,
                 onClick = { onTabSelected(WorkspaceTab.TERMINAL) },
                 icon = { Icon(Icons.Default.Terminal, contentDescription = "Terminal", modifier = Modifier.size(20.dp)) },
-                label = { Text("Terminal", fontWeight = FontWeight.Medium, fontSize = 11.sp) },
+                label = { Text("Terminal", fontWeight = FontWeight.Medium, fontSize = 11.sp, maxLines = 1) },
+                alwaysShowLabel = true,
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = Color(0xFFD29922),
                     selectedTextColor = Color(0xFFD29922),
@@ -947,7 +952,8 @@ fun WorkspaceBottomNavigation(
                 selected = currentTab == WorkspaceTab.ANDROID_BUILD,
                 onClick = { onTabSelected(WorkspaceTab.ANDROID_BUILD) },
                 icon = { Icon(Icons.Default.Build, contentDescription = "Android Build", modifier = Modifier.size(20.dp)) },
-                label = { Text("Build", fontWeight = FontWeight.Medium, fontSize = 11.sp) },
+                label = { Text("Build", fontWeight = FontWeight.Medium, fontSize = 11.sp, maxLines = 1) },
+                alwaysShowLabel = true,
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = Color(0xFFA371F7),
                     selectedTextColor = Color(0xFFA371F7),
@@ -2070,46 +2076,75 @@ fun ChatTabContent(
                         }
                     }
 
-                    OutlinedTextField(
-                        value = chatInputText,
-                        onValueChange = { onUpdateChatInputText(it) },
-                        placeholder = { Text("Describe your request (@ files, / skills)...", color = Color(0xFF8D96A0), fontSize = 13.sp) },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color(0xFFE6EDF3),
-                            unfocusedTextColor = Color(0xFFE6EDF3),
-                            focusedBorderColor = Color(0xFF2F81F7),
-                            unfocusedBorderColor = Color(0xFF30363D),
-                            focusedContainerColor = Color(0xFF161B22),
-                            unfocusedContainerColor = Color(0xFF161B22)
-                        ),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp),
-                        maxLines = 5,
-                        trailingIcon = {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFF161B22),
+                        border = BorderStroke(1.dp, Color(0xFF30363D)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = chatInputText,
+                                onValueChange = { onUpdateChatInputText(it) },
+                                placeholder = { Text("Describe your request (@ files, / skills)...", color = Color(0xFF8D96A0), fontSize = 13.sp) },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color(0xFFE6EDF3),
+                                    unfocusedTextColor = Color(0xFFE6EDF3),
+                                    focusedBorderColor = Color.Transparent,
+                                    unfocusedBorderColor = Color.Transparent,
+                                    focusedContainerColor = Color.Transparent,
+                                    unfocusedContainerColor = Color.Transparent
+                                ),
+                                modifier = Modifier.fillMaxWidth(),
+                                minLines = 1,
+                                maxLines = 5
+                            )
+
                             Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                modifier = Modifier.padding(end = 8.dp)
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                IconButton(onClick = { onOpenSelectMcpDialog() }, modifier = Modifier.size(36.dp)) {
-                                    Icon(
-                                        Icons.Default.Hub,
-                                        contentDescription = "Select MCP",
-                                        tint = if (selectedMcpServerIds.isNotEmpty()) Color(0xFF818CF8) else Color(0xFF8D96A0),
-                                        modifier = Modifier.size(18.dp)
-                                    )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    IconButton(
+                                        onClick = { filePickerLauncher.launch("*/*") },
+                                        modifier = Modifier.size(36.dp)
+                                    ) {
+                                        Icon(Icons.Default.AttachFile, contentDescription = "Attach", tint = Color(0xFF8D96A0), modifier = Modifier.size(18.dp))
+                                    }
+                                    IconButton(
+                                        onClick = { onOpenSelectMcpDialog() },
+                                        modifier = Modifier.size(36.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Hub,
+                                            contentDescription = "Select MCP",
+                                            tint = if (selectedMcpServerIds.isNotEmpty()) Color(0xFF818CF8) else Color(0xFF8D96A0),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = { onOpenSettings() },
+                                        modifier = Modifier.size(36.dp)
+                                    ) {
+                                        Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color(0xFF8D96A0), modifier = Modifier.size(18.dp))
+                                    }
                                 }
-                                IconButton(onClick = { onOpenSettings() }, modifier = Modifier.size(36.dp)) {
-                                    Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color(0xFF8D96A0), modifier = Modifier.size(18.dp))
-                                }
-                                IconButton(onClick = { filePickerLauncher.launch("*/*") }, modifier = Modifier.size(36.dp)) {
-                                    Icon(Icons.Default.AttachFile, contentDescription = "Attach", tint = Color(0xFF8D96A0), modifier = Modifier.size(18.dp))
-                                }
+
+                                val canSend = (chatInputText.isNotBlank() || attachedFiles.isNotEmpty() || taggedFiles.isNotEmpty() || taggedSkills.isNotEmpty())
                                 IconButton(
                                     onClick = {
                                         if (isThinking) {
                                             onStopAI()
-                                        } else if (chatInputText.isNotBlank() || attachedFiles.isNotEmpty() || taggedFiles.isNotEmpty() || taggedSkills.isNotEmpty()) {
+                                        } else if (canSend) {
                                             val fileAttachments = taggedFiles.map { file ->
                                                 com.example.ui.AttachedFile(
                                                     uri = android.net.Uri.EMPTY,
@@ -2136,13 +2171,14 @@ fun ChatTabContent(
                                             taggedSkills = emptyList()
                                         }
                                     },
-                                    enabled = (chatInputText.isNotBlank() || attachedFiles.isNotEmpty() || taggedFiles.isNotEmpty() || taggedSkills.isNotEmpty()) || isThinking,
+                                    enabled = canSend || isThinking,
                                     modifier = Modifier
-                                        .size(34.dp)
+                                        .size(36.dp)
                                         .background(
-                                            if ((chatInputText.isNotBlank() || attachedFiles.isNotEmpty()) || isThinking) Color(0xFF238636)
-                                            else Color.Transparent,
-                                            RoundedCornerShape(6.dp)
+                                            if (isThinking) Color(0xFFEF4444)
+                                            else if (canSend) Color(0xFF238636)
+                                            else Color(0xFF21262D),
+                                            RoundedCornerShape(8.dp)
                                         )
                                 ) {
                                     if (isThinking) {
@@ -2156,21 +2192,21 @@ fun ChatTabContent(
                                                 Icons.Default.Stop,
                                                 contentDescription = "Stop",
                                                 tint = Color.White,
-                                                modifier = Modifier.size(11.dp)
+                                                modifier = Modifier.size(12.dp)
                                             )
                                         }
                                     } else {
                                         Icon(
                                             Icons.AutoMirrored.Filled.Send,
                                             contentDescription = "Send",
-                                            tint = if (chatInputText.isNotBlank() || attachedFiles.isNotEmpty()) Color.White else Color(0xFF6E7681),
+                                            tint = if (canSend) Color.White else Color(0xFF6E7681),
                                             modifier = Modifier.size(16.dp)
                                         )
                                     }
                                 }
                             }
                         }
-                    )
+                    }
                 }
             }
         }
