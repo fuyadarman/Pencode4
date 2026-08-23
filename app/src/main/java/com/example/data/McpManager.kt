@@ -32,7 +32,7 @@ class McpManager(private val context: Context) {
     val authManager = McpAuthManager(context, tokenStore)
     val mcpClient = McpClient(tokenStore, authManager)
     val toolRegistry = McpToolRegistry()
-    val gscService = GoogleSearchConsoleMcpService(tokenStore)
+    val gscService = GoogleSearchConsoleMcpService(tokenStore, authManager)
 
     private val prefs = context.getSharedPreferences("mcp_servers_prefs", Context.MODE_PRIVATE)
     private val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
@@ -355,8 +355,16 @@ class McpManager(private val context: Context) {
             requestBuilder.addHeader("Authorization", "${tokens.tokenType} ${tokens.accessToken}")
         }
 
-        val response = httpClient.newCall(requestBuilder.build()).execute()
-        if (!response.isSuccessful) {
+        val response = try {
+            httpClient.newCall(requestBuilder.build()).execute()
+        } catch (e: Exception) {
+            null
+        }
+        if (response == null || !response.isSuccessful) {
+            val presetTools = getPresetToolsForPlatform(server.platform, server.name)
+            if (presetTools.isNotEmpty()) {
+                return presetTools
+            }
             return listOf(
                 McpToolInfo(
                     name = "${server.name.lowercase().replace(" ", "_")}_action",
@@ -497,7 +505,7 @@ class McpManager(private val context: Context) {
           ?: return@withContext "Error: MCP Server '$serverId' not found or no connected MCP server available."
 
         if (server.platform == "GOOGLE_SEARCH_CONSOLE" || server.url.contains("searchconsole") || toolName.startsWith("gsc_")) {
-            return@withContext gscService.executeTool(server.id, toolName, argumentsJson)
+            return@withContext gscService.executeTool(server.id, toolName, argumentsJson, server)
         }
 
         val metadata = cachedMetadata[server.id] ?: authManager.discoverOAuthMetadata(server.url).getOrNull()

@@ -2425,6 +2425,13 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     private val _aiActionLogs = MutableStateFlow<List<AiActionLog>>(emptyList())
     val aiActionLogs: StateFlow<List<AiActionLog>> = _aiActionLogs.asStateFlow()
 
+    // Per-project state cache so that navigating back or switching screens does not erase operation history
+    private val projectActionLogsMap = java.util.concurrent.ConcurrentHashMap<String, List<AiActionLog>>()
+    private val projectTodoListMap = java.util.concurrent.ConcurrentHashMap<String, List<TodoItem>>()
+    private val projectEditHistoryMap = java.util.concurrent.ConcurrentHashMap<String, List<EditRecord>>()
+    private val projectAgentStatusMap = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private var runningProjectName: String? = null
+
     private val _isLoadingWorkspace = MutableStateFlow(false)
     val isLoadingWorkspace: StateFlow<Boolean> = _isLoadingWorkspace.asStateFlow()
 
@@ -2488,28 +2495,103 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     private val _isInterrupted = MutableStateFlow(false)
     val isInterrupted: StateFlow<Boolean> = _isInterrupted.asStateFlow()
 
+    private val _interruptionReason = MutableStateFlow("")
+    val interruptionReason: StateFlow<String> = _interruptionReason.asStateFlow()
+
+    fun isContinuationKeyword(prompt: String): Boolean {
+        val p = prompt.lowercase().trim()
+        return p == "continue" || p == "cont" || p == "continue task" || p == "continue please" ||
+                p == "chalate thako" || p == "caliye jao" || p == "কাজ চালিয়ে যান" || p == "চালিয়ে যাও"
+    }
+
+    suspend fun buildIntelligentContinuationPrompt(project: ProjectEntity): String {
+        val allChats = repository.getChatsForProject(project.name)
+        val lastRealUserMessage = allChats.reversed().firstOrNull { 
+            it.role == "user" && !isContinuationKeyword(it.content) && !it.content.startsWith("[TASK CONTINUATION")
+        }
+        val originalPrompt = lastRealUserMessage?.content?.take(500) ?: "Previous coding task"
+
+        val recentEdits = _editHistory.value.takeLast(10)
+        val editedFilesSummary = if (recentEdits.isNotEmpty()) {
+            recentEdits.joinToString("\n") { "• ${it.tool.uppercase()} on '${it.path}' (${it.lines})" }
+        } else {
+            "No files recorded in edit history yet."
+        }
+
+        val completedTodos = _todoList.value.filter { it.isCompleted }
+        val pendingTodos = _todoList.value.filter { !it.isCompleted }
+        val todoSummary = buildString {
+            if (completedTodos.isNotEmpty()) {
+                append("Completed sub-tasks:\n")
+                completedTodos.forEach { append("  ✓ ${it.task}\n") }
+            }
+            if (pendingTodos.isNotEmpty()) {
+                append("Remaining pending sub-tasks:\n")
+                pendingTodos.forEach { append("  ⏳ ${it.task}\n") }
+            }
+        }.ifBlank { "No explicit todo list items." }
+
+        val reason = _interruptionReason.value.ifBlank { "Execution stopped or hit a limit" }
+
+        return """
+            [TASK CONTINUATION & RESUMPTION]
+            You are resuming the following task:
+            "$originalPrompt"
+
+            PREVIOUS EXECUTION PROGRESS:
+            • Status / Interruption Cause: $reason
+            • Files Modified So Far:
+            $editedFilesSummary
+            • Sub-task Progress:
+            $todoSummary
+
+            RESUMPTION INSTRUCTIONS (OpenCode / Claude Code protocol):
+            1. Resume directly from the exact point where work stopped.
+            2. Review already created or modified files. DO NOT rewrite, duplicate, or overwrite completed files.
+            3. Proceed immediately with remaining changes, logic, or missing files to fulfill the original user request.
+            4. When all requirements are satisfied, call 'complete' with a clean Markdown summary.
+        """.trimIndent()
+    }
+
     fun skipInterruption() {
         _isInterrupted.value = false
+        _interruptionReason.value = ""
     }
 
     fun continuePrompt() {
         _isInterrupted.value = false
-        sendPrompt("Please continue the previous code implementation. Pick up exactly where you left off, make sure to finish any incomplete files, functions, or blocks, and output the necessary tool call.")
+        val project = _currentProject.value ?: return
+        viewModelScope.launch {
+            val continuationPrompt = buildIntelligentContinuationPrompt(project)
+            sendPrompt(continuationPrompt)
+        }
     }
 
     fun stopThinking() {
         currentAiJob?.cancel()
         _isThinking.value = false
+        _isInterrupted.value = true
+        _interruptionReason.value = "AI task paused or stopped by user."
         _agentStatus.value = "AI task stopped by user."
         checkAndTriggerAutoFixOnAgentFinish()
         
-        // Optionally add a log for cancellation
+        // Add log for cancellation
         val cancelLog = AiActionLog(
-            title = "Task Stopped",
+            title = "Task Interrupted",
             status = "failed",
-            details = "Execution was cancelled by the user."
+            details = "Execution was paused/stopped by the user. Press 'Continue' or type 'continue' to resume."
         )
-        _aiActionLogs.value = _aiActionLogs.value + cancelLog
+        val updatedLogs = _aiActionLogs.value + cancelLog
+        _aiActionLogs.value = updatedLogs
+        
+        val project = _currentProject.value
+        if (project != null) {
+            projectActionLogsMap[project.name] = updatedLogs
+            projectTodoListMap[project.name] = _todoList.value
+            projectEditHistoryMap[project.name] = _editHistory.value
+            projectAgentStatusMap[project.name] = _agentStatus.value
+        }
+        runningProjectName = null
     }
 
     private fun checkHasCodeChangesThisTurn(editsAtPromptStart: Int): Boolean {
@@ -2716,11 +2798,18 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     fun deleteProject(projectName: String) {
         viewModelScope.launch {
             repository.deleteProject(projectName)
+            projectActionLogsMap.remove(projectName)
+            projectTodoListMap.remove(projectName)
+            projectEditHistoryMap.remove(projectName)
+            projectAgentStatusMap.remove(projectName)
             if (_currentProject.value?.name == projectName) {
                 _currentProject.value = null
                 _projectFiles.value = emptyList()
                 _activeFile.value = null
                 _chatMessages.value = emptyList()
+                _aiActionLogs.value = emptyList()
+                _todoList.value = emptyList()
+                _agentStatus.value = ""
             }
             loadProjects()
         }
@@ -2731,7 +2820,39 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             _isLoadingWorkspace.value = true
             _currentProject.value = project
             _currentTab.value = WorkspaceTab.CHAT
-            _agentStatus.value = ""
+            
+            // Restore action logs, todo list, and status from memory or persistent chat message
+            val cachedLogs = projectActionLogsMap[project.name]
+            if (!cachedLogs.isNullOrEmpty()) {
+                _aiActionLogs.value = cachedLogs
+            } else {
+                val chats = repository.getChatsForProject(project.name)
+                val lastAssistant = chats.lastOrNull { it.role == "assistant" && !it.aiActionLogsJson.isNullOrBlank() }
+                if (lastAssistant?.aiActionLogsJson != null) {
+                    try {
+                        val listType = Types.newParameterizedType(List::class.java, AiActionLog::class.java)
+                        val restoredLogs = moshi.adapter<List<AiActionLog>>(listType).fromJson(lastAssistant.aiActionLogsJson) ?: emptyList()
+                        _aiActionLogs.value = restoredLogs
+                        projectActionLogsMap[project.name] = restoredLogs
+                    } catch (e: Exception) {
+                        _aiActionLogs.value = emptyList()
+                    }
+                } else {
+                    _aiActionLogs.value = emptyList()
+                }
+            }
+
+            _todoList.value = projectTodoListMap[project.name] ?: emptyList()
+            _editHistory.value = projectEditHistoryMap[project.name] ?: emptyList()
+            
+            val isProjectCurrentlyThinking = runningProjectName == project.name && currentAiJob?.isActive == true
+            _isThinking.value = isProjectCurrentlyThinking
+            if (isProjectCurrentlyThinking) {
+                _agentStatus.value = projectAgentStatusMap[project.name] ?: "AI is working..."
+            } else {
+                _agentStatus.value = projectAgentStatusMap[project.name] ?: ""
+            }
+
             startPollingBuild()
             
             try {
@@ -2753,11 +2874,20 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun exitProject() {
+        val current = _currentProject.value
+        if (current != null) {
+            projectActionLogsMap[current.name] = _aiActionLogs.value
+            projectTodoListMap[current.name] = _todoList.value
+            projectEditHistoryMap[current.name] = _editHistory.value
+            projectAgentStatusMap[current.name] = _agentStatus.value
+        }
         _currentProject.value = null
         _projectFiles.value = emptyList()
         _activeFile.value = null
         _chatMessages.value = emptyList()
         _aiActionLogs.value = emptyList()
+        _todoList.value = emptyList()
+        _agentStatus.value = ""
     }
 
     fun dismissGithubPushPrompt() {
@@ -3363,6 +3493,13 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             autoSaveActiveFile()
             _detectedWebErrors.value = emptyList()
             var finalPrompt = userPrompt
+            if (isContinuationKeyword(userPrompt.trim())) {
+                _isInterrupted.value = false
+                _interruptionReason.value = ""
+                finalPrompt = buildIntelligentContinuationPrompt(project)
+            } else {
+                _isInterrupted.value = false
+            }
             attachments.forEach { file ->
                 if (file.isImage && file.contentAsBase64 != null) {
                     finalPrompt += "\n\n[IMAGE_BASE64: data:${file.mimeType};base64,${file.contentAsBase64}]"
@@ -3396,11 +3533,15 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             _chatMessages.value = repository.getChatsForProject(project.name)
 
             // 2. Clear previous logs and initialize thinking state
+            runningProjectName = project.name
             _aiActionLogs.value = emptyList()
+            projectActionLogsMap[project.name] = emptyList()
             _todoList.value = emptyList()
+            projectTodoListMap[project.name] = emptyList()
             _showGithubPushPrompt.value = false
             _isThinking.value = true
             _agentStatus.value = "AI is thinking..."
+            projectAgentStatusMap[project.name] = "AI is thinking..."
             val editsAtPromptStart = _editHistory.value.size
 
             // Re-enable conversation history with highly optimized, token-saving action summaries
@@ -4053,6 +4194,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 _chatMessages.value = repository.getChatsForProject(project.name)
                                 
                                 _agentStatus.value = "Changes applied successfully!"
+                                _isInterrupted.value = false
+                                _interruptionReason.value = ""
                                 loopCompleted = true
                                 agentMessageSaved = true
 
@@ -5116,13 +5259,17 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                         val failLog = AiActionLog(
                             title = "Invalid response parsed",
                             status = "failed",
-                            details = "API did not return structured tool JSON."
+                            details = "API did not return structured tool JSON. Press 'Continue' to resume."
                         )
                         _aiActionLogs.value = _aiActionLogs.value + failLog
+                        _isInterrupted.value = true
+                        _interruptionReason.value = "AI did not return structured tool JSON."
                         loopCompleted = true
                     }
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     Log.d("VibeViewModel", "AI agent loop cancelled")
+                    _isInterrupted.value = true
+                    _interruptionReason.value = "AI task cancelled by user."
                     loopCompleted = true
                     throw e
                 } catch (e: Exception) {
@@ -5130,9 +5277,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                     val failLog = AiActionLog(
                         title = "Agent loop connection failure",
                         status = "failed",
-                        details = "Error: ${e.localizedMessage}"
+                        details = "Error: ${e.localizedMessage}. Press 'Continue' or type 'continue' to retry and resume."
                     )
                     _aiActionLogs.value = _aiActionLogs.value + failLog
+                    _isInterrupted.value = true
+                    _interruptionReason.value = "Connection or API response failure: ${e.localizedMessage ?: "Unknown error"}"
                     loopCompleted = true
                 }
                 
@@ -5148,14 +5297,21 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 
             if (!loopCompleted && actionsCount >= maxActionSteps) {
                 _isInterrupted.value = true
+                _interruptionReason.value = "AI reached the maximum action budget ($maxActionSteps steps)."
                 val failLog = AiActionLog(
                     title = "Action limit reached",
                     status = "failed",
-                    details = "AI reached the maximum number of actions/tool calls ($maxActionSteps) without completing the task."
+                    details = "AI reached the maximum number of actions/tool calls ($maxActionSteps). Press 'Continue' or type 'continue' to keep working."
                 )
                 _aiActionLogs.value = _aiActionLogs.value + failLog
             }
             } finally {
+                if (!loopCompleted && !_isInterrupted.value) {
+                    _isInterrupted.value = true
+                    if (_interruptionReason.value.isBlank()) {
+                        _interruptionReason.value = "Task stopped before calling 'complete'."
+                    }
+                }
                 kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
                     timerJob.cancel()
                     val finalSecs = maxOf(1L, (System.currentTimeMillis() - executionStartTime) / 1000)
@@ -5223,6 +5379,13 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                     }
                     
                     _isThinking.value = false
+                    projectActionLogsMap[project.name] = _aiActionLogs.value
+                    projectTodoListMap[project.name] = _todoList.value
+                    projectEditHistoryMap[project.name] = _editHistory.value
+                    projectAgentStatusMap[project.name] = _agentStatus.value
+                    if (runningProjectName == project.name) {
+                        runningProjectName = null
+                    }
                     _chatMessages.value = repository.getChatsForProject(project.name)
                     if (project.templateKey == "vanilla" || project.templateKey == "react" || project.templateKey == "vanilla_three") {
                         // Clear old detected errors right before reloading preview so newly reloaded preview can report fresh errors if any

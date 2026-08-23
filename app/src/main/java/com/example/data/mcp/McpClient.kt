@@ -243,7 +243,7 @@ class McpClient(
             val respBody = response.body?.string() ?: ""
             if (!response.isSuccessful) {
                 val parsedError = try {
-                    val errJson = JSONObject(respBody)
+                    val errJson = parseJsonFromResponse(respBody)
                     if (errJson.has("error")) {
                         val errObj = errJson.optJSONObject("error")
                         errObj?.optString("message") ?: errJson.optString("error")
@@ -254,7 +254,7 @@ class McpClient(
                 return@withContext Result.failure(Exception("MCP Server HTTP ${response.code}: $parsedError"))
             }
 
-            val jsonRes = JSONObject(respBody)
+            val jsonRes = parseJsonFromResponse(respBody)
 
             // Also check if result contains sessionId
             if (jsonRes.has("result")) {
@@ -270,6 +270,27 @@ class McpClient(
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    private fun parseJsonFromResponse(body: String): JSONObject {
+        val trimmed = body.trim()
+        if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+            return JSONObject(trimmed)
+        }
+        // Handle Server-Sent Events (SSE) stream format e.g. "data: {...}"
+        val lines = trimmed.lines()
+        for (line in lines) {
+            val l = line.trim()
+            if (l.startsWith("data:")) {
+                val jsonPart = l.substring(5).trim()
+                if (jsonPart.startsWith("{") && jsonPart.endsWith("}")) {
+                    try {
+                        return JSONObject(jsonPart)
+                    } catch (ignored: Exception) {}
+                }
+            }
+        }
+        return JSONObject(body)
     }
 
     /**

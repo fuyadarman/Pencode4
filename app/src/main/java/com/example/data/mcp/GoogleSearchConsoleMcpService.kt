@@ -1,5 +1,6 @@
 package com.example.data.mcp
 
+import com.example.data.McpServer
 import com.example.data.McpToolInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -21,7 +22,8 @@ import java.util.concurrent.TimeUnit
  * - URL Inspection (Indexing status, Mobile usability, Rich results)
  */
 class GoogleSearchConsoleMcpService(
-    private val tokenStore: McpTokenStore
+    private val tokenStore: McpTokenStore,
+    private val authManager: McpAuthManager? = null
 ) {
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -87,12 +89,24 @@ class GoogleSearchConsoleMcpService(
     suspend fun executeTool(
         serverId: String,
         toolName: String,
-        argumentsJson: String?
+        argumentsJson: String?,
+        server: McpServer? = null
     ): String = withContext(Dispatchers.IO) {
-        val tokens = tokenStore.getTokens(serverId)
-        val accessToken = tokens?.accessToken
+        var accessToken = server?.apiKey?.takeIf { it.isNotBlank() }
+
         if (accessToken.isNullOrBlank()) {
-            return@withContext "Error: Google Search Console access token missing. Please connect with Google OAuth first."
+            var tokens = tokenStore.getTokens(serverId)
+            if (tokens != null && tokens.isExpired() && authManager != null) {
+                val refreshRes = authManager.refreshAccessToken(serverId, "https://oauth2.googleapis.com/token")
+                if (refreshRes.isSuccess) {
+                    tokens = refreshRes.getOrNull()
+                }
+            }
+            accessToken = tokens?.accessToken
+        }
+
+        if (accessToken.isNullOrBlank()) {
+            return@withContext "Error: Google Search Console access token missing. Please connect with Google OAuth or provide an API Token first."
         }
 
         val args = try {

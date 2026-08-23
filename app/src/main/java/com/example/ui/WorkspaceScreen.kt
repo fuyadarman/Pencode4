@@ -134,6 +134,7 @@ fun WorkspaceScreen(
     onEditMessage: (ChatMessageEntity, String) -> Unit = { _, _ -> },
     onRegenerate: (ChatMessageEntity) -> Unit = {},
     isInterrupted: Boolean = false,
+    interruptionReason: String = "",
     onContinue: () -> Unit = {},
     onSkip: () -> Unit = {},
     webConsoleLogs: List<VibeViewModel.WebConsoleLog> = emptyList(),
@@ -216,6 +217,23 @@ fun WorkspaceScreen(
     var showPushDialog by remember { mutableStateOf(false) }
     var showSearchDialog by remember { mutableStateOf(false) }
     var showRestoreDialog by remember { mutableStateOf(false) }
+
+    androidx.activity.compose.BackHandler {
+        if (showExplorer) {
+            showExplorer = false
+        } else if (showSettingsDialog || showAgentSkillsDialog || showMcpDialog || showSelectMcpDialog || showPushDialog || showSearchDialog || showRestoreDialog || showCreateFileDialog) {
+            showSettingsDialog = false
+            showAgentSkillsDialog = false
+            showMcpDialog = false
+            showSelectMcpDialog = false
+            showPushDialog = false
+            showSearchDialog = false
+            showRestoreDialog = false
+            showCreateFileDialog = false
+        } else {
+            onBack()
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
@@ -419,6 +437,7 @@ fun WorkspaceScreen(
                                 onEditMessage = onEditMessage,
                                 onRegenerate = onRegenerate,
                                 isInterrupted = isInterrupted,
+                                interruptionReason = interruptionReason,
                                 onContinue = onContinue,
                                 onSkip = onSkip,
                                 files = files,
@@ -953,6 +972,7 @@ fun ChatTabContent(
     onEditMessage: (ChatMessageEntity, String) -> Unit,
     onRegenerate: (ChatMessageEntity) -> Unit,
     isInterrupted: Boolean,
+    interruptionReason: String = "",
     onContinue: () -> Unit,
     onSkip: () -> Unit,
     files: List<ProjectFileEntity>,
@@ -1642,32 +1662,100 @@ fun ChatTabContent(
                     }
                 }
                 if (messages.isNotEmpty() && !isThinking && isInterrupted) {
-                    Row(
+                    Card(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(start = 12.dp, end = 12.dp, top = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        shape = RoundedCornerShape(10.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1B2E)),
+                        border = BorderStroke(1.dp, Color(0xFF8B5CF6).copy(alpha = 0.6f)),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                     ) {
-                        Button(
-                            onClick = onContinue,
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6)),
-                            shape = RoundedCornerShape(6.dp),
-                            modifier = Modifier.height(32.dp)
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Text("Continue (কাজ চালিয়ে যান)", fontSize = 11.sp)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.PlayCircleFilled,
+                                        contentDescription = "Resume",
+                                        tint = Color(0xFFA78BFA),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Text(
+                                        text = "Task Interrupted (কাজটি অসমাপ্ত রয়েছে)",
+                                        color = Color(0xFFE2E8F0),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                if (interruptionReason.isNotBlank()) {
+                                    Surface(
+                                        shape = RoundedCornerShape(4.dp),
+                                        color = Color(0xFF8B5CF6).copy(alpha = 0.2f)
+                                    ) {
+                                        Text(
+                                            text = interruptionReason.take(30),
+                                            color = Color(0xFFA78BFA),
+                                            fontSize = 10.sp,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
                             }
-                        }
-                        OutlinedButton(
-                            onClick = onSkip,
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Gray),
-                            shape = RoundedCornerShape(6.dp),
-                            border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.5f)),
-                            modifier = Modifier.height(32.dp)
-                        ) {
-                            Text("Skip", fontSize = 11.sp)
+                            
+                            Text(
+                                text = if (interruptionReason.isNotBlank()) interruptionReason else "Agent was stopped before finishing all steps. You can resume and complete the remaining work.",
+                                color = Color(0xFF94A3B8),
+                                fontSize = 11.sp,
+                                lineHeight = 15.sp
+                            )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Button(
+                                    onClick = onContinue,
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C3AED)),
+                                    shape = RoundedCornerShape(6.dp),
+                                    modifier = Modifier.height(34.dp).weight(1.5f)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
+                                        Text("Continue (কাজ চালিয়ে যান)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                    }
+                                }
+                                OutlinedButton(
+                                    onClick = onSkip,
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF94A3B8)),
+                                    shape = RoundedCornerShape(6.dp),
+                                    border = BorderStroke(1.dp, Color(0xFF475569)),
+                                    modifier = Modifier.height(34.dp).weight(1f)
+                                ) {
+                                    Text("Dismiss", fontSize = 11.sp)
+                                }
+                            }
+                            Text(
+                                text = "💡 Tip: You can also simply type 'continue' in chat to resume.",
+                                color = Color(0xFF64748B),
+                                fontSize = 10.sp
+                            )
                         }
                     }
                 }

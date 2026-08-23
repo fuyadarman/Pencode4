@@ -14,6 +14,7 @@ object AgentInstructionEngine {
 
     enum class PromptIntent {
         CONVERSATIONAL_OR_EXPLANATION,
+        TASK_CONTINUATION,
         CODE_MODIFICATION_OR_FEATURE,
         SEARCH_AND_EXPLORATION,
         WEB_AND_UI_INSPECTION,
@@ -31,8 +32,19 @@ object AgentInstructionEngine {
         hasTaggedFiles: Boolean,
         hasBrowserUrls: Boolean
     ): Set<PromptIntent> {
-        val p = userPrompt.lowercase()
+        val p = userPrompt.lowercase().trim()
         val intents = mutableSetOf<PromptIntent>()
+
+        // Check for continuation trigger (e.g. "continue", "Continue", "CONTINUE", "cont", "kaj caliye jao", etc.)
+        val isContinuation = p == "continue" || p == "cont" || p == "continue task" || p == "continue please" ||
+                p == "chalate thako" || p == "caliye jao" || p == "কাজ চালিয়ে যান" || p == "চালিয়ে যাও" ||
+                p.startsWith("[task continuation") || p.startsWith("please continue the previous")
+
+        if (isContinuation) {
+            intents.add(PromptIntent.TASK_CONTINUATION)
+            intents.add(PromptIntent.CODE_MODIFICATION_OR_FEATURE)
+            return intents
+        }
 
         val isGreetingOrChat = p.matches(Regex("^(hi|hello|hey|hola|kemon|kemn|kemon acho|assalamu alaikum|salam|sup|yo|good morning|good evening|thanks|thank you|dhonnobad)[.!?\\s]*$")) ||
                 (p.length < 35 && (p.contains("explain") || p.contains("what is") || p.contains("how does") || p.contains("ki eta") || p.contains("bujhiye dao") || p.contains("meaning")) && !p.contains("code") && !p.contains("create") && !p.contains("make") && !p.contains("build") && !p.contains("add") && !p.contains("fix"))
@@ -129,7 +141,9 @@ object AgentInstructionEngine {
         sb.append("2. STEP BUDGET: Step limit: $maxActionSteps. Call 'complete' IMMEDIATELY after finishing with a structured summary.\n")
         sb.append("3. LANGUAGE: Mirror user language, script, and tone exactly (Bangla, English, Hindi, etc.).\n")
 
-        if (intents.contains(PromptIntent.CODE_MODIFICATION_OR_FEATURE) || intents.contains(PromptIntent.DEBUG_AND_ERROR_FIXING) || intents.contains(PromptIntent.GENERAL_AGENT_TASK)) {
+        if (intents.contains(PromptIntent.TASK_CONTINUATION)) {
+            sb.append("4. TASK RESUMPTION & CONTINUATION: You are resuming an interrupted/paused task. Inspect the conversation history and previous actions. Do NOT re-execute already completed file edits or repeat reads. Pick up EXACTLY where execution stopped and finalize the remaining requirements. Call 'complete' when finished.\n")
+        } else if (intents.contains(PromptIntent.CODE_MODIFICATION_OR_FEATURE) || intents.contains(PromptIntent.DEBUG_AND_ERROR_FIXING) || intents.contains(PromptIntent.GENERAL_AGENT_TASK)) {
             sb.append("4. SURGICAL EDIT MANDATE: Overwriting files >30 lines with 'write_file' is REJECTED. Use 'edit_file', 'multi_edit_file', or 'patch_file'. Read target file ONCE first with 'read_file'/'read_file_range'/'multi_read_file'. Re-reading right after edits is FORBIDDEN.\n")
             sb.append("5. SEPARATION OF CONCERNS: Put new features, functions, and systems in dedicated new files ('create_file').\n")
         }

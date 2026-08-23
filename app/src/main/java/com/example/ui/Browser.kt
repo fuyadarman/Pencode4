@@ -20,13 +20,30 @@ class BackgroundBrowser(private val context: Context) {
 
     init {
         mainHandler.post {
+            try {
+                WebView.enableSlowWholeDocumentDraw()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
             webView = WebView(context).apply {
+                val defaultWidth = 1080
+                val defaultHeight = 1920
+                layoutParams = android.view.ViewGroup.LayoutParams(defaultWidth, defaultHeight)
+                measure(
+                    android.view.View.MeasureSpec.makeMeasureSpec(defaultWidth, android.view.View.MeasureSpec.EXACTLY),
+                    android.view.View.MeasureSpec.makeMeasureSpec(defaultHeight, android.view.View.MeasureSpec.EXACTLY)
+                )
+                layout(0, 0, defaultWidth, defaultHeight)
+
                 settings.apply {
                     javaScriptEnabled = true
                     domStorageEnabled = true
                     databaseEnabled = true
                     useWideViewPort = true
                     loadWithOverviewMode = true
+                    allowFileAccess = true
+                    allowContentAccess = true
+                    mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                     // Set a modern mobile user agent
                     userAgentString = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36"
                 }
@@ -38,6 +55,15 @@ class BackgroundBrowser(private val context: Context) {
 
                     override fun onPageFinished(view: WebView?, url: String?) {
                         super.onPageFinished(view, url)
+                        view?.let { wv ->
+                            val w = if (wv.width > 0) wv.width else 1080
+                            val h = if (wv.height > 0) wv.height else 1920
+                            wv.measure(
+                                android.view.View.MeasureSpec.makeMeasureSpec(w, android.view.View.MeasureSpec.EXACTLY),
+                                android.view.View.MeasureSpec.makeMeasureSpec(h, android.view.View.MeasureSpec.EXACTLY)
+                            )
+                            wv.layout(0, 0, w, h)
+                        }
                         synchronized(loadLock) {
                             pageLoadDeferred?.complete(url ?: "")
                         }
@@ -483,13 +509,64 @@ class BackgroundBrowser(private val context: Context) {
         try {
             val width = if (wv.width > 0) wv.width else 1080
             val height = if (wv.height > 0) wv.height else 1920
+
+            wv.measure(
+                android.view.View.MeasureSpec.makeMeasureSpec(width, android.view.View.MeasureSpec.EXACTLY),
+                android.view.View.MeasureSpec.makeMeasureSpec(height, android.view.View.MeasureSpec.EXACTLY)
+            )
+            wv.layout(0, 0, width, height)
+
+            kotlinx.coroutines.delay(300)
+
             val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             val canvas = android.graphics.Canvas(bitmap)
             wv.draw(canvas)
+
+            if (!isBitmapBlank(bitmap)) {
+                return@withContext bitmap
+            }
+
+            // Fallback drawing cache
+            try {
+                wv.isDrawingCacheEnabled = true
+                wv.buildDrawingCache()
+                val cacheBitmap = wv.drawingCache
+                if (cacheBitmap != null && !isBitmapBlank(cacheBitmap)) {
+                    val copy = cacheBitmap.copy(Bitmap.Config.ARGB_8888, true)
+                    wv.isDrawingCacheEnabled = false
+                    return@withContext copy
+                }
+                wv.isDrawingCacheEnabled = false
+            } catch (e: Exception) {
+                // Ignore fallback error
+            }
+
             bitmap
         } catch (e: Exception) {
+            e.printStackTrace()
             null
         }
+    }
+
+    private fun isBitmapBlank(bitmap: Bitmap): Boolean {
+        val w = bitmap.width
+        val h = bitmap.height
+        if (w <= 0 || h <= 0) return true
+        var firstPixel: Int? = null
+        var allSame = true
+        for (stepX in 1..9) {
+            for (stepY in 1..9) {
+                val px = bitmap.getPixel((w * stepX) / 10, (h * stepY) / 10)
+                if (firstPixel == null) {
+                    firstPixel = px
+                } else if (px != firstPixel) {
+                    allSame = false
+                    break
+                }
+            }
+            if (!allSame) break
+        }
+        return allSame && (firstPixel == -1 || firstPixel == 0)
     }
 
     private suspend fun getPageTitle(): String = withContext(Dispatchers.Main) {

@@ -38,6 +38,11 @@ class MainActivity : ComponentActivity() {
     private var pendingOAuthUri: android.net.Uri? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        try {
+            android.webkit.WebView.enableSlowWholeDocumentDraw()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
         super.onCreate(savedInstanceState)
         pendingOAuthUri = intent?.data
         
@@ -357,6 +362,7 @@ class MainActivity : ComponentActivity() {
                                     viewModel.regenerateResponse(msg)
                                 },
                                 isInterrupted = viewModel.isInterrupted.collectAsStateWithLifecycle().value,
+                                interruptionReason = viewModel.interruptionReason.collectAsStateWithLifecycle().value,
                                 onContinue = {
                                     viewModel.continuePrompt()
                                 },
