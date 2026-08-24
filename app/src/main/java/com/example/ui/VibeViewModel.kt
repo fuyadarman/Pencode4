@@ -2092,112 +2092,15 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             _scanError.value = null
             _scannedModels.value = emptyList()
             
-            try {
-                val client = OkHttpClient.Builder()
-                    .connectTimeout(12, java.util.concurrent.TimeUnit.SECONDS)
-                    .readTimeout(12, java.util.concurrent.TimeUnit.SECONDS)
-                    .build()
-                val url = when (provider) {
-                    "gemini" -> {
-                        val key = apiKey.ifBlank { BuildConfig.GEMINI_API_KEY }
-                        "https://generativelanguage.googleapis.com/v1beta/models?key=$key"
-                    }
-                    "cohere" -> "https://api.cohere.com/v1/models"
-                    "openai" -> if (baseUrl.isNotBlank()) "${baseUrl.trimEnd('/')}/models" else "https://api.openai.com/v1/models"
-                    "mistral" -> if (baseUrl.isNotBlank()) "${baseUrl.trimEnd('/')}/models" else "https://api.mistral.ai/v1/models"
-                    "openrouter" -> if (baseUrl.isNotBlank()) "${baseUrl.trimEnd('/')}/models" else "https://openrouter.ai/api/v1/models"
-                    "groq" -> if (baseUrl.isNotBlank()) "${baseUrl.trimEnd('/')}/models" else "https://api.groq.com/openai/v1/models"
-                    "opencode_zen", "opencode" -> if (baseUrl.isNotBlank()) "${baseUrl.trimEnd('/')}/models" else "https://opencode.ai/zen/v1/models"
-                    "ollama_cloud" -> if (baseUrl.isNotBlank()) "${baseUrl.trimEnd('/')}/v1/models" else "https://api.ollama.com/v1/models"
-                    else -> {
-                        if (baseUrl.isNotBlank()) {
-                            if (baseUrl.contains("cloudflare")) {
-                                "https://api.cloudflare.com/client/v4/accounts/YOUR_ACCOUNT_ID/ai/run"
-                            } else {
-                                "${baseUrl.trimEnd('/')}/models"
-                            }
-                        } else {
-                            ""
-                        }
-                    }
+            when (val result = com.example.api.ProviderModelScanner.scanModels(provider, apiKey, baseUrl)) {
+                is com.example.api.ProviderModelScanner.ScanResult.Success -> {
+                    _scannedModels.value = result.models
                 }
-
-                if (url.isBlank()) {
-                    _scanError.value = "Invalid or unsupported provider/base URL for scanning."
-                    _isScanningModels.value = false
-                    return@launch
+                is com.example.api.ProviderModelScanner.ScanResult.Error -> {
+                    _scanError.value = result.message
                 }
-
-                if (provider == "cloudflare") {
-                    val cfModels = listOf(
-                        "@cf/meta/llama-3.3-70b-instruct",
-                        "@cf/meta/llama-3-8b-instruct",
-                        "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
-                        "@cf/qwen/qwen1.5-14b-chat",
-                        "@cf/mistral/mistral-7b-instruct-v0.1"
-                    )
-                    _scannedModels.value = cfModels
-                    _isScanningModels.value = false
-                    return@launch
-                }
-
-                val requestBuilder = Request.Builder().url(url)
-                if (apiKey.isNotBlank() && provider != "gemini") {
-                    requestBuilder.header("Authorization", "Bearer $apiKey")
-                } else if (provider == "openrouter" && apiKey.isNotBlank()) {
-                    requestBuilder.header("Authorization", "Bearer $apiKey")
-                } else if (provider == "cohere" && apiKey.isNotBlank()) {
-                    requestBuilder.header("Authorization", "Bearer $apiKey")
-                }
-
-                val request = requestBuilder.get().build()
-                val response = client.newCall(request).execute()
-                val bodyStr = response.body?.string()
-
-                if (!response.isSuccessful || bodyStr == null) {
-                    _scanError.value = "Error ${response.code}: ${bodyStr ?: "No response body"}"
-                    _isScanningModels.value = false
-                    return@launch
-                }
-
-                val modelsList = mutableListOf<String>()
-                val json = JSONObject(bodyStr)
-
-                if (json.has("data")) {
-                    val dataArray = json.getJSONArray("data")
-                    for (i in 0 until dataArray.length()) {
-                        val item = dataArray.getJSONObject(i)
-                        if (item.has("id")) {
-                            modelsList.add(item.getString("id"))
-                        }
-                    }
-                } else if (json.has("models")) {
-                    val modelsArray = json.getJSONArray("models")
-                    for (i in 0 until modelsArray.length()) {
-                        val item = modelsArray.getJSONObject(i)
-                        if (item.has("name")) {
-                            val name = item.getString("name")
-                            modelsList.add(name)
-                            if (name.startsWith("models/")) {
-                                modelsList.add(name.substringAfter("models/"))
-                            }
-                        } else if (item.has("id")) {
-                            modelsList.add(item.getString("id"))
-                        }
-                    }
-                }
-
-                if (modelsList.isEmpty()) {
-                    _scanError.value = "No models found in the API response. Make sure your API key is correct."
-                } else {
-                    _scannedModels.value = modelsList.distinct()
-                }
-
-            } catch (e: Exception) {
-                _scanError.value = "Scan failed: ${e.localizedMessage}"
-            } finally {
-                _isScanningModels.value = false
             }
+            _isScanningModels.value = false
         }
     }
 
@@ -2678,6 +2581,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                     _currentRunningModelName.value
                 } else {
                     when (provider.lowercase()) {
+                        "cline" -> "Cline"
                         "opencode_zen", "opencode" -> "OpenCode Zen"
                         "ollama_cloud", "ollama" -> "Ollama"
                         "gemini", "direct gemini" -> "Gemini"

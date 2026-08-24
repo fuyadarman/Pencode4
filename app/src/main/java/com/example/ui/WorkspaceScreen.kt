@@ -5957,7 +5957,7 @@ fun CustomSettingsDialog(
                         )
 
                         // Provider Picker
-                        val providers = listOf("opencode_zen", "gemini", "openai", "claude", "mistral", "groq", "cohere", "openrouter", "ollama_cloud", "cloudflare", "custom")
+                        val providers = listOf("cline", "opencode_zen", "gemini", "openai", "claude", "mistral", "groq", "cohere", "openrouter", "ollama_cloud", "cloudflare", "custom")
                         Text("Provider", color = Color(0xFF80809B), fontSize = 11.sp)
                         Row(
                             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -5974,6 +5974,7 @@ fun CustomSettingsDialog(
                                             pInput = p 
                                             // Set defaults based on provider but let user customize freely
                                             modelInput = when(p) {
+                                                "cline" -> "claude-3-7-sonnet-20250219"
                                                 "opencode_zen" -> "opencode-zen"
                                                 "gemini" -> "gemini-2.0-flash"
                                                 "openai" -> "gpt-4o"
@@ -5986,6 +5987,7 @@ fun CustomSettingsDialog(
                                                 else -> ""
                                             }
                                             baseInput = when(p) {
+                                                "cline" -> "https://api.cline.bot/v1"
                                                 "opencode_zen" -> "https://opencode.ai/zen/v1"
                                                 "groq" -> "https://api.groq.com/openai"
                                                 "cohere" -> "https://api.cohere.com"
@@ -6000,6 +6002,7 @@ fun CustomSettingsDialog(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     val displayName = when(p) {
+                                        "cline" -> "Cline"
                                         "opencode_zen" -> "OpenCode Zen"
                                         "ollama_cloud" -> "Ollama Cloud"
                                         "cloudflare" -> "Cloudflare"
@@ -6018,12 +6021,12 @@ fun CustomSettingsDialog(
                             }
                         }
 
-                        if (pInput == "custom" || pInput == "opencode_zen" || pInput == "groq" || pInput == "cohere" || pInput == "openrouter" || pInput == "ollama_cloud" || pInput == "cloudflare") {
+                        if (pInput == "custom" || pInput == "cline" || pInput == "opencode_zen" || pInput == "groq" || pInput == "cohere" || pInput == "openrouter" || pInput == "ollama_cloud" || pInput == "cloudflare") {
                             OutlinedTextField(
                                 value = baseInput,
                                 onValueChange = { baseInput = it },
                                 label = { Text("API Base URL") },
-                                placeholder = { Text(if (pInput == "opencode_zen") "https://opencode.ai/zen/v1" else "e.g. https://api.groq.com/openai/v1") },
+                                placeholder = { Text(if (pInput == "cline") "https://api.cline.bot/v1" else if (pInput == "opencode_zen") "https://opencode.ai/zen/v1" else "e.g. https://api.groq.com/openai/v1") },
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedTextColor = Color.White,
                                     unfocusedTextColor = Color.White,
@@ -6067,6 +6070,7 @@ fun CustomSettingsDialog(
 
                         // Create API Key Button / Link
                         val createKeyUrl = when (pInput) {
+                            "cline" -> "https://openrouter.ai/keys"
                             "opencode_zen" -> "https://opencode.ai/zen"
                             "gemini" -> "https://aistudio.google.com/app/apikey"
                             "openai" -> "https://platform.openai.com/api-keys"

@@ -534,9 +534,10 @@ object GeminiClient {
                 }
             }
 
-            useCustom && (provider == "mistral" || provider == "openai" || provider == "custom" || provider == "groq" || provider == "cohere" || provider == "ollama_cloud" || provider == "ollama" || provider == "openrouter" || provider == "opencode_zen" || provider == "opencode") -> {
+            useCustom && (provider == "mistral" || provider == "openai" || provider == "custom" || provider == "groq" || provider == "cohere" || provider == "ollama_cloud" || provider == "ollama" || provider == "openrouter" || provider == "opencode_zen" || provider == "opencode" || provider == "cline") -> {
                 val rawBase = when {
                     !customBaseUrl.isNullOrBlank() -> customBaseUrl.trim()
+                    provider == "cline" -> "https://api.cline.bot/v1"
                     provider == "opencode_zen" || provider == "opencode" -> "https://opencode.ai/zen/v1"
                     provider == "mistral" -> "https://api.mistral.ai"
                     provider == "openai" -> "https://api.openai.com"
@@ -608,6 +609,7 @@ object GeminiClient {
                 val request = requestBuilder.build()
 
                 val modelDisplayName = if (modelId.isNotBlank()) modelId else when (provider.lowercase()) {
+                    "cline" -> "Cline"
                     "opencode_zen", "opencode" -> "OpenCode Zen"
                     "ollama_cloud", "ollama" -> "Ollama"
                     "openai" -> "OpenAI"
@@ -732,17 +734,13 @@ object GeminiClient {
                         )
                     }
 
-                    val responseMap = try {
-                        moshi.adapter(Map::class.java).lenient().fromJson(rawResponse) as? Map<*, *>
-                    } catch (e: Exception) {
-                        null
+                    // Use robust CustomModelResponseParser to handle string, array content blocks, reasoning_content, and tool calls
+                    val extracted = CustomModelResponseParser.extractContentOrTool(rawResponse, provider)
+                    if (extracted.toolCallResponse != null) {
+                        return@withContext extracted.toolCallResponse
                     }
 
-                    val choices = responseMap?.get("choices") as? List<*>
-                    val choice = choices?.firstOrNull() as? Map<*, *>
-                    val messageMap = choice?.get("message") as? Map<*, *>
-                    val responseText = (messageMap?.get("content") as? String) ?: (responseMap?.get("response") as? String)
-
+                    val responseText = extracted.text
                     if (responseText == null) {
                         // Fallback: If rawResponse is non-empty and contains XML or JSON tool calls directly
                         if (!rawResponse.isNullOrBlank() && (rawResponse.contains("<tool") || rawResponse.contains("<arg_key") || rawResponse.contains("\"tool\""))) {
@@ -750,10 +748,16 @@ object GeminiClient {
                             return@withContext fallbackParsed
                         }
 
+                        // Last resort fallback: check if rawResponse itself has message or text
+                        val fallbackText = rawResponse.trim()
+                        if (fallbackText.isNotBlank() && !fallbackText.startsWith("{") && !fallbackText.startsWith("[")) {
+                            return@withContext parseToolCallResponse(cleanJsonString(fallbackText), fallbackText)
+                        }
+
                         return@withContext ToolCallResponse(
                             thought = "Empty content from $provider response.",
                             tool = "complete",
-                            arguments = ToolArguments(message = "Empty text content received from $provider model.")
+                            arguments = ToolArguments(message = "Received response without text content from $provider model. Raw response: ${rawResponse.take(250)}")
                         )
                     }
 
