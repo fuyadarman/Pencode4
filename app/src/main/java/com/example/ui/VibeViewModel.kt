@@ -2715,6 +2715,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 if (lastRetryIndex != -1) {
                     val old = currentLogs[lastRetryIndex]
                     currentLogs[lastRetryIndex] = old.copy(
+                        title = "API Connected",
                         status = "success",
                         details = "${old.details} • Connection established successfully"
                     )
@@ -3962,54 +3963,13 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                             }
 
                                             if (k == 1) {
-                                                if (com.example.agent.ReadLoopSafetyManager.isReadTool(tool) && cycles >= 2) {
-                                                    _agentStatus.value = "Generating AI task completion summary..."
-                                                    val autoSummary = com.example.agent.ReadLoopSafetyManager.generateAiCompletionSummary(
-                                                        userPrompt = userPrompt,
-                                                        activeApiKey = activeApiKey,
-                                                        systemInstruction = systemInstruction,
-                                                        history = history,
-                                                        provider = provider,
-                                                        modelId = modelId,
-                                                        baseUrl = baseUrl,
-                                                        useCustom = useCustom,
-                                                        lastTool = tool,
-                                                        path = args?.path ?: args?.targetFile
-                                                    )
-                                                    val loopLog = createAiLog(
-                                                        title = "AI finished task execution",
-                                                        status = "success",
-                                                        details = autoSummary
-                                                    )
-                                                    _aiActionLogs.value = _aiActionLogs.value + loopLog
-                                                    
-                                                    val logsJson = try {
-                                                        val listType = Types.newParameterizedType(List::class.java, AiActionLog::class.java)
-                                                        moshi.adapter<List<AiActionLog>>(listType).toJson(_aiActionLogs.value)
-                                                    } catch (e: Exception) {
-                                                        null
-                                                    }
-
-                                                    val agentMsg = ChatMessageEntity(
-                                                        projectName = project.name,
-                                                        role = "assistant",
-                                                        content = autoSummary,
-                                                        timestamp = System.currentTimeMillis(),
-                                                        aiActionLogsJson = logsJson
-                                                    )
-                                                    repository.insertChatMessage(agentMsg)
-                                                    _chatMessages.value = repository.getChatsForProject(project.name)
-                                                    _agentStatus.value = "Task completed"
-                                                    loopCompleted = true
-                                                    agentMessageSaved = true
-                                                    loopHandled = true
-                                                    break
-                                                } else if (cycles >= 5) {
+                                                if (cycles >= 5) {
                                                     _isInterrupted.value = true
+                                                    _interruptionReason.value = "Aborted execution: AI was stuck repeating the same action '$tool' $cycles times consecutively."
                                                     val loopAbortedLog = createAiLog(
                                                         title = "Infinite Loop Blocked",
                                                         status = "failed",
-                                                        details = "Aborted execution: AI was stuck in an infinite loop, repeating the same task $cycles times consecutively."
+                                                        details = _interruptionReason.value
                                                     )
                                                     _aiActionLogs.value = _aiActionLogs.value + loopAbortedLog
                                                     loopCompleted = true
@@ -4023,7 +3983,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                                         Arguments: ${args?.toString() ?: "None"}
                                                         
                                                         This has resulted in the same outcome!
-                                                        You MUST stop repeating this action. Use 'grep' or 'read_file' to check the file state first before taking another action.
+                                                        You MUST stop repeating this action. Use 'grep' or check the file state first before taking another action.
                                                     """.trimIndent()
                                                     
                                                     history.add(Content(
@@ -4033,62 +3993,21 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                                     
                                                     val warningLog = createAiLog(
                                                         title = "Loop warning injected",
-                                                        status = "failed",
+                                                        status = "thinking",
                                                         details = "Injected warning: AI repeated tool '$tool' $cycles times consecutively."
                                                     )
                                                     _aiActionLogs.value = _aiActionLogs.value + warningLog
                                                     loopHandled = true
                                                 }
                                             } else {
-                                                val isAllReadToolsInSeq = (0 until k).all { idx -> com.example.agent.ReadLoopSafetyManager.isReadTool(recentToolCallsHistory[size - k + idx].tool) }
-                                                if (isAllReadToolsInSeq && cycles >= 2) {
-                                                    _agentStatus.value = "Generating AI task completion summary..."
-                                                    val autoSummary = com.example.agent.ReadLoopSafetyManager.generateAiCompletionSummary(
-                                                        userPrompt = userPrompt,
-                                                        activeApiKey = activeApiKey,
-                                                        systemInstruction = systemInstruction,
-                                                        history = history,
-                                                        provider = provider,
-                                                        modelId = modelId,
-                                                        baseUrl = baseUrl,
-                                                        useCustom = useCustom,
-                                                        lastTool = tool,
-                                                        path = args?.path ?: args?.targetFile
-                                                    )
-                                                    val loopLog = createAiLog(
-                                                        title = "AI finished task execution",
-                                                        status = "success",
-                                                        details = autoSummary
-                                                    )
-                                                    _aiActionLogs.value = _aiActionLogs.value + loopLog
-                                                    
-                                                    val logsJson = try {
-                                                        val listType = Types.newParameterizedType(List::class.java, AiActionLog::class.java)
-                                                        moshi.adapter<List<AiActionLog>>(listType).toJson(_aiActionLogs.value)
-                                                    } catch (e: Exception) {
-                                                        null
-                                                    }
-
-                                                    val agentMsg = ChatMessageEntity(
-                                                        projectName = project.name,
-                                                        role = "assistant",
-                                                        content = autoSummary,
-                                                        timestamp = System.currentTimeMillis(),
-                                                        aiActionLogsJson = logsJson
-                                                    )
-                                                    repository.insertChatMessage(agentMsg)
-                                                    _chatMessages.value = repository.getChatsForProject(project.name)
-                                                    _agentStatus.value = "Task completed"
-                                                    loopCompleted = true
-                                                    agentMessageSaved = true
-                                                    loopHandled = true
-                                                    break
-                                                } else if (cycles >= 3) {
+                                                if (cycles >= 4) {
                                                     _isInterrupted.value = true
+                                                    val seqNames = (0 until k).map { idx -> recentToolCallsHistory[size - k + idx].tool }.joinToString(" -> ")
+                                                    _interruptionReason.value = "Aborted execution: AI was stuck in a $k-step sequence loop ($seqNames) repeated $cycles cycles."
                                                     val loopAbortedLog = createAiLog(
                                                         title = "Sequence Loop Blocked",
                                                         status = "failed",
-                                                        details = "Aborted execution: AI was stuck in a $k-step sequence infinite loop repeated $cycles cycles."
+                                                        details = _interruptionReason.value
                                                     )
                                                     _aiActionLogs.value = _aiActionLogs.value + loopAbortedLog
                                                     loopCompleted = true
@@ -4099,9 +4018,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                                     val warningText = """
                                                         SYSTEM ALERT (SEQUENCE LOOP DETECTED):
                                                         You are repeating a $k-step sequence cycle ($seqNames) for $cycles cycles!
-                                                        This indicates an oscillating infinite loop where previous steps keep failing or reverting.
+                                                        This indicates an oscillating loop where previous steps keep failing or reverting.
                                                         
-                                                        You MUST stop this sequence cycle immediately! Try a completely different approach or use 'grep' to inspect code before proceeding.
+                                                        You MUST stop this sequence cycle immediately! Try a different approach or inspect code before proceeding.
                                                     """.trimIndent()
                                                     
                                                     history.add(Content(
@@ -4111,7 +4030,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                                     
                                                     val warningLog = createAiLog(
                                                         title = "Sequence loop warning injected",
-                                                        status = "failed",
+                                                        status = "thinking",
                                                         details = "Injected warning: $k-step sequence pattern ($seqNames) repeated $cycles times."
                                                     )
                                                     _aiActionLogs.value = _aiActionLogs.value + warningLog
@@ -5347,13 +5266,15 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                             null
                         }
                         
-                        val isSuccessful = loopCompleted && _aiActionLogs.value.none { it.status == "failed" }
-                        val rawContent = if (isSuccessful) {
+                        val isInterruptedTask = _isInterrupted.value
+                        val rawContent = if (!isInterruptedTask) {
                             lastThought?.ifBlank { null } ?: "Task completed successfully!"
                         } else {
-                            val finalMessage = _aiActionLogs.value.lastOrNull { it.status == "failed" }?.details 
-                                ?: "AI task stopped unexpectedly or hit a limit."
-                            "Task interrupted: $finalMessage"
+                            val reason = _interruptionReason.value.ifBlank {
+                                _aiActionLogs.value.lastOrNull { it.status == "failed" && !it.details.isNullOrBlank() }?.let { "${it.title}: ${it.details}" }
+                                    ?: "AI task stopped before completion."
+                            }
+                            "Task interrupted: $reason"
                         }
                         val content = rawContent.replace(Regex("(?i)</?tool_call>"), "")
                             .replace(Regex("(?i)</?function_call>"), "")

@@ -38,6 +38,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -1867,38 +1868,48 @@ fun ChatTabContent(
                         Spacer(modifier = Modifier.height(8.dp))
                     }
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 4.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.weight(1f, fill = false)
                         ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .background(Color(0xFF10B981), CircleShape)
+                            )
                             Text(
-                                text = "Workspace Context Included",
+                                text = "Workspace Context",
                                 color = Color(0xFF64748B),
-                                fontSize = 11.sp
+                                fontSize = 11.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Surface(
                                 onClick = onOpenSelectMcpDialog,
-                                shape = RoundedCornerShape(6.dp),
+                                shape = RoundedCornerShape(4.dp),
                                 color = if (selectedMcpServerIds.isNotEmpty()) Color(0xFF6366F1).copy(alpha = 0.2f) else Color(0xFF1E2130),
                                 border = BorderStroke(1.dp, if (selectedMcpServerIds.isNotEmpty()) Color(0xFF6366F1).copy(alpha = 0.6f) else Color(0xFF30363D))
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(3.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Hub,
                                         contentDescription = "MCP",
                                         tint = if (selectedMcpServerIds.isNotEmpty()) Color(0xFF818CF8) else Color(0xFF94A3B8),
-                                        modifier = Modifier.size(11.dp)
+                                        modifier = Modifier.size(10.dp)
                                     )
                                     Text(
-                                        text = if (selectedMcpServerIds.isNotEmpty()) "MCP (${selectedMcpServerIds.size})" else "Select MCP",
+                                        text = if (selectedMcpServerIds.isNotEmpty()) "MCP (${selectedMcpServerIds.size})" else "MCP",
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = if (selectedMcpServerIds.isNotEmpty()) Color(0xFF818CF8) else Color(0xFF94A3B8)
@@ -1907,9 +1918,11 @@ fun ChatTabContent(
                             }
                         }
                         Text(
-                            text = "Prompt: ${chatInputText.length / 4} tokens",
+                            text = "${chatInputText.length / 4} tokens",
                             color = Color(0xFF64748B),
-                            fontSize = 11.sp
+                            fontSize = 10.sp,
+                            maxLines = 1,
+                            modifier = Modifier.padding(start = 4.dp)
                         )
                     }
 
