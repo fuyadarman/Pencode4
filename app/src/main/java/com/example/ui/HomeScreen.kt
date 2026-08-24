@@ -31,6 +31,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.example.data.ProjectEntity
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -418,81 +419,95 @@ fun EditProjectDialog(
     var name by remember { mutableStateOf(project.name) }
     var description by remember { mutableStateOf(project.description) }
 
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = RoundedCornerShape(24.dp),
-            color = Color(0xFF12131A),
-            border = BorderStroke(1.dp, Color(0xFF222533)),
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
+    ) {
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .wrapContentHeight()
+                .fillMaxSize()
+                .imePadding()
+                .padding(16.dp),
+            contentAlignment = Alignment.Center
         ) {
-            Column(
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = Color(0xFF12131A),
+                border = BorderStroke(1.dp, Color(0xFF222533)),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .widthIn(max = 500.dp)
             ) {
-                Text(
-                    text = "Edit Workspace",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Workspace Name") },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFF6366F1),
-                        unfocusedBorderColor = Color(0xFF222533),
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
-                )
-
-                OutlinedTextField(
-                    value = description,
-                    onValueChange = { description = it },
-                    label = { Text("Short Description") },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFF6366F1),
-                        unfocusedBorderColor = Color(0xFF222533),
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 2,
-                    maxLines = 3
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    TextButton(onClick = onDismiss) {
-                        Text("Cancel", color = Color(0xFF80809B))
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(
-                        onClick = {
-                            if (name.isNotBlank()) {
-                                onUpdate(name.trim(), description.trim())
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF6366F1)
+                    Text(
+                        text = "Edit Workspace",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text("Workspace Name") },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFF6366F1),
+                            unfocusedBorderColor = Color(0xFF222533),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
                         ),
                         shape = RoundedCornerShape(12.dp),
-                        enabled = name.isNotBlank()
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    OutlinedTextField(
+                        value = description,
+                        onValueChange = { description = it },
+                        label = { Text("Short Description") },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFF6366F1),
+                            unfocusedBorderColor = Color(0xFF222533),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 2,
+                        maxLines = 3
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Save Changes", color = Color.White, fontWeight = FontWeight.Bold)
+                        TextButton(onClick = onDismiss) {
+                            Text("Cancel", color = Color(0xFF80809B))
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Button(
+                            onClick = {
+                                if (name.isNotBlank()) {
+                                    onUpdate(name.trim(), description.trim())
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF6366F1)
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = name.isNotBlank()
+                        ) {
+                            Text("Save Changes", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
@@ -527,166 +542,187 @@ fun CreateProjectDialog(
         TemplateOption("vanilla_three", "Vanilla Three.js", "Interactive 3D Globe canvas powered by Three.js for 3D models, games, websites & objects.")
     )
 
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = RoundedCornerShape(24.dp),
-            color = Color(0xFF12131A),
-            border = BorderStroke(1.dp, Color(0xFF222533)),
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
+    ) {
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .wrapContentHeight()
+                .fillMaxSize()
+                .imePadding()
+                .padding(horizontal = 16.dp, vertical = 20.dp),
+            contentAlignment = Alignment.Center
         ) {
-            Column(
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = Color(0xFF12131A),
+                border = BorderStroke(1.dp, Color(0xFF222533)),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 560.dp)
-                    .verticalScroll(rememberScrollState())
-                    .padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .widthIn(max = 520.dp)
+                    .heightIn(max = 600.dp)
             ) {
-                Text(
-                    text = "New Workspace",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-
-                // Name Input
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Workspace Name") },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = Color(0xFF00FFCC),
-                        unfocusedBorderColor = Color(0xFF222533),
-                        focusedLabelColor = Color(0xFF00FFCC),
-                        unfocusedLabelColor = Color(0xFF80809B)
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                // Description Input
-                OutlinedTextField(
-                    value = description,
-                    onValueChange = { description = it },
-                    label = { Text("Short Description") },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = Color(0xFF00FFCC),
-                        unfocusedBorderColor = Color(0xFF222533),
-                        focusedLabelColor = Color(0xFF00FFCC),
-                        unfocusedLabelColor = Color(0xFF80809B)
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Text(
-                    text = "Select Starter Template",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF80809B)
-                )
-
-                // Import from Device Button
-                OutlinedButton(
-                    onClick = { filePickerLauncher.launch("*/*") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF38BDF8)),
-                    border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.4f))
-                ) {
-                    Icon(Icons.Default.UploadFile, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(if (selectedUris.isEmpty()) "Import from Device" else "${selectedUris.size} files selected")
-                }
-
-                if (selectedUris.isNotEmpty()) {
-                    Text(
-                        text = "Importing files will skip template generation for those files.",
-                        fontSize = 11.sp,
-                        color = Color(0xFF8B949E),
-                        style = TextStyle(fontStyle = FontStyle.Italic)
-                    )
-                }
-
-                // Templates Picker List
                 Column(
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp)
                 ) {
-                    templates.forEach { template ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(
-                                    if (selectedTemplate == template.key) Color(0xFF1E2130)
-                                    else Color(0xFF161822)
-                                )
-                                .border(
-                                    1.dp,
-                                    if (selectedTemplate == template.key) Color(0xFF6C5CE7)
-                                    else Color(0xFF222533),
-                                    RoundedCornerShape(12.dp)
-                                )
-                                .clickable { selectedTemplate = template.key }
-                                .padding(12.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                    Text(
+                        text = "New Workspace",
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f, fill = false)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        // Name Input
+                        OutlinedTextField(
+                            value = name,
+                            onValueChange = { name = it },
+                            label = { Text("Workspace Name") },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedBorderColor = Color(0xFF00FFCC),
+                                unfocusedBorderColor = Color(0xFF222533),
+                                focusedLabelColor = Color(0xFF00FFCC),
+                                unfocusedLabelColor = Color(0xFF80809B)
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        // Description Input
+                        OutlinedTextField(
+                            value = description,
+                            onValueChange = { description = it },
+                            label = { Text("Short Description") },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedBorderColor = Color(0xFF00FFCC),
+                                unfocusedBorderColor = Color(0xFF222533),
+                                focusedLabelColor = Color(0xFF00FFCC),
+                                unfocusedLabelColor = Color(0xFF80809B)
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Text(
+                            text = "Select Starter Template",
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF80809B)
+                        )
+
+                        // Import from Device Button
+                        OutlinedButton(
+                            onClick = { filePickerLauncher.launch("*/*") },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF38BDF8)),
+                            border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.4f))
                         ) {
-                            RadioButton(
-                                selected = selectedTemplate == template.key,
-                                onClick = { selectedTemplate = template.key },
-                                colors = RadioButtonDefaults.colors(
-                                    selectedColor = Color(0xFF6C5CE7),
-                                    unselectedColor = Color(0xFF3B4056)
-                                )
+                            Icon(Icons.Default.UploadFile, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(if (selectedUris.isEmpty()) "Import from Device" else "${selectedUris.size} files selected")
+                        }
+
+                        if (selectedUris.isNotEmpty()) {
+                            Text(
+                                text = "Importing files will skip template generation for those files.",
+                                fontSize = 11.sp,
+                                color = Color(0xFF8B949E),
+                                style = TextStyle(fontStyle = FontStyle.Italic)
                             )
-                            TemplateIcon(key = template.key)
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = template.title,
-                                    color = Color.White,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = template.description,
-                                    color = Color(0xFF80809B),
-                                    fontSize = 11.sp
-                                )
+                        }
+
+                        // Templates Picker List
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            templates.forEach { template ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(
+                                            if (selectedTemplate == template.key) Color(0xFF1E2130)
+                                            else Color(0xFF161822)
+                                        )
+                                        .border(
+                                            1.dp,
+                                            if (selectedTemplate == template.key) Color(0xFF6C5CE7)
+                                            else Color(0xFF222533),
+                                            RoundedCornerShape(12.dp)
+                                        )
+                                        .clickable { selectedTemplate = template.key }
+                                        .padding(12.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    RadioButton(
+                                        selected = selectedTemplate == template.key,
+                                        onClick = { selectedTemplate = template.key },
+                                        colors = RadioButtonDefaults.colors(
+                                            selectedColor = Color(0xFF6C5CE7),
+                                            unselectedColor = Color(0xFF3B4056)
+                                        )
+                                    )
+                                    TemplateIcon(key = template.key)
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = template.title,
+                                            color = Color.White,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = template.description,
+                                            color = Color(0xFF80809B),
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
-                }
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    TextButton(onClick = onDismiss) {
-                        Text("Cancel", color = Color(0xFF80809B))
-                    }
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Button(
-                        onClick = {
-                            if (name.isNotBlank()) {
-                                onCreate(name, description, selectedTemplate, selectedUris)
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF6C5CE7),
-                            contentColor = Color.White
-                        ),
-                        shape = RoundedCornerShape(12.dp),
-                        enabled = name.isNotBlank()
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 14.dp),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Launch", fontWeight = FontWeight.Bold)
+                        TextButton(onClick = onDismiss) {
+                            Text("Cancel", color = Color(0xFF80809B))
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Button(
+                            onClick = {
+                                if (name.isNotBlank()) {
+                                    onCreate(name, description, selectedTemplate, selectedUris)
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF6C5CE7),
+                                contentColor = Color.White
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = name.isNotBlank()
+                        ) {
+                            Text("Launch", fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
@@ -712,157 +748,181 @@ fun CloneProjectDialog(
     var token by remember { mutableStateOf("") }
     var branch by remember { mutableStateOf("main") }
 
-    Dialog(onDismissRequest = { if (gitProgress.isEmpty() || gitProgress.contains("complete", ignoreCase = true) || gitProgress.contains("failed", ignoreCase = true)) onDismiss() }) {
-        Card(
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF0D0E15)),
-            border = BorderStroke(1.dp, Color(0xFF1E2230)),
+    Dialog(
+        onDismissRequest = { if (gitProgress.isEmpty() || gitProgress.contains("complete", ignoreCase = true) || gitProgress.contains("failed", ignoreCase = true)) onDismiss() },
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
+    ) {
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
+                .fillMaxSize()
+                .imePadding()
+                .padding(horizontal = 16.dp, vertical = 20.dp),
+            contentAlignment = Alignment.Center
         ) {
-            Column(
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = Color(0xFF0D0E15),
+                border = BorderStroke(1.dp, Color(0xFF1E2230)),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 560.dp)
-                    .verticalScroll(rememberScrollState())
-                    .padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .widthIn(max = 520.dp)
+                    .heightIn(max = 600.dp)
             ) {
-                Text(
-                    text = "Clone GitHub Repository",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp)
+                ) {
+                    Text(
+                        text = "Clone GitHub Repository",
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
 
-                Text(
-                    text = "Specify repository details to clone and overwrite or load files into your localized memory.",
-                    color = Color(0xFF80809B),
-                    fontSize = 12.sp,
-                    lineHeight = 16.sp
-                )
+                    Text(
+                        text = "Specify repository details to clone and overwrite or load files into your localized memory.",
+                        color = Color(0xFF80809B),
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
+                    )
 
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Workspace Name") },
-                    placeholder = { Text("e.g. My Website") },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = Color(0xFF00FFCC),
-                        unfocusedBorderColor = Color(0xFF222533),
-                        focusedLabelColor = Color(0xFF00FFCC),
-                        unfocusedLabelColor = Color(0xFF80809B)
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-
-                OutlinedTextField(
-                    value = repo,
-                    onValueChange = { repo = it },
-                    label = { Text("Repository (owner/repo or URL)") },
-                    placeholder = { Text("e.g. octocat/Hello-World") },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = Color(0xFF00FFCC),
-                        unfocusedBorderColor = Color(0xFF222533),
-                        focusedLabelColor = Color(0xFF00FFCC),
-                        unfocusedLabelColor = Color(0xFF80809B)
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-
-                OutlinedTextField(
-                    value = token,
-                    onValueChange = { token = it },
-                    label = { Text("GitHub Access Token (Optional)") },
-                    placeholder = { Text("ghp_xxxxxxxxxxxx") },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = Color(0xFF00FFCC),
-                        unfocusedBorderColor = Color(0xFF222533),
-                        focusedLabelColor = Color(0xFF00FFCC),
-                        unfocusedLabelColor = Color(0xFF80809B)
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-
-                OutlinedTextField(
-                    value = branch,
-                    onValueChange = { branch = it },
-                    label = { Text("Branch") },
-                    placeholder = { Text("main") },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = Color(0xFF00FFCC),
-                        unfocusedBorderColor = Color(0xFF222533),
-                        focusedLabelColor = Color(0xFF00FFCC),
-                        unfocusedLabelColor = Color(0xFF80809B)
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-
-                if (gitProgress.isNotEmpty()) {
-                    Box(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(Color(0xFF1E293B), RoundedCornerShape(12.dp))
-                            .padding(12.dp),
-                        contentAlignment = Alignment.Center
+                            .weight(1f, fill = false)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            CircularProgressIndicator(
-                                color = Color(0xFF00FFCC),
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp
-                            )
-                            Text(
-                                text = gitProgress,
-                                color = Color.White,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium
-                            )
+                        OutlinedTextField(
+                            value = name,
+                            onValueChange = { name = it },
+                            label = { Text("Workspace Name") },
+                            placeholder = { Text("e.g. My Website") },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedBorderColor = Color(0xFF00FFCC),
+                                unfocusedBorderColor = Color(0xFF222533),
+                                focusedLabelColor = Color(0xFF00FFCC),
+                                unfocusedLabelColor = Color(0xFF80809B)
+                            ),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+
+                        OutlinedTextField(
+                            value = repo,
+                            onValueChange = { repo = it },
+                            label = { Text("Repository (owner/repo or URL)") },
+                            placeholder = { Text("e.g. octocat/Hello-World") },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedBorderColor = Color(0xFF00FFCC),
+                                unfocusedBorderColor = Color(0xFF222533),
+                                focusedLabelColor = Color(0xFF00FFCC),
+                                unfocusedLabelColor = Color(0xFF80809B)
+                            ),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+
+                        OutlinedTextField(
+                            value = token,
+                            onValueChange = { token = it },
+                            label = { Text("GitHub Access Token (Optional)") },
+                            placeholder = { Text("ghp_xxxxxxxxxxxx") },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedBorderColor = Color(0xFF00FFCC),
+                                unfocusedBorderColor = Color(0xFF222533),
+                                focusedLabelColor = Color(0xFF00FFCC),
+                                unfocusedLabelColor = Color(0xFF80809B)
+                            ),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+
+                        OutlinedTextField(
+                            value = branch,
+                            onValueChange = { branch = it },
+                            label = { Text("Branch") },
+                            placeholder = { Text("main") },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedBorderColor = Color(0xFF00FFCC),
+                                unfocusedBorderColor = Color(0xFF222533),
+                                focusedLabelColor = Color(0xFF00FFCC),
+                                unfocusedLabelColor = Color(0xFF80809B)
+                            ),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+
+                        if (gitProgress.isNotEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Color(0xFF1E293B), RoundedCornerShape(12.dp))
+                                    .padding(12.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    CircularProgressIndicator(
+                                        color = Color(0xFF00FFCC),
+                                        modifier = Modifier.size(20.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                    Text(
+                                        text = gitProgress,
+                                        color = Color.White,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
                         }
                     }
-                }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(
-                        onClick = onDismiss,
-                        enabled = gitProgress.isEmpty() || gitProgress.contains("complete", ignoreCase = true) || gitProgress.contains("failed", ignoreCase = true)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 14.dp),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Cancel", color = Color(0xFF80809B))
-                    }
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Button(
-                        onClick = {
-                            if (name.isNotBlank() && repo.isNotBlank()) {
-                                onClone(name, repo, token.ifBlank { null }, branch.ifBlank { "main" })
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF00FFCC),
-                            contentColor = Color.Black
-                        ),
-                        shape = RoundedCornerShape(12.dp),
-                        enabled = name.isNotBlank() && repo.isNotBlank() && (gitProgress.isEmpty() || gitProgress.contains("complete", ignoreCase = true) || gitProgress.contains("failed", ignoreCase = true))
-                    ) {
-                        Text("Clone", fontWeight = FontWeight.Bold)
+                        TextButton(
+                            onClick = onDismiss,
+                            enabled = gitProgress.isEmpty() || gitProgress.contains("complete", ignoreCase = true) || gitProgress.contains("failed", ignoreCase = true)
+                        ) {
+                            Text("Cancel", color = Color(0xFF80809B))
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Button(
+                            onClick = {
+                                if (name.isNotBlank() && repo.isNotBlank()) {
+                                    onClone(name, repo, token.ifBlank { null }, branch.ifBlank { "main" })
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF00FFCC),
+                                contentColor = Color.Black
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = name.isNotBlank() && repo.isNotBlank() && (gitProgress.isEmpty() || gitProgress.contains("complete", ignoreCase = true) || gitProgress.contains("failed", ignoreCase = true))
+                        ) {
+                            Text("Clone", fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
