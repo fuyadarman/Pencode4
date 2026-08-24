@@ -889,8 +889,8 @@ fun WorkspaceBottomNavigation(
         NavigationBar(
             containerColor = Color(0xFF0D1117),
             tonalElevation = 0.dp,
-            windowInsets = WindowInsets.navigationBars,
-            modifier = Modifier.height(64.dp)
+            windowInsets = NavigationBarDefaults.windowInsets,
+            modifier = Modifier.fillMaxWidth()
         ) {
             NavigationBarItem(
                 selected = currentTab == WorkspaceTab.CHAT,
