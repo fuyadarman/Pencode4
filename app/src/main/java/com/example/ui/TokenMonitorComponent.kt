@@ -205,6 +205,33 @@ fun CollapsibleTokenMonitor(
 
                     HorizontalDivider(color = Color(0xFF1E2638), thickness = 0.8.dp)
 
+                    // Jcode Harness Architecture Badge
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color(0xFF6366F1).copy(alpha = 0.12f),
+                        border = BorderStroke(0.8.dp, Color(0xFF818CF8).copy(alpha = 0.4f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Bolt,
+                                contentDescription = "Jcode Harness",
+                                tint = Color(0xFF818CF8),
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Text(
+                                text = "Jcode Runtime: Lean Prompt + Semantic Vector Memory",
+                                color = Color(0xFFC7D2FE),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+
                     // Totals Row
                     Row(
                         modifier = Modifier.fillMaxWidth(),

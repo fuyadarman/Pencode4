@@ -131,7 +131,18 @@ object AgentInstructionEngine {
             return sb.toString()
         }
 
-        // 2. Workspace Context (File Tree & Framework)
+        // 2. Dynamic Semantic Memory (Jcode Vector Cosine Similarity Retrieval)
+        val relevantMemories = com.example.agent.harness.SemanticMemoryStore.retrieveRelevantMemories(
+            query = userPrompt,
+            projectName = project.name,
+            topK = 3,
+            threshold = 0.18f
+        )
+        if (relevantMemories.isNotEmpty()) {
+            sb.append(com.example.agent.harness.SemanticMemoryStore.formatMemoriesForPrompt(relevantMemories))
+        }
+
+        // 3. Workspace Context (File Tree & Framework)
         sb.append(fileTreeSummary).append("\n\n")
         sb.append("FRAMEWORK: ").append(activeTemplateInfo).append("\n\n")
 

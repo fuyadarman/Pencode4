@@ -2563,9 +2563,20 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     )
     val terminalOutput: StateFlow<String> = _terminalOutput.asStateFlow()
 
+    // Jcode Harness Telemetry & Semantic Memory State
+    private val _recalledMemoriesCount = MutableStateFlow<Int>(0)
+    val recalledMemoriesCount: StateFlow<Int> = _recalledMemoriesCount.asStateFlow()
+
+    private val _isMultiAgentActive = MutableStateFlow<Boolean>(false)
+    val isMultiAgentActive: StateFlow<Boolean> = _isMultiAgentActive.asStateFlow()
+
+    private val _activeSubAgents = MutableStateFlow<List<com.example.agent.harness.ParallelSubAgentCoordinator.SubAgentTask>>(emptyList())
+    val activeSubAgents: StateFlow<List<com.example.agent.harness.ParallelSubAgentCoordinator.SubAgentTask>> = _activeSubAgents.asStateFlow()
+
     init {
         val database = VibeDatabase.getDatabase(application)
         repository = VibeRepository(database.vibeDao(), application)
+        com.example.agent.harness.SemanticMemoryStore.init(application)
         loadProjects()
         loadCustomModels()
         loadAgentSkills()
@@ -3631,8 +3642,25 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             } else ""
 
             val fileTreeStr = generateFileTree(_projectFiles.value)
+            val currentPromptText = currentPromptEntity?.content ?: ""
+            val recalled = com.example.agent.harness.SemanticMemoryStore.retrieveRelevantMemories(
+                query = currentPromptText,
+                projectName = project.name,
+                topK = 3,
+                threshold = 0.18f
+            )
+            _recalledMemoriesCount.value = recalled.size
+
+            if (com.example.agent.harness.ParallelSubAgentCoordinator.shouldDecomposeIntoParallelAgents(currentPromptText)) {
+                _isMultiAgentActive.value = true
+                _activeSubAgents.value = com.example.agent.harness.ParallelSubAgentCoordinator.planSubAgentTasks(currentPromptText, project.name)
+            } else {
+                _isMultiAgentActive.value = false
+                _activeSubAgents.value = emptyList()
+            }
+
             val systemInstruction = com.example.agent.AgentInstructionEngine.buildDynamicSystemInstruction(
-                userPrompt = currentPromptEntity?.content ?: "",
+                userPrompt = currentPromptText,
                 project = project,
                 allFiles = _projectFiles.value,
                 fileTreeSummary = fileTreeStr,
@@ -5201,6 +5229,21 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                             totalOutputTokens = finalOut
                         )
                         repository.insertChatMessage(agentMsg)
+
+                        // Ingest completed turn outcome into Jcode Semantic Memory Store
+                        try {
+                            val modifiedPaths = _editHistory.value.takeLast(10).map { (it as EditRecord).path }.distinct()
+                            val promptContent = currentPromptEntity?.content ?: ""
+                            com.example.agent.harness.JcodeHarnessManager.recordTurnMemory(
+                                projectName = project.name,
+                                userPrompt = promptContent,
+                                assistantSummary = agentMsg.content,
+                                filesModified = modifiedPaths,
+                                context = getApplication<Application>()
+                            )
+                        } catch (e: Exception) {
+                            Log.w("VibeViewModel", "Failed recording semantic turn memory: ${e.message}")
+                        }
                     }
                     
                     _isThinking.value = false
