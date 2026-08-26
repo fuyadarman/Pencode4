@@ -41,8 +41,25 @@ object SemanticMemoryStore {
                 loadFromJson(jsonStr)
             }
             isInitialized = true
+            
+            // Seed base core architectural memory if store is fresh
+            seedDefaultSystemMemories()
         } catch (e: Exception) {
             Log.w(TAG, "Failed loading semantic memories: ${e.message}")
+        }
+    }
+
+    private fun seedDefaultSystemMemories() {
+        val defaultProjs = listOf("global", "default", "PenCode")
+        for (p in defaultProjs) {
+            if (memoryByProject[p].isNullOrEmpty()) {
+                recordMemory(
+                    projectName = p,
+                    topic = "Architectural Patterns & Sub-Agent Orchestration",
+                    content = "PenCode supports specialized sub-agent teammates (Frontend, Backend, Testing, Reviewer) and executes precise surgical edits with Compose M3.",
+                    tags = listOf("architecture", "subagents", "compose", "harness")
+                )
+            }
         }
     }
 
@@ -92,20 +109,22 @@ object SemanticMemoryStore {
         query: String,
         projectName: String,
         topK: Int = 4,
-        threshold: Float = 0.18f
+        threshold: Float = 0.12f
     ): List<Pair<MemoryEntry, Float>> {
-        val list = memoryByProject[projectName] ?: return emptyList()
+        val list = mutableListOf<MemoryEntry>()
+        memoryByProject[projectName]?.let { synchronized(it) { list.addAll(it) } }
+        memoryByProject["global"]?.let { synchronized(it) { list.addAll(it) } }
+        memoryByProject["PenCode"]?.let { synchronized(it) { list.addAll(it) } }
+
         if (list.isEmpty() || query.isBlank()) return emptyList()
 
         val queryVector = SemanticVectorEmbedder.embed(query)
         val scoredList = mutableListOf<Pair<MemoryEntry, Float>>()
 
-        synchronized(list) {
-            for (entry in list) {
-                val sim = SemanticVectorEmbedder.cosineSimilarity(queryVector, entry.embedding)
-                if (sim >= threshold) {
-                    scoredList.add(Pair(entry, sim))
-                }
+        for (entry in list.distinctBy { it.id }) {
+            val sim = SemanticVectorEmbedder.cosineSimilarity(queryVector, entry.embedding)
+            if (sim >= threshold) {
+                scoredList.add(Pair(entry, sim))
             }
         }
 

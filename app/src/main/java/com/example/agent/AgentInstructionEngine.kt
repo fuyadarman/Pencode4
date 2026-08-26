@@ -146,26 +146,13 @@ object AgentInstructionEngine {
         sb.append(fileTreeSummary).append("\n\n")
         sb.append("FRAMEWORK: ").append(activeTemplateInfo).append("\n\n")
 
-        // 3. Dynamic Core Directives
+        // 3. Lean Core Directives (Optimized for KV Cache & low token footprint)
         sb.append("=== CORE DIRECTIVES ===\n")
-        sb.append("1. FIDELITY & SCOPE: Execute EXACTLY what user requested. Do not add unsolicited features. Never ignore any requirement. If impossible, explain why.\n")
-        sb.append("2. STEP BUDGET: Step limit: $maxActionSteps. Call 'complete' IMMEDIATELY after finishing with a structured summary.\n")
-        sb.append("3. LANGUAGE: Mirror user language, script, and tone exactly (Bangla, English, Hindi, etc.).\n")
-
-        if (intents.contains(PromptIntent.TASK_CONTINUATION)) {
-            sb.append("4. TASK RESUMPTION & CONTINUATION: You are resuming an interrupted/paused task. Inspect the conversation history and previous actions. Do NOT re-execute already completed file edits or repeat reads. Pick up EXACTLY where execution stopped and finalize the remaining requirements. Call 'complete' when finished.\n")
-        } else if (intents.contains(PromptIntent.CODE_MODIFICATION_OR_FEATURE) || intents.contains(PromptIntent.DEBUG_AND_ERROR_FIXING) || intents.contains(PromptIntent.GENERAL_AGENT_TASK)) {
-            sb.append("4. SURGICAL EDIT MANDATE: Overwriting files >30 lines with 'write_file' is REJECTED. Use 'edit_file', 'multi_edit_file', or 'patch_file'. Read target file ONCE first with 'read_file'/'read_file_range'/'multi_read_file'. Re-reading right after edits is FORBIDDEN.\n")
-            sb.append("5. SEPARATION OF CONCERNS: Put new features, functions, and systems in dedicated new files ('create_file').\n")
-        }
-
-        if (intents.contains(PromptIntent.SEARCH_AND_EXPLORATION) || intents.contains(PromptIntent.CODE_MODIFICATION_OR_FEATURE) || intents.contains(PromptIntent.DEBUG_AND_ERROR_FIXING)) {
-            sb.append("6. EXPLORATION: Use 'scan_dir' with specific folder names (e.g. 'app', 'src'). Scanning root '.' is FORBIDDEN. Search first ('global_search', 'scan_dir') before targeted reads.\n")
-        }
-
-        if (intents.contains(PromptIntent.DATABASE_AND_MCP)) {
-            sb.append("7. DATABASE SCHEMAS & QUERIES: Put DB schemas, entities, and queries in separate dedicated files. List all created/updated DB queries and schemas in final 'complete' summary.\n")
-        }
+        sb.append("1. SCOPE: Execute EXACTLY what user requested without unsolicited bloat. Call 'complete' when done.\n")
+        sb.append("2. STEP BUDGET: Max steps: $maxActionSteps. Use 'ai_think' before editing or debugging.\n")
+        sb.append("3. LANGUAGE: Respond in the exact language & script of user (Bangla/English).\n")
+        sb.append("4. SURGICAL EDITS: Never overwrite files >30 lines. Inspect with 'read_file' first, then use 'edit_file'/'multi_edit_file'.\n")
+        sb.append("5. HARNESS & SUB-AGENTS: PenCode uses Jcode Harness architecture with specialized Sub-Agent teammates (Frontend, Backend, Testing) and Semantic Vector Memory.\n")
 
         // 4. Skills Module (Only if skills are active)
         if (activeSkills.isNotEmpty()) {
