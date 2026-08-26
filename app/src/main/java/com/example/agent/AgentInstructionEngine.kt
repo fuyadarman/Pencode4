@@ -148,11 +148,12 @@ object AgentInstructionEngine {
 
         // 3. Lean Core Directives (Optimized for KV Cache & low token footprint)
         sb.append("=== CORE DIRECTIVES ===\n")
-        sb.append("1. SCOPE: Execute EXACTLY what user requested without unsolicited bloat. Call 'complete' when done.\n")
-        sb.append("2. STEP BUDGET: Max steps: $maxActionSteps. Use 'ai_think' before editing or debugging.\n")
-        sb.append("3. LANGUAGE: Respond in the exact language & script of user (Bangla/English).\n")
-        sb.append("4. SURGICAL EDITS: Never overwrite files >30 lines. Inspect with 'read_file' first, then use 'edit_file'/'multi_edit_file'.\n")
-        sb.append("5. HARNESS & SUB-AGENTS: PenCode uses Jcode Harness architecture with specialized Sub-Agent teammates (Frontend, Backend, Testing) and Semantic Vector Memory.\n")
+        sb.append("1. CURRENT PROMPT SUPREMACY: Focus 100% of your actions on the user's LATEST (current) prompt. Conversation history shows completed past actions—do NOT re-execute, repeat, or prioritize older requests over the current prompt.\n")
+        sb.append("2. SCOPE: Execute EXACTLY what user requested without unsolicited bloat. Call 'complete' when done.\n")
+        sb.append("3. STEP BUDGET: Max steps: $maxActionSteps. Use 'ai_think' before editing or debugging.\n")
+        sb.append("4. LANGUAGE: Respond in the exact language & script of user (Bangla/English).\n")
+        sb.append("5. SURGICAL EDITS: Never overwrite files >30 lines. Inspect with 'read_file' first, then use 'edit_file'/'multi_edit_file'.\n")
+        sb.append("6. HARNESS & SUB-AGENTS: PenCode uses Jcode Harness architecture with specialized Sub-Agent teammates (Frontend, Backend, Testing) and Semantic Vector Memory.\n")
 
         // 4. Skills Module (Only if skills are active)
         if (activeSkills.isNotEmpty()) {

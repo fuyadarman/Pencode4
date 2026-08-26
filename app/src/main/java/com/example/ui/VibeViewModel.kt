@@ -3475,10 +3475,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                     val rawPrevPrompt = lastUserEntity?.content ?: "[Previous Request]"
                     val previousUserPrompt = rawPrevPrompt.replace("""\[IMAGE_BASE64: data:.*?;base64,.*?\]""".toRegex(), "[Attached Image]")
 
-                    // Alternate role: add the actual previous user query
+                    // Alternate role: add the actual previous user query with explicit history tag
                     history.add(Content(
                         role = "user",
-                        parts = listOf(Part(text = previousUserPrompt))
+                        parts = listOf(Part(text = "[PREVIOUS COMPLETED REQUEST]\n$previousUserPrompt"))
                     ))
 
                     // Extract and compact file actions
@@ -3529,6 +3529,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                     }
 
                     val assistantText = buildString {
+                        append("[PREVIOUS OUTCOME - FINISHED]\n")
                         if (actionsStr.isNotEmpty()) {
                             append(actionsStr)
                             append("\n\n")
@@ -3543,7 +3544,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 }
             }
 
-            // Append the current user prompt at the end of history
+            // Append the current user prompt at the end of history with primary focus marker
             val currentPromptEntity = historyEntities.lastOrNull { it.role == "user" }
             if (currentPromptEntity != null) {
                 val textParts = mutableListOf<Part>()
