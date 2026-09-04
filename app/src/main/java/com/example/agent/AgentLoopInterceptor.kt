@@ -34,8 +34,14 @@ object AgentLoopInterceptor {
         recentToolCalls: List<ToolCallItem>,
         currentCall: ToolCallItem,
         currentThought: String?,
-        recentThoughts: List<String>
+        recentThoughts: List<String>,
+        turn: Int = 1
     ): AgentLoopDecision {
+        // Never auto-finish on initial actions or early turns; loops only exist after multiple prior actions
+        if (turn <= 2 || recentToolCalls.size < 3) {
+            return AgentLoopDecision.Continue
+        }
+
         val tool = currentCall.tool.trim().lowercase()
         val isRead = ReadLoopSafetyManager.isReadTool(tool)
         val currentPath = currentCall.arguments?.path?.trim() 
@@ -44,31 +50,37 @@ object AgentLoopInterceptor {
 
         val thought = currentThought?.trim() ?: ""
 
+        // Exclude the current thought if it was already added to the history list
+        val pastThoughts = if (recentThoughts.isNotEmpty() && recentThoughts.last().trim() == thought) {
+            recentThoughts.dropLast(1)
+        } else {
+            recentThoughts
+        }
+
         // 1. Check if model's thought indicates the error is already fixed
         val indicatesFixed = FIXED_INDICATORS.any { thought.contains(it, ignoreCase = true) }
-        if (indicatesFixed && isRead) {
-            // Count how many recent thoughts or steps also indicated fixed
-            val priorFixedCount = recentThoughts.count { prev ->
+        if (indicatesFixed && isRead && pastThoughts.isNotEmpty()) {
+            val priorFixedCount = pastThoughts.count { prev ->
                 FIXED_INDICATORS.any { prev.contains(it, ignoreCase = true) }
             }
-            if (priorFixedCount >= 1) {
+            if (priorFixedCount >= 2) {
                 return AgentLoopDecision.AutoFinish(
                     summary = "Task completed: $thought",
-                    reason = "AI confirmed the fix is already complete and verified. Auto-completing to prevent verification loop."
+                    reason = "AI confirmed the fix is already complete and verified across multiple steps. Auto-completing to prevent verification loop."
                 )
             }
         }
 
-        // 2. Check repetitive thought loop (almost identical thought generated across turns)
-        if (thought.length > 20) {
-            val identicalThoughtCount = recentThoughts.count { prev ->
+        // 2. Check repetitive thought loop (identical thought repeated multiple times in prior turns)
+        if (thought.length > 20 && pastThoughts.size >= 2) {
+            val identicalThoughtCount = pastThoughts.count { prev ->
                 prev.trim().equals(thought, ignoreCase = true) ||
                 (thought.length > 40 && prev.contains(thought.take(40), ignoreCase = true))
             }
-            if (identicalThoughtCount >= 1 && isRead) {
+            if (identicalThoughtCount >= 2 && isRead) {
                 return AgentLoopDecision.AutoFinish(
                     summary = if (thought.isNotBlank()) thought else "Task completed after code verification.",
-                    reason = "AI repeated identical reasoning while reading files. Finalizing task."
+                    reason = "AI repeated identical reasoning multiple times while reading files. Finalizing task."
                 )
             }
         }

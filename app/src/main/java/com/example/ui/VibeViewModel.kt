@@ -3831,7 +3831,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 _aiActionLogs.value = currentLogs + newThoughtLog
                             }
                         }
-                        recentThoughtsHistory.add(thoughtText)
                     }
 
                     if (stepResponse != null) {
@@ -3873,7 +3872,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     recentToolCalls = recentToolCallsHistory,
                                     currentCall = call,
                                     currentThought = thoughtText,
-                                    recentThoughts = recentThoughtsHistory
+                                    recentThoughts = recentThoughtsHistory,
+                                    turn = turn
                                 )
                                 when (loopDecision) {
                                     is com.example.agent.AgentLoopDecision.AutoFinish -> {
@@ -5180,6 +5180,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                     loopCompleted = true
                 }
                 
+                if (!lastThought.isNullOrBlank()) {
+                    recentThoughtsHistory.add(lastThought!!)
+                }
                 turn++
                 // Reload project files list inside the loop so changes update dynamically
                 loadProjectDetails(project.name)
