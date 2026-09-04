@@ -55,6 +55,8 @@ import android.graphics.BitmapFactory
 import androidx.compose.ui.graphics.asImageBitmap
 import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import com.example.ui.agent.AgentActivityFeed
+import com.example.ui.agent.ModernAgentChatBar
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
@@ -481,7 +483,10 @@ fun WorkspaceScreen(
                                 mcpServers = mcpServers,
                                 selectedMcpServerIds = selectedMcpServerIds,
                                 onToggleSelectMcpServer = onToggleSelectMcpServer,
-                                onOpenSelectMcpDialog = { showSelectMcpDialog = true }
+                                onOpenSelectMcpDialog = { showSelectMcpDialog = true },
+                                customModels = customModels,
+                                selectedModelId = selectedModelId,
+                                onSelectCustomModel = onSelectCustomModel
                             )
                         }
                         WorkspaceTab.CODE -> {
@@ -1016,7 +1021,10 @@ fun ChatTabContent(
     mcpServers: List<com.example.data.McpServer> = emptyList(),
     selectedMcpServerIds: Set<String> = emptySet(),
     onToggleSelectMcpServer: (String) -> Unit = {},
-    onOpenSelectMcpDialog: () -> Unit = {}
+    onOpenSelectMcpDialog: () -> Unit = {},
+    customModels: List<CustomModelConfig> = emptyList(),
+    selectedModelId: String = "",
+    onSelectCustomModel: (String) -> Unit = {}
 ) {
     var taggedFiles by remember { mutableStateOf<List<ProjectFileEntity>>(emptyList()) }
     var taggedSkills by remember { mutableStateOf<List<com.example.ui.AgentSkill>>(emptyList()) }
@@ -1224,14 +1232,9 @@ fun ChatTabContent(
 
                 if (isThinking || (aiActionLogs.isNotEmpty() && (messages.isEmpty() || messages.lastOrNull()?.role == "user"))) {
                     item {
-                        WorkspaceOperationsTimeline(
+                        AgentActivityFeed(
                             displayLogs = aiActionLogs.filter { log ->
-                                val title = log.title
-                                val isFormulatingLogic = title.contains("formulating logic", ignoreCase = true)
-                                val hasForbiddenThinkingKeywords = title.contains("thought process", ignoreCase = true) || 
-                                                                   title.contains("thinking", ignoreCase = true) || 
-                                                                   (title.contains("formulating", ignoreCase = true) && !isFormulatingLogic)
-                                !title.contains("finished task execution", ignoreCase = true) && (isFormulatingLogic || !hasForbiddenThinkingKeywords)
+                                !log.title.contains("finished task execution", ignoreCase = true)
                             },
                             isThinking = isThinking
                         )
@@ -2089,137 +2092,48 @@ fun ChatTabContent(
                         }
                     }
 
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = Color(0xFF161B22),
-                        border = BorderStroke(1.dp, Color(0xFF30363D)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(10.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            OutlinedTextField(
-                                value = chatInputText,
-                                onValueChange = { onUpdateChatInputText(it) },
-                                placeholder = { Text("Describe your request (@ files, / skills)...", color = Color(0xFF8D96A0), fontSize = 13.sp) },
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = Color(0xFFE6EDF3),
-                                    unfocusedTextColor = Color(0xFFE6EDF3),
-                                    focusedBorderColor = Color.Transparent,
-                                    unfocusedBorderColor = Color.Transparent,
-                                    focusedContainerColor = Color.Transparent,
-                                    unfocusedContainerColor = Color.Transparent
-                                ),
-                                modifier = Modifier.fillMaxWidth(),
-                                minLines = 1,
-                                maxLines = 5
-                            )
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    IconButton(
-                                        onClick = { filePickerLauncher.launch("*/*") },
-                                        modifier = Modifier.size(36.dp)
-                                    ) {
-                                        Icon(Icons.Default.AttachFile, contentDescription = "Attach", tint = Color(0xFF8D96A0), modifier = Modifier.size(18.dp))
-                                    }
-                                    IconButton(
-                                        onClick = { onOpenSelectMcpDialog() },
-                                        modifier = Modifier.size(36.dp)
-                                    ) {
-                                        Icon(
-                                            Icons.Default.Hub,
-                                            contentDescription = "Select MCP",
-                                            tint = if (selectedMcpServerIds.isNotEmpty()) Color(0xFF818CF8) else Color(0xFF8D96A0),
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-                                    IconButton(
-                                        onClick = { onOpenSettings() },
-                                        modifier = Modifier.size(36.dp)
-                                    ) {
-                                        Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color(0xFF8D96A0), modifier = Modifier.size(18.dp))
-                                    }
-                                }
-
-                                val canSend = (chatInputText.isNotBlank() || attachedFiles.isNotEmpty() || taggedFiles.isNotEmpty() || taggedSkills.isNotEmpty())
-                                IconButton(
-                                    onClick = {
-                                        if (isThinking) {
-                                            onStopAI()
-                                        } else if (canSend) {
-                                            val fileAttachments = taggedFiles.map { file ->
-                                                com.example.ui.AttachedFile(
-                                                    uri = android.net.Uri.EMPTY,
-                                                    name = file.path,
-                                                    mimeType = "text/plain",
-                                                    isImage = false,
-                                                    contentAsText = "File Context (@${file.path}):\n${file.content}"
-                                                )
-                                            }
-                                            val skillAttachments = taggedSkills.map { skill ->
-                                                com.example.ui.AttachedFile(
-                                                    uri = android.net.Uri.EMPTY,
-                                                    name = "Skill: ${skill.name}",
-                                                    mimeType = "text/plain",
-                                                    isImage = false,
-                                                    contentAsText = "[ACTIVE SKILL CONTEXT: ${skill.name}]\nDescription: ${skill.description}\nInstructions:\n${skill.skillPrompt}"
-                                                )
-                                            }
-                                            val combinedAttachments = attachedFiles + fileAttachments + skillAttachments
-                                            onSendPrompt(chatInputText, combinedAttachments)
-                                            onUpdateChatInputText("")
-                                            onClearAttachedFiles()
-                                            taggedFiles = emptyList()
-                                            taggedSkills = emptyList()
-                                        }
-                                    },
-                                    enabled = canSend || isThinking,
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .background(
-                                            if (isThinking) Color(0xFFEF4444)
-                                            else if (canSend) Color(0xFF238636)
-                                            else Color(0xFF21262D),
-                                            RoundedCornerShape(8.dp)
-                                        )
-                                ) {
-                                    if (isThinking) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            CircularProgressIndicator(
-                                                modifier = Modifier.size(18.dp),
-                                                strokeWidth = 2.dp,
-                                                color = Color.White
-                                            )
-                                            Icon(
-                                                Icons.Default.Stop,
-                                                contentDescription = "Stop",
-                                                tint = Color.White,
-                                                modifier = Modifier.size(12.dp)
-                                            )
-                                        }
-                                    } else {
-                                        Icon(
-                                            Icons.AutoMirrored.Filled.Send,
-                                            contentDescription = "Send",
-                                            tint = if (canSend) Color.White else Color(0xFF6E7681),
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
-                                }
+                    ModernAgentChatBar(
+                        chatInputText = chatInputText,
+                        onUpdateChatInputText = onUpdateChatInputText,
+                        isThinking = isThinking,
+                        onSend = {
+                            val fileAttachments = taggedFiles.map { file ->
+                                com.example.ui.AttachedFile(
+                                    uri = android.net.Uri.EMPTY,
+                                    name = file.path,
+                                    mimeType = "text/plain",
+                                    isImage = false,
+                                    contentAsText = "File Context (@${file.path}):\n${file.content}"
+                                )
                             }
-                        }
-                    }
+                            val skillAttachments = taggedSkills.map { skill ->
+                                com.example.ui.AttachedFile(
+                                    uri = android.net.Uri.EMPTY,
+                                    name = "Skill: ${skill.name}",
+                                    mimeType = "text/plain",
+                                    isImage = false,
+                                    contentAsText = "[ACTIVE SKILL CONTEXT: ${skill.name}]\nDescription: ${skill.description}\nInstructions:\n${skill.skillPrompt}"
+                                )
+                            }
+                            val combinedAttachments = attachedFiles + fileAttachments + skillAttachments
+                            onSendPrompt(chatInputText, combinedAttachments)
+                            onUpdateChatInputText("")
+                            onClearAttachedFiles()
+                            taggedFiles = emptyList()
+                            taggedSkills = emptyList()
+                        },
+                        onStopAI = onStopAI,
+                        onAttachClick = { filePickerLauncher.launch("*/*") },
+                        customModels = customModels,
+                        selectedModelId = selectedModelId,
+                        onSelectCustomModel = onSelectCustomModel,
+                        attachedFiles = attachedFiles,
+                        onRemoveAttachedFile = onRemoveAttachedFile,
+                        taggedFiles = taggedFiles,
+                        onRemoveTaggedFile = { taggedFiles = taggedFiles - it },
+                        taggedSkills = taggedSkills,
+                        onRemoveTaggedSkill = { taggedSkills = taggedSkills - it }
+                    )
                 }
             }
         }
@@ -2523,15 +2437,10 @@ fun ChatBubble(
         ) {
             if (!isUser && logs.isNotEmpty()) {
                 val filteredLogs = logs.filter { log ->
-                    val title = log.title
-                    val isFormulatingLogic = title.contains("formulating logic", ignoreCase = true)
-                    val hasForbiddenThinkingKeywords = title.contains("thought process", ignoreCase = true) || 
-                                                       title.contains("thinking", ignoreCase = true) || 
-                                                       (title.contains("formulating", ignoreCase = true) && !isFormulatingLogic)
-                    !title.contains("finished task execution", ignoreCase = true) && (isFormulatingLogic || !hasForbiddenThinkingKeywords)
+                    !log.title.contains("finished task execution", ignoreCase = true)
                 }
                 if (filteredLogs.isNotEmpty()) {
-                    WorkspaceOperationsTimeline(
+                    AgentActivityFeed(
                         displayLogs = filteredLogs,
                         isThinking = false
                     )
