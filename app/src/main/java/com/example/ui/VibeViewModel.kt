@@ -3795,27 +3795,30 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                     val stepMsg = stepResponse?.arguments?.message ?: stepResponse?.arguments?.content
                     val addedOut = maxOf(1, thought.length / 4)
                     _liveTotalOutputTokens.value += addedOut
-                    if (thought.isNotBlank()) {
-                        lastThought = thought
+                    val thoughtText = if (thought.isNotBlank()) thought.trim() else stepMsg?.trim() ?: ""
+                    if (thoughtText.isNotBlank()) {
+                        lastThought = thoughtText
                         val currentLogs = _aiActionLogs.value.toMutableList()
-                        val logicIdx = currentLogs.indexOfFirst { it.title == "AI formulating logic" }
-                        if (logicIdx != -1) {
-                            currentLogs[logicIdx] = currentLogs[logicIdx].copy(
-                                status = "success",
-                                details = thought.trim()
-                            )
-                            _aiActionLogs.value = currentLogs
+                        val placeholderIdx = currentLogs.indexOfFirst {
+                            it.title == "AI formulating logic" && it.details?.contains("Analyzing user prompt") == true
                         }
-                    } else if (!stepMsg.isNullOrBlank()) {
-                        lastThought = stepMsg
-                        val currentLogs = _aiActionLogs.value.toMutableList()
-                        val logicIdx = currentLogs.indexOfFirst { it.title == "AI formulating logic" }
-                        if (logicIdx != -1) {
-                            currentLogs[logicIdx] = currentLogs[logicIdx].copy(
+                        if (placeholderIdx != -1) {
+                            currentLogs[placeholderIdx] = currentLogs[placeholderIdx].copy(
                                 status = "success",
-                                details = stepMsg.trim()
+                                details = thoughtText
                             )
                             _aiActionLogs.value = currentLogs
+                        } else {
+                            val lastLog = currentLogs.lastOrNull()
+                            if (lastLog?.details != thoughtText) {
+                                val stepTitle = if (turn > 1) "AI formulating logic (Step $turn)" else "AI formulating logic"
+                                val newThoughtLog = createAiLog(
+                                    title = stepTitle,
+                                    status = "success",
+                                    details = thoughtText
+                                )
+                                _aiActionLogs.value = currentLogs + newThoughtLog
+                            }
                         }
                     }
 

@@ -129,13 +129,31 @@ private fun AgentFeedItemRow(
             title.contains("cache", ignoreCase = true)
 
     if (isThought) {
-        // Interleaved thought block rendered seamlessly as elegant markdown/text
+        // Interleaved thought block rendered seamlessly with subtle step title
         val thoughtContent = log.details?.takeIf { it.isNotBlank() } ?: title
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 4.dp)
         ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                modifier = Modifier.padding(bottom = 2.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Psychology,
+                    contentDescription = null,
+                    tint = Color(0xFF58A6FF),
+                    modifier = Modifier.size(13.dp)
+                )
+                Text(
+                    text = log.title,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF8B949E)
+                )
+            }
             Text(
                 text = thoughtContent,
                 fontSize = 13.sp,

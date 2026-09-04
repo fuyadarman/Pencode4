@@ -1894,31 +1894,6 @@ fun ChatTabContent(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            Surface(
-                                onClick = onOpenSelectMcpDialog,
-                                shape = RoundedCornerShape(4.dp),
-                                color = if (selectedMcpServerIds.isNotEmpty()) Color(0xFF6366F1).copy(alpha = 0.2f) else Color(0xFF1E2130),
-                                border = BorderStroke(1.dp, if (selectedMcpServerIds.isNotEmpty()) Color(0xFF6366F1).copy(alpha = 0.6f) else Color(0xFF30363D))
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(3.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Hub,
-                                        contentDescription = "MCP",
-                                        tint = if (selectedMcpServerIds.isNotEmpty()) Color(0xFF818CF8) else Color(0xFF94A3B8),
-                                        modifier = Modifier.size(10.dp)
-                                    )
-                                    Text(
-                                        text = if (selectedMcpServerIds.isNotEmpty()) "MCP (${selectedMcpServerIds.size})" else "MCP",
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = if (selectedMcpServerIds.isNotEmpty()) Color(0xFF818CF8) else Color(0xFF94A3B8)
-                                    )
-                                }
-                            }
                         }
                         Text(
                             text = "${chatInputText.length / 4} tokens",
@@ -2124,9 +2099,8 @@ fun ChatTabContent(
                         },
                         onStopAI = onStopAI,
                         onAttachClick = { filePickerLauncher.launch("*/*") },
-                        customModels = customModels,
-                        selectedModelId = selectedModelId,
-                        onSelectCustomModel = onSelectCustomModel,
+                        selectedMcpServerIds = selectedMcpServerIds,
+                        onOpenSelectMcpDialog = onOpenSelectMcpDialog,
                         attachedFiles = attachedFiles,
                         onRemoveAttachedFile = onRemoveAttachedFile,
                         taggedFiles = taggedFiles,

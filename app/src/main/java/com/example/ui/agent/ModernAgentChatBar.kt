@@ -44,9 +44,8 @@ fun ModernAgentChatBar(
     onSend: () -> Unit,
     onStopAI: () -> Unit,
     onAttachClick: () -> Unit,
-    customModels: List<CustomModelConfig>,
-    selectedModelId: String,
-    onSelectCustomModel: (String) -> Unit,
+    selectedMcpServerIds: Set<String> = emptySet(),
+    onOpenSelectMcpDialog: () -> Unit = {},
     attachedFiles: List<AttachedFile> = emptyList(),
     onRemoveAttachedFile: (AttachedFile) -> Unit = {},
     taggedFiles: List<ProjectFileEntity> = emptyList(),
@@ -55,29 +54,20 @@ fun ModernAgentChatBar(
     onRemoveTaggedSkill: (AgentSkill) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    var isApproveForMeActive by remember { mutableStateOf(true) }
-    var showModelMenu by remember { mutableStateOf(false) }
-
-    val activeModelName = remember(selectedModelId, customModels) {
-        val found = customModels.find { it.id == selectedModelId }
-        found?.let { if (it.alias.isNotBlank()) it.alias else it.modelId } ?: "Daybreak Blue Ultra"
-    }
-
     val canSend = chatInputText.isNotBlank() || attachedFiles.isNotEmpty() || taggedFiles.isNotEmpty() || taggedSkills.isNotEmpty()
 
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-        shape = RoundedCornerShape(22.dp),
-        color = Color(0xFF1E1E22),
-        border = BorderStroke(1.dp, Color(0xFF2E2E34)),
-        shadowElevation = 4.dp
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = Color(0xFF161B22),
+        border = BorderStroke(1.dp, Color(0xFF30363D))
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 10.dp)
+                .padding(horizontal = 10.dp, vertical = 8.dp)
         ) {
             // Attached / Tagged items chips row (if any)
             if (attachedFiles.isNotEmpty() || taggedFiles.isNotEmpty() || taggedSkills.isNotEmpty()) {
@@ -121,16 +111,14 @@ fun ModernAgentChatBar(
                 onValueChange = onUpdateChatInputText,
                 placeholder = {
                     Text(
-                        text = "Work with PenCode...",
+                        text = "Describe your request (@ files, / skills)...",
                         color = Color(0xFF7D8590),
-                        fontSize = 14.sp,
-                        fontFamily = FontFamily.SansSerif
+                        fontSize = 13.sp
                     )
                 },
                 textStyle = TextStyle(
                     color = Color(0xFFE6EDF3),
-                    fontSize = 14.sp,
-                    fontFamily = FontFamily.SansSerif
+                    fontSize = 13.sp
                 ),
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
@@ -148,7 +136,7 @@ fun ModernAgentChatBar(
                 maxLines = 5
             )
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             // Bottom row: Actions & Controls
             Row(
@@ -156,184 +144,91 @@ fun ModernAgentChatBar(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Left controls: [+] and [Approve for me] pill
+                // Left controls: Attach button and MCP Selection button
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // + button
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .clickable(onClick = onAttachClick),
-                        contentAlignment = Alignment.Center
+                    IconButton(
+                        onClick = onAttachClick,
+                        modifier = Modifier.size(32.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = "Attach",
-                            tint = Color(0xFF8B949E),
-                            modifier = Modifier.size(20.dp)
+                            imageVector = Icons.Default.AttachFile,
+                            contentDescription = "Attach File",
+                            tint = Color(0xFF8D96A0),
+                            modifier = Modifier.size(18.dp)
                         )
                     }
 
-                    // "Approve for me" toggle pill
+                    // MCP Selection Button inside chatbar
                     Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = if (isApproveForMeActive) Color(0xFF26292E) else Color(0xFF1E1E22),
+                        shape = RoundedCornerShape(6.dp),
+                        color = if (selectedMcpServerIds.isNotEmpty()) Color(0xFF6366F1).copy(alpha = 0.2f) else Color(0xFF21262D),
                         border = BorderStroke(
                             1.dp,
-                            if (isApproveForMeActive) Color(0xFF3B414B) else Color(0xFF30363D)
+                            if (selectedMcpServerIds.isNotEmpty()) Color(0xFF6366F1).copy(alpha = 0.6f) else Color(0xFF30363D)
                         ),
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(16.dp))
-                            .clickable { isApproveForMeActive = !isApproveForMeActive }
+                        modifier = Modifier.clickable(onClick = onOpenSelectMcpDialog)
                     ) {
                         Row(
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp),
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Icon(
-                                imageVector = if (isApproveForMeActive) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
-                                contentDescription = null,
-                                tint = if (isApproveForMeActive) Color(0xFF7EE787) else Color(0xFF8B949E),
+                                imageVector = Icons.Default.Hub,
+                                contentDescription = "MCP",
+                                tint = if (selectedMcpServerIds.isNotEmpty()) Color(0xFF818CF8) else Color(0xFF8D96A0),
                                 modifier = Modifier.size(13.dp)
                             )
                             Text(
-                                text = "Approve for me",
-                                fontSize = 12.sp,
-                                fontFamily = FontFamily.SansSerif,
-                                color = if (isApproveForMeActive) Color(0xFFE6EDF3) else Color(0xFF8B949E)
+                                text = if (selectedMcpServerIds.isNotEmpty()) "MCP (${selectedMcpServerIds.size})" else "MCP",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (selectedMcpServerIds.isNotEmpty()) Color(0xFF818CF8) else Color(0xFF8D96A0)
                             )
                         }
                     }
                 }
 
-                // Right controls: Model Selector Pill, Mic Icon, Action Button (Stop/Send)
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // Model Selector Dropdown Pill
-                    Box {
-                        Surface(
-                            shape = RoundedCornerShape(14.dp),
-                            color = Color(0xFF21262D),
-                            border = BorderStroke(1.dp, Color(0xFF30363D)),
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(14.dp))
-                                .clickable { showModelMenu = true }
+                // Right action: Stop or Send Button
+                if (isThinking) {
+                    Button(
+                        onClick = onStopAI,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(6.dp)
-                                        .background(Color(0xFF58A6FF), CircleShape)
-                                )
-                                Text(
-                                    text = activeModelName.take(16) + if (activeModelName.length > 16) ".." else "",
-                                    fontSize = 11.sp,
-                                    fontFamily = FontFamily.SansSerif,
-                                    color = Color(0xFFC9D1D9),
-                                    maxLines = 1
-                                )
-                                Icon(
-                                    imageVector = Icons.Default.KeyboardArrowDown,
-                                    contentDescription = "Select Model",
-                                    tint = Color(0xFF8B949E),
-                                    modifier = Modifier.size(13.dp)
-                                )
-                            }
-                        }
-
-                        DropdownMenu(
-                            expanded = showModelMenu,
-                            onDismissRequest = { showModelMenu = false },
-                            modifier = Modifier.background(Color(0xFF1E1E22))
-                        ) {
-                            if (customModels.isEmpty()) {
-                                DropdownMenuItem(
-                                    text = { Text("Daybreak Blue Ultra", color = Color.White, fontSize = 12.sp) },
-                                    onClick = { showModelMenu = false }
-                                )
-                            } else {
-                                customModels.forEach { model ->
-                                    DropdownMenuItem(
-                                        text = {
-                                            Text(
-                                                text = if (model.alias.isNotBlank()) model.alias else model.modelId,
-                                                color = if (model.id == selectedModelId) Color(0xFF58A6FF) else Color.White,
-                                                fontSize = 12.sp
-                                            )
-                                        },
-                                        onClick = {
-                                            onSelectCustomModel(model.id)
-                                            showModelMenu = false
-                                        }
-                                    )
-                                }
-                            }
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(12.dp),
+                                color = Color.White,
+                                strokeWidth = 2.dp
+                            )
+                            Text("Stop", fontSize = 12.sp, color = Color.White)
                         }
                     }
-
-                    // Voice / Mic icon button
-                    Box(
+                } else {
+                    IconButton(
+                        onClick = onSend,
+                        enabled = canSend,
                         modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .clickable { /* mic input trigger */ },
-                        contentAlignment = Alignment.Center
+                            .size(34.dp)
+                            .background(
+                                if (canSend) Color(0xFF238636) else Color(0xFF21262D),
+                                RoundedCornerShape(8.dp)
+                            )
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Mic,
-                            contentDescription = "Voice Input",
-                            tint = Color(0xFF8B949E),
-                            modifier = Modifier.size(18.dp)
+                            imageVector = Icons.AutoMirrored.Filled.Send,
+                            contentDescription = "Send",
+                            tint = if (canSend) Color.White else Color(0xFF6E7681),
+                            modifier = Modifier.size(16.dp)
                         )
-                    }
-
-                    // Action Button (Stop or Send)
-                    if (isThinking) {
-                        // White circle with dark stop square (directly matching screenshot!)
-                        Box(
-                            modifier = Modifier
-                                .size(34.dp)
-                                .background(Color.White, CircleShape)
-                                .clip(CircleShape)
-                                .clickable(onClick = onStopAI),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(12.dp)
-                                    .background(Color(0xFF121417), RoundedCornerShape(2.dp))
-                            )
-                        }
-                    } else {
-                        // Send Circle button
-                        Box(
-                            modifier = Modifier
-                                .size(34.dp)
-                                .background(
-                                    if (canSend) Color.White else Color(0xFF28282E),
-                                    CircleShape
-                                )
-                                .clip(CircleShape)
-                                .clickable(enabled = canSend, onClick = onSend),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.Send,
-                                contentDescription = "Send",
-                                tint = if (canSend) Color(0xFF121417) else Color(0xFF6E7681),
-                                modifier = Modifier.size(15.dp)
-                            )
-                        }
                     }
                 }
             }
