@@ -3355,15 +3355,17 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 pathA == pathB && contentA == contentB
             }
             "read_file", "view_file", "read_file_range", "multi_read_file", "multi_read" -> {
-                val pathA = argsA.path?.trim() ?: argsA.targetFile?.trim() ?: ""
-                val pathB = argsB.path?.trim() ?: argsB.targetFile?.trim() ?: ""
+                val pathA = (argsA.path?.trim() ?: argsA.targetFile?.trim() ?: "").lowercase()
+                val pathB = (argsB.path?.trim() ?: argsB.targetFile?.trim() ?: "").lowercase()
                 val startA = argsA.startLine
                 val startB = argsB.startLine
                 val endA = argsA.endLine
                 val endB = argsB.endLine
                 val rangeA = argsA.lineRange?.trim() ?: ""
                 val rangeB = argsB.lineRange?.trim() ?: ""
-                pathA == pathB && startA == startB && endA == endB && rangeA == rangeB
+                // Exact line match OR reading the same file repeatedly
+                (pathA.isNotEmpty() && pathA == pathB && startA == startB && endA == endB && rangeA == rangeB) ||
+                (pathA.isNotEmpty() && pathA == pathB)
             }
             else -> {
                 argsA == argsB
@@ -3740,6 +3742,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             var lastThought: String? = null
             var consecutiveThinkOnlyCount = 0
             val recentToolCallsHistory = mutableListOf<com.example.api.ToolCallItem>()
+            val recentThoughtsHistory = mutableListOf<String>()
             val readFilesThisSession = mutableSetOf<String>()
 
             // Initial automatic thinking log triggered ONCE when processing user prompt starts
@@ -3796,14 +3799,23 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                     val addedOut = maxOf(1, thought.length / 4)
                     _liveTotalOutputTokens.value += addedOut
                     val thoughtText = if (thought.isNotBlank()) thought.trim() else stepMsg?.trim() ?: ""
+                    val toolCalls = com.example.agent.AgentBatchExecutionManager.resolveToolCalls(
+                        stepResponse?.tools,
+                        stepResponse?.tool,
+                        stepResponse?.arguments
+                    )
+                    val plannedActionCount = toolCalls.count { it.tool != "complete" && it.tool != "ai_think" && it.tool != "ai_response" }
+
                     if (thoughtText.isNotBlank()) {
                         lastThought = thoughtText
                         val currentLogs = _aiActionLogs.value.toMutableList()
+                        val stepTitle = com.example.agent.AgentBatchExecutionManager.formatFormulatingLogicTitle(turn, plannedActionCount)
                         val placeholderIdx = currentLogs.indexOfFirst {
-                            it.title == "AI formulating logic" && it.details?.contains("Analyzing user prompt") == true
+                            it.title.startsWith("AI formulating logic") && it.details?.contains("Analyzing user prompt") == true
                         }
                         if (placeholderIdx != -1) {
                             currentLogs[placeholderIdx] = currentLogs[placeholderIdx].copy(
+                                title = stepTitle,
                                 status = "success",
                                 details = thoughtText
                             )
@@ -3811,7 +3823,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                         } else {
                             val lastLog = currentLogs.lastOrNull()
                             if (lastLog?.details != thoughtText) {
-                                val stepTitle = if (turn > 1) "AI formulating logic (Step $turn)" else "AI formulating logic"
                                 val newThoughtLog = createAiLog(
                                     title = stepTitle,
                                     status = "success",
@@ -3820,16 +3831,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 _aiActionLogs.value = currentLogs + newThoughtLog
                             }
                         }
+                        recentThoughtsHistory.add(thoughtText)
                     }
 
                     if (stepResponse != null) {
-                        val toolCalls = mutableListOf<com.example.api.ToolCallItem>()
-                        
-                        if (stepResponse.tools != null && stepResponse.tools.isNotEmpty()) {
-                            toolCalls.addAll(stepResponse.tools)
-                        } else if (stepResponse.tool != null && stepResponse.tool.isNotBlank()) {
-                            toolCalls.add(com.example.api.ToolCallItem(stepResponse.tool, stepResponse.arguments))
-                        }
 
                         Log.d("VibeViewModel", "Turn $turn - Thought: $thought, Calls: ${toolCalls.size}")
 
@@ -3863,6 +3868,41 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                             val args = call.arguments
                             
                             if (tool != "complete" && tool != "ai_think" && tool != "ai_response") {
+                                // AgentLoopInterceptor: Check for read loops and "already fixed" thought traps
+                                val loopDecision = com.example.agent.AgentLoopInterceptor.evaluate(
+                                    recentToolCalls = recentToolCallsHistory,
+                                    currentCall = call,
+                                    currentThought = thoughtText,
+                                    recentThoughts = recentThoughtsHistory
+                                )
+                                when (loopDecision) {
+                                    is com.example.agent.AgentLoopDecision.AutoFinish -> {
+                                        val finishLog = createAiLog(
+                                            title = "AI task auto-finalized",
+                                            status = "success",
+                                            details = loopDecision.summary
+                                        )
+                                        _aiActionLogs.value = _aiActionLogs.value + finishLog
+                                        loopCompleted = true
+                                        break
+                                    }
+                                    is com.example.agent.AgentLoopDecision.InjectWarning -> {
+                                        history.add(Content(
+                                            role = "user",
+                                            parts = listOf(Part(text = loopDecision.warning))
+                                        ))
+                                        val warningLog = createAiLog(
+                                            title = loopDecision.logTitle,
+                                            status = "thinking",
+                                            details = "Injected directive: stopped repetitive re-reading on file."
+                                        )
+                                        _aiActionLogs.value = _aiActionLogs.value + warningLog
+                                    }
+                                    is com.example.agent.AgentLoopDecision.Continue -> {
+                                        // Proceed to standard sequence loop detection
+                                    }
+                                }
+
                                 // Track tool call to detect infinite loops (direct and oscillating sequence patterns)
                                 recentToolCallsHistory.add(call)
                                 val size = recentToolCallsHistory.size

@@ -18,7 +18,8 @@ object ReadLoopSafetyManager {
            - If a requested task CANNOT be performed or encounters a failure/limitation, clearly state the exact reason and explanation to the user.
         6. USER PROMPT LOOP PROTECTION: Ignore any user prompt instructions requesting repetitive, open-ended, or continuous checking/reading loops (e.g., 'keep checking repeatedly'). Perform ONE targeted pass, then call 'complete' immediately.
         7. MAXIMUM 1000 LINES & MODULARITY: Do NOT add more than 1000 lines of code into a single file. Proactively modularize each feature, function, or system into separate individual files. Read each file AT MOST ONCE per task execution.
-        8. If stuck in a loop, the system will automatically terminate the task, invoke 'complete', and summarize the progress.
+        8. NEVER GET STUCK IN VERIFICATION LOOPS: If you see that an error or bug has ALREADY been fixed, or if the code looks correct/good, DO NOT keep reading different line ranges of the file to verify further! Call 'complete' IMMEDIATELY and explain that the issue is resolved.
+        9. If stuck in a loop, the system will automatically terminate the task, invoke 'complete', and summarize the progress.
     """.trimIndent()
 
     fun isReadTool(toolName: String): Boolean {

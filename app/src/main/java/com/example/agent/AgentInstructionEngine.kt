@@ -227,14 +227,21 @@ object AgentInstructionEngine {
 
         tools.forEach { t -> sb.append("- ").append(t).append("\n") }
 
-        // 7. Output Format
+        // 7. Batch Operations & Formulating Logic Guideline
+        sb.append("\n").append(AgentBatchExecutionManager.SYSTEM_BATCH_LOGIC_INSTRUCTION).append("\n")
+
+        // 8. Output Format
         sb.append("""
 
 === MANDATORY FORMAT ===
-Return ONLY raw JSON object:
-{"thought":"Short reasoning (1-2 sentences)","tool":"tool_name","arguments":{"path":"...","search":"...","replace":"...","message":"..."}}
-- MANDATORY: Invoke 'ai_think' before starting tasks or error fixes.
-- Call 'complete' with Markdown summary to finish.
+Return ONLY raw JSON object.
+Single operation format:
+{"thought":"Your formulated logic/plan","tool":"tool_name","arguments":{"path":"...","search":"...","replace":"...","message":"..."}}
+
+Multiple operations format (PREFERRED when plan is known):
+{"thought":"Your formulated logic for multiple upcoming operations","tools":[{"tool":"tool_1","arguments":{...}},{"tool":"tool_2","arguments":{...}}]}
+
+- Call 'complete' with Markdown summary when all tasks are finished.
         """.trimIndent())
 
         return sb.toString()
