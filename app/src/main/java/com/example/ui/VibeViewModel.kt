@@ -3363,9 +3363,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 val endB = argsB.endLine
                 val rangeA = argsA.lineRange?.trim() ?: ""
                 val rangeB = argsB.lineRange?.trim() ?: ""
-                // Exact line match OR reading the same file repeatedly
-                (pathA.isNotEmpty() && pathA == pathB && startA == startB && endA == endB && rangeA == rangeB) ||
-                (pathA.isNotEmpty() && pathA == pathB)
+                // Same action ONLY if reading the exact same file AND the exact same line range/offsets
+                pathA.isNotEmpty() && pathA == pathB && startA == startB && endA == endB && rangeA == rangeB
             }
             else -> {
                 argsA == argsB
@@ -4302,9 +4301,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 }
                                 
                                 val startLine = rawStartLine ?: 1
-                                var endLineInput = rawEndLine ?: (startLine + 29)
+                                var endLineInput = rawEndLine ?: (startLine + 99)
                                 if (endLineInput < startLine) {
-                                    endLineInput = startLine + 29
+                                    endLineInput = startLine + 99
                                 }
                                 val endLine = endLineInput
                                 val readLog = AiActionLog(
