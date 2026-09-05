@@ -3862,6 +3862,12 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                             loopCompleted = true
                         }
 
+                        val hasPlannedEdits = toolCalls.any { 
+                            val t = it.tool.lowercase()
+                            t.contains("edit") || t.contains("create") || t.contains("write") || 
+                            t.contains("delete") || t.contains("command") || t.contains("patch")
+                        }
+
                         for (call in toolCalls) {
                             val tool = call.tool
                             val args = call.arguments
@@ -3873,7 +3879,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     currentCall = call,
                                     currentThought = thoughtText,
                                     recentThoughts = recentThoughtsHistory,
-                                    turn = turn
+                                    turn = turn,
+                                    hasPlannedEdits = hasPlannedEdits
                                 )
                                 when (loopDecision) {
                                     is com.example.agent.AgentLoopDecision.AutoFinish -> {

@@ -35,10 +35,16 @@ object AgentLoopInterceptor {
         currentCall: ToolCallItem,
         currentThought: String?,
         recentThoughts: List<String>,
-        turn: Int = 1
+        turn: Int = 1,
+        hasPlannedEdits: Boolean = false
     ): AgentLoopDecision {
-        // Never auto-finish on initial actions or early turns; loops only exist after multiple prior actions
-        if (turn <= 2 || recentToolCalls.size < 3) {
+        // Never auto-finish or intercept if the AI has planned file modifications/edits in this turn
+        if (hasPlannedEdits) {
+            return AgentLoopDecision.Continue
+        }
+
+        // Never auto-finish on initial actions or early turns
+        if (turn <= 2 || recentToolCalls.size < 4) {
             return AgentLoopDecision.Continue
         }
 
@@ -57,7 +63,7 @@ object AgentLoopInterceptor {
             recentThoughts
         }
 
-        // 1. Check if model's thought indicates the error is already fixed
+        // 1. Check if model's thought explicitly indicates the error is already fixed
         val indicatesFixed = FIXED_INDICATORS.any { thought.contains(it, ignoreCase = true) }
         if (indicatesFixed && isRead && pastThoughts.isNotEmpty()) {
             val priorFixedCount = pastThoughts.count { prev ->
@@ -71,21 +77,7 @@ object AgentLoopInterceptor {
             }
         }
 
-        // 2. Check repetitive thought loop (identical thought repeated multiple times in prior turns)
-        if (thought.length > 20 && pastThoughts.size >= 2) {
-            val identicalThoughtCount = pastThoughts.count { prev ->
-                prev.trim().equals(thought, ignoreCase = true) ||
-                (thought.length > 40 && prev.contains(thought.take(40), ignoreCase = true))
-            }
-            if (identicalThoughtCount >= 2 && isRead) {
-                return AgentLoopDecision.AutoFinish(
-                    summary = if (thought.isNotBlank()) thought else "Task completed after code verification.",
-                    reason = "AI repeated identical reasoning multiple times while reading files. Finalizing task."
-                )
-            }
-        }
-
-        // 3. Check read loops on the same file (regardless of differing line ranges)
+        // 2. Check read loops on the same file (regardless of differing line ranges)
         if (isRead && currentPath.isNotEmpty()) {
             val normalizedCurrent = normalizePath(currentPath)
             var consecutiveSameFileReads = 0
@@ -101,9 +93,16 @@ object AgentLoopInterceptor {
             }
 
             if (consecutiveSameFileReads >= 3) {
-                return AgentLoopDecision.AutoFinish(
-                    summary = "Task completed: Successfully inspected and verified $currentPath.",
-                    reason = "AI read the same file '$currentPath' $consecutiveSameFileReads times without modifications. Auto-finalizing."
+                val warning = """
+                    SYSTEM DIRECTIVE (ACTION REQUIRED):
+                    You have inspected '$currentPath' $consecutiveSameFileReads times without making modifications.
+                    DO NOT read this file again.
+                    If changes are needed, apply them now using 'edit_file' or 'multi_edit_file'.
+                    If the code is already correct, call the 'complete' tool with your summary.
+                """.trimIndent()
+                return AgentLoopDecision.InjectWarning(
+                    warning = warning,
+                    logTitle = "Action required on $currentPath"
                 )
             } else if (consecutiveSameFileReads >= 2) {
                 val warning = """
