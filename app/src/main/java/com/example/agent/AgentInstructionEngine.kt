@@ -235,11 +235,12 @@ object AgentInstructionEngine {
 
 === MANDATORY FORMAT ===
 Return ONLY raw JSON object.
-Single operation format:
-{"thought":"Your formulated logic/plan","tool":"tool_name","arguments":{"path":"...","search":"...","replace":"...","message":"..."}}
 
-Multiple operations format (PREFERRED when plan is known):
-{"thought":"Your formulated logic for multiple upcoming operations","tools":[{"tool":"tool_1","arguments":{...}},{"tool":"tool_2","arguments":{...}}]}
+Standard & Required Format (ALWAYS BATCH 2+ OPERATIONS):
+{"thought":"Your formulated master plan for multiple upcoming operations","tools":[{"tool":"tool_1","arguments":{...}},{"tool":"tool_2","arguments":{...}}]}
+
+Single Operation Format (ONLY for genuinely complex/unpredictable investigations):
+{"thought":"Detailed reasoning explaining why this single step must be explored first","tool":"tool_name","arguments":{"path":"...","search":"...","replace":"...","message":"..."}}
 
 - Call 'complete' with Markdown summary when all tasks are finished.
         """.trimIndent())

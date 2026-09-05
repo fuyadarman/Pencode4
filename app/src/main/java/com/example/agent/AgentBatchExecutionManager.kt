@@ -14,24 +14,29 @@ import com.example.api.ToolCallItem
 object AgentBatchExecutionManager {
 
     val SYSTEM_BATCH_LOGIC_INSTRUCTION = """
-        === FORMULATING LOGIC & BATCH OPERATIONS DIRECTIVE ===
-        - BATCHED PLANNING SUPPORTED: You can formulate logic for ONE or MULTIPLE upcoming operations at once!
-        - MULTIPLE OPERATIONS PREFERRED: When you have a clear multi-step plan (e.g., reading a file then editing, creating multiple files, or updating related code), formulate your overall logic ONCE in the 'thought' field and return all planned operations together in the 'tools' array:
-          {
-            "thought": "Plan: 1. Read App.js to check state, 2. Update styles in styles.css, 3. Create helper in utils.js",
-            "tools": [
-              { "tool": "read_file", "arguments": { "path": "App.js" } },
-              { "tool": "edit_file", "arguments": { "path": "styles.css", "search": "oldStyle", "replace": "newStyle" } },
-              { "tool": "create_file", "arguments": { "path": "utils.js", "content": "export function helper() {}" } }
-            ]
-          }
-        - SINGLE OPERATION ALLOWED: If the next action strictly depends on dynamic exploration (e.g. searching or reading an unfamiliar file first), you can formulate logic for just that single operation:
-          {
-            "thought": "Searching for button handler implementation in codebase",
-            "tool": "global_search",
-            "arguments": { "query": "handleButtonClick" }
-          }
-        - EFFICIENCY: Formulating logic once for multiple operations is strongly preferred over single-step turns whenever feasible, as it executes significantly faster without repetitive formulating logic pauses.
+        === STRICT MANDATE: MULTI-OPERATION BATCHING & FORMULATING LOGIC ===
+        [CRITICAL DIRECTIVE ON FORMULATING LOGIC & TOOL BATCHING]
+        1. MANDATORY MULTI-OPERATION BATCHING (ALWAYS 2+ OPERATIONS):
+           You MUST formulate logic for MULTIPLE upcoming operations at once (2, 3, or more operations in a single turn).
+           Never formulate logic for just 1 minor operation if you can plan subsequent steps together.
+           Provide your comprehensive reasoning ONCE in the 'thought' field and return all planned operations together in the 'tools' array:
+           {
+             "thought": "Master Plan: 1. Read existing config in App.js, 2. Add 3D scene container in styles.css, 3. Create 3D car logic in CarScene.js",
+             "tools": [
+               { "tool": "read_file", "arguments": { "path": "App.js" } },
+               { "tool": "edit_file", "arguments": { "path": "styles.css", "search": "oldStyle", "replace": "newStyle" } },
+               { "tool": "create_file", "arguments": { "path": "CarScene.js", "content": "..." } }
+             ]
+           }
+
+        2. STRICT EXCEPTION (ONLY FOR HIGHLY COMPLEX / UNPREDICTABLE TASKS):
+           You may ONLY formulate logic for a SINGLE operation if the task is genuinely complex, unpredictable, or an exploratory investigation where subsequent edits cannot possibly be known without inspecting the tool's result first (e.g. an exploratory global_search or investigating an obscure crash log):
+           {
+             "thought": "Complex investigation: searching for obscure symbol definition before determining architecture",
+             "tool": "global_search",
+             "arguments": { "query": "obscureMethodName" }
+           }
+           Otherwise, for standard coding, modifications, and creation tasks, ALWAYS batch multiple (2+) operations under one formulating logic turn!
     """.trimIndent()
 
     /**
