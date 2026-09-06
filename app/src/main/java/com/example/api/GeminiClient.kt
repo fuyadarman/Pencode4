@@ -307,7 +307,9 @@ object GeminiClient {
                     direction = direction,
                     amount = amount,
                     text = text,
-                    targetImage = targetImage
+                    targetImage = targetImage,
+                    chunks = com.example.agent.MultiEditChunkParser.parseChunksFromRawText(rawText).ifEmpty { null },
+                    replacementChunks = com.example.agent.MultiEditChunkParser.parseChunksFromRawText(rawText).ifEmpty { null }
                 ),
                 finishReason = finishReason
             )
@@ -328,9 +330,15 @@ object GeminiClient {
             
         val thought = extractField(rawText, "thought") ?: extractXmlField(rawText, "thought")
         val message = extractField(rawText, "message") ?: extractXmlField(rawText, "message")
-        val path = extractField(rawText, "path") ?: extractXmlField(rawText, "path")
+        val path = extractField(rawText, "path") ?: extractXmlField(rawText, "path") ?: extractField(rawText, "targetFile") ?: extractXmlField(rawText, "targetFile")
         val content = extractField(rawText, "content") ?: extractXmlField(rawText, "content")
         val command = extractField(rawText, "command") ?: extractXmlField(rawText, "command")
+        val search = extractField(rawText, "search") ?: extractXmlField(rawText, "search") ?: extractField(rawText, "targetContent") ?: extractXmlField(rawText, "targetContent")
+        val replace = extractField(rawText, "replace") ?: extractXmlField(rawText, "replace") ?: extractField(rawText, "replacementContent") ?: extractXmlField(rawText, "replacementContent")
+        val query = extractField(rawText, "query") ?: extractXmlField(rawText, "query")
+        val parsedChunks = com.example.agent.MultiEditChunkParser.parseChunksFromRawString(rawText).ifEmpty {
+            com.example.agent.MultiEditChunkParser.parseChunksFromRawText(rawText)
+        }
         
         if (tool != null) {
             return ToolCallResponse(
@@ -339,8 +347,14 @@ object GeminiClient {
                 arguments = ToolArguments(
                     message = message,
                     path = path,
+                    targetFile = path,
                     content = content,
-                    command = command
+                    command = command,
+                    search = search,
+                    replace = replace,
+                    query = query,
+                    chunks = parsedChunks.ifEmpty { null },
+                    replacementChunks = parsedChunks.ifEmpty { null }
                 ),
                 finishReason = finishReason
             )
@@ -370,11 +384,22 @@ object GeminiClient {
             val toolCallAdapter = moshi.adapter(ToolCallResponse::class.java).lenient()
             val parsed = toolCallAdapter.fromJson(cleaned)
             if (parsed != null && (parsed.tool != null || parsed.tools != null)) {
-                if (finishReason != null) {
-                    parsed.copy(finishReason = finishReason)
-                } else {
-                    parsed
+                val enhancedTools = parsed.tools?.map { item ->
+                    if (item.tool in listOf("multi_edit_file", "multi_edit", "multi_patch")) {
+                        val c = com.example.agent.MultiEditChunkParser.resolveChunks(item.arguments, rawText)
+                        item.copy(arguments = item.arguments?.copy(chunks = c, replacementChunks = c))
+                    } else item
                 }
+                val enhancedArgs = if (parsed.tool in listOf("multi_edit_file", "multi_edit", "multi_patch")) {
+                    val c = com.example.agent.MultiEditChunkParser.resolveChunks(parsed.arguments, rawText)
+                    parsed.arguments?.copy(chunks = c, replacementChunks = c)
+                } else parsed.arguments
+
+                parsed.copy(
+                    arguments = enhancedArgs,
+                    tools = enhancedTools,
+                    finishReason = finishReason ?: parsed.finishReason
+                )
             } else {
                 parseFallbackToolCall(rawText, finishReason)
             }

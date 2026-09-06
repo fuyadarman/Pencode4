@@ -189,7 +189,7 @@ object AgentInstructionEngine {
             tools.add("'multi_read_file'(path, ranges:[{startLine,endLine}])")
             tools.add("'create_file'(path, content)")
             tools.add("'edit_file'(path, search, replace)")
-            tools.add("'multi_edit_file'(path, chunks:[{search,replace}])")
+            tools.add("'multi_edit_file'(path, chunks:[{search,replace}]) [Apply multiple search & replace edits to one file. Supports 'chunks' or 'replacementChunks']")
             tools.add("'patch_file'(path, search, replace)")
             tools.add("'append'(path, content)")
             tools.add("'delete_file'(path)")

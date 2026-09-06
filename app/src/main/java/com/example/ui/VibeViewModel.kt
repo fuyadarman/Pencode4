@@ -3343,8 +3343,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 val searchB = argsB.search?.trim() ?: ""
                 val replaceA = argsA.replace?.trim() ?: ""
                 val replaceB = argsB.replace?.trim() ?: ""
-                val chunksA = argsA.chunks ?: argsA.replacementChunks ?: argsA.edits
-                val chunksB = argsB.chunks ?: argsB.replacementChunks ?: argsB.edits
+                val chunksA = com.example.agent.MultiEditChunkParser.resolveChunks(argsA)
+                val chunksB = com.example.agent.MultiEditChunkParser.resolveChunks(argsB)
                 pathA == pathB && searchA == searchB && replaceA == replaceB && chunksA == chunksB
             }
             "create_file", "write_file", "write", "append" -> {
@@ -4710,13 +4710,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': $result"))))
                             }
                             "multi_edit_file", "multi_edit", "multi_patch" -> {
-                                val filePath = normalizePath(args?.path ?: args?.targetFile ?: "")
-                                val rawChunks = args?.chunks ?: args?.replacementChunks ?: args?.edits ?: emptyList()
-                                val chunks = if (rawChunks.isEmpty() && !args?.search.isNullOrEmpty()) {
-                                    listOf(EditChunk(search = args?.search, replace = args?.replace))
-                                } else {
-                                    rawChunks
-                                }
+                                val filePath = normalizePath(args?.path ?: args?.targetFile ?: args?.destinationPath ?: "")
+                                val chunks = com.example.agent.MultiEditChunkParser.resolveChunks(args, args?.content)
 
                                 val multiLog = createAiLog(
                                     title = "Multi-edited file",
@@ -4756,16 +4751,24 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                         val lineRanges = mutableListOf<String>()
 
                                         for ((index, chunk) in chunks.withIndex()) {
-                                            val searchStr = chunk.search ?: chunk.targetContent ?: ""
-                                            val replaceStr = chunk.replace ?: chunk.replacementContent ?: ""
+                                            var searchStr = com.example.agent.MultiEditChunkParser.getEffectiveSearch(chunk)
+                                            val replaceStr = com.example.agent.MultiEditChunkParser.getEffectiveReplace(chunk)
 
                                             if (searchStr.isEmpty()) {
                                                 chunkError = "Error in chunk #${index + 1}: 'search' block cannot be empty."
                                                 break
                                             }
                                             if (!currentContent.contains(searchStr)) {
-                                                chunkError = "Error in chunk #${index + 1}: Could not find exact search block in $filePath. Please double-check characters, indentation, and spaces."
-                                                break
+                                                // Check with CRLF normalization
+                                                val normContent = currentContent.replace("\r\n", "\n")
+                                                val normSearch = searchStr.replace("\r\n", "\n")
+                                                if (normContent.contains(normSearch)) {
+                                                    currentContent = normContent
+                                                    searchStr = normSearch
+                                                } else {
+                                                    chunkError = "Error in chunk #${index + 1}: Could not find exact search block in $filePath. Please double-check characters, indentation, and spaces."
+                                                    break
+                                                }
                                             }
                                             val occurrences = currentContent.split(searchStr).size - 1
                                             if (occurrences > 1) {

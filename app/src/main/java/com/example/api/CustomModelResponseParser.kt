@@ -140,18 +140,7 @@ object CustomModelResponseParser {
                 val argsRaw = fn.optString("arguments", "{}")
                 if (name.isNotBlank()) {
                     val argsObj = try { JSONObject(argsRaw) } catch (e: Exception) { JSONObject() }
-                    val args = ToolArguments(
-                        path = argsObj.optString("path", "").ifBlank { argsObj.optString("targetFile", "").ifBlank { null } },
-                        targetFile = argsObj.optString("targetFile", "").ifBlank { null },
-                        content = argsObj.optString("content", "").ifBlank { null },
-                        oldPath = argsObj.optString("oldPath", "").ifBlank { null },
-                        newPath = argsObj.optString("newPath", "").ifBlank { null },
-                        command = argsObj.optString("command", "").ifBlank { null },
-                        message = argsObj.optString("message", "").ifBlank { null },
-                        search = argsObj.optString("search", "").ifBlank { null },
-                        replace = argsObj.optString("replace", "").ifBlank { null },
-                        query = argsObj.optString("query", "").ifBlank { null }
-                    )
+                    val args = com.example.agent.MultiEditChunkParser.parseFullArguments(argsObj)
                     items.add(ToolCallItem(tool = name, arguments = args))
                 }
             }
