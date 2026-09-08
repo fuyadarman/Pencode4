@@ -3357,14 +3357,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             "read_file", "view_file", "read_file_range", "multi_read_file", "multi_read" -> {
                 val pathA = (argsA.path?.trim() ?: argsA.targetFile?.trim() ?: "").lowercase()
                 val pathB = (argsB.path?.trim() ?: argsB.targetFile?.trim() ?: "").lowercase()
-                val startA = argsA.startLine
-                val startB = argsB.startLine
-                val endA = argsA.endLine
-                val endB = argsB.endLine
-                val rangeA = argsA.lineRange?.trim() ?: ""
-                val rangeB = argsB.lineRange?.trim() ?: ""
-                // Same action ONLY if reading the exact same file AND the exact same line range/offsets
-                pathA.isNotEmpty() && pathA == pathB && startA == startB && endA == endB && rangeA == rangeB
+                // Same action if inspecting the same file (detects read-range shuffling loops)
+                pathA.isNotEmpty() && pathA == pathB
             }
             else -> {
                 argsA == argsB
@@ -3463,112 +3457,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 
             // Re-enable conversation history with highly optimized, token-saving action summaries
             val historyEntities = repository.getChatsForProject(project.name)
-            val history = mutableListOf<Content>()
-
-            if (historyEntities.size > 1) {
-                val historicalMessages = historyEntities.dropLast(1)
-                val lastAssistantEntity = historicalMessages.lastOrNull { it.role == "assistant" }
-                
-                if (lastAssistantEntity != null) {
-                    val lastUserEntity = historicalMessages.lastOrNull { 
-                        it.role == "user" && it.timestamp <= lastAssistantEntity.timestamp 
-                    }
-                    val rawPrevPrompt = lastUserEntity?.content ?: "[Previous Request]"
-                    val previousUserPrompt = rawPrevPrompt.replace("""\[IMAGE_BASE64: data:.*?;base64,.*?\]""".toRegex(), "[Attached Image]")
-
-                    // Alternate role: add the actual previous user query with explicit history tag
-                    history.add(Content(
-                        role = "user",
-                        parts = listOf(Part(text = "[PREVIOUS COMPLETED REQUEST]\n$previousUserPrompt"))
-                    ))
-
-                    // Extract and compact file actions
-                    val fileOperations = mutableListOf<String>()
-                    if (lastAssistantEntity.aiActionLogsJson != null) {
-                        try {
-                            val listType = Types.newParameterizedType(List::class.java, AiActionLog::class.java)
-                            val logs = moshi.adapter<List<AiActionLog>>(listType).fromJson(lastAssistantEntity.aiActionLogsJson)
-                            if (logs != null) {
-                                for (log in logs) {
-                                    val titleLower = log.title.lowercase()
-                                    val filePath = log.details?.lineSequence()?.firstOrNull()?.let { line ->
-                                        val match = """(?:from|to|file|written to|read from|for)?\s*([a-zA-Z0-9_\-\./]+)""".toRegex(RegexOption.IGNORE_CASE).find(line)
-                                        match?.groupValues?.get(1) ?: line
-                                    } ?: ""
-                                    val fileName = java.io.File(filePath).name.ifEmpty { filePath }
-
-                                    if (fileName.isNotEmpty()) {
-                                        when {
-                                            titleLower.contains("read_file") || titleLower.contains("read file") -> {
-                                                fileOperations.add("read:$fileName")
-                                            }
-                                            titleLower.contains("edit_file") || titleLower.contains("edit file") || titleLower.contains("multi_edit") || titleLower.contains("modify") -> {
-                                                fileOperations.add("modified:$fileName")
-                                            }
-                                            titleLower.contains("patch_file") || titleLower.contains("patch file") || titleLower.contains("patch") -> {
-                                                fileOperations.add("modified:$fileName")
-                                            }
-                                            titleLower.contains("append") -> {
-                                                fileOperations.add("append:$fileName")
-                                            }
-                                            titleLower.contains("write_file") || titleLower.contains("write file") || titleLower.contains("create") -> {
-                                                fileOperations.add("create:$fileName")
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        } catch (e: Exception) {
-                            // ignore
-                        }
-                    }
-
-                    val actionsStr = if (fileOperations.isNotEmpty()) {
-                        fileOperations.joinToString(", ")
-                    } else {
-                        ""
-                    }
-
-                    val assistantText = buildString {
-                        append("[PREVIOUS OUTCOME - FINISHED]\n")
-                        if (actionsStr.isNotEmpty()) {
-                            append(actionsStr)
-                            append("\n\n")
-                        }
-                        append(lastAssistantEntity.content)
-                    }
-
-                    history.add(Content(
-                        role = "model",
-                        parts = listOf(Part(text = assistantText))
-                    ))
-                }
-            }
-
-            // Append the current user prompt at the end of history with primary focus marker
+            val history = com.example.agent.AgentHistoryBuilder.buildHistory(historyEntities, moshi)
             val currentPromptEntity = historyEntities.lastOrNull { it.role == "user" }
-            if (currentPromptEntity != null) {
-                val textParts = mutableListOf<Part>()
-                var remainingText = currentPromptEntity.content
-
-                val regex = """\[IMAGE_BASE64: data:(.*?);base64,(.*?)\]""".toRegex()
-                var match = regex.find(remainingText)
-                while (match != null) {
-                    val textBefore = remainingText.substring(0, match.range.first)
-                    if (textBefore.isNotBlank()) textParts.add(Part(text = textBefore))
-                    textParts.add(Part(inlineData = com.example.api.InlineData(mimeType = match.groupValues[1], data = match.groupValues[2])))
-                    remainingText = remainingText.substring(match.range.last + 1)
-                    match = regex.find(remainingText)
-                }
-                if (remainingText.isNotBlank() || textParts.isEmpty()) {
-                    textParts.add(Part(text = remainingText))
-                }
-
-                history.add(Content(
-                    role = "user",
-                    parts = textParts
-                ))
-            }
 
             val activeTemplateInfo = when (project.templateKey) {
                 "android_kotlin" -> """
@@ -3743,6 +3633,31 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             val recentToolCallsHistory = mutableListOf<com.example.api.ToolCallItem>()
             val recentThoughtsHistory = mutableListOf<String>()
             val readFilesThisSession = mutableSetOf<String>()
+            val loopProtectionEngine = com.example.agent.AgentLoopProtectionEngine()
+
+            val handleComplete: suspend (String) -> Unit = { finishMsg: String ->
+                com.example.agent.AgentTaskFinalizer.finalizeTask(
+                    projectName = project.name,
+                    finishMsg = finishMsg,
+                    repository = repository,
+                    moshi = moshi,
+                    currentLogs = _aiActionLogs.value,
+                    hasCodeChanges = checkHasCodeChangesThisTurn(editsAtPromptStart),
+                    allowBuildPush = _allowBuildPush.value,
+                    onAddLog = { log -> _aiActionLogs.value = _aiActionLogs.value + log },
+                    onUpdateStatus = { st -> _agentStatus.value = st },
+                    onUpdateChats = { ch -> _chatMessages.value = ch },
+                    onTriggerBuildPush = { fw, autoAccept ->
+                        _detectedFramework.value = fw
+                        if (autoAccept) acceptGithubPushPrompt() else _showGithubPushPrompt.value = true
+                    },
+                    onHideBuildPushPrompt = { _showGithubPushPrompt.value = false }
+                )
+                _isInterrupted.value = false
+                _interruptionReason.value = ""
+                loopCompleted = true
+                agentMessageSaved = true
+            }
 
             // Initial automatic thinking log triggered ONCE when processing user prompt starts
             val initialThoughtLog = createAiLog(
@@ -3851,14 +3766,12 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 
                         if (toolCalls.isEmpty() || (toolCalls.size == 1 && toolCalls[0].tool == "complete") || consecutiveThinkOnlyCount >= 2) {
                             if (consecutiveThinkOnlyCount >= 2) {
-                                val autoFinishLog = createAiLog(
-                                    title = "AI task auto-finalized",
-                                    status = "success",
-                                    details = lastThought ?: "Task completed after reasoning."
-                                )
-                                _aiActionLogs.value = _aiActionLogs.value + autoFinishLog
+                                handleComplete(lastThought ?: "Task completed after reasoning.")
+                            } else if (toolCalls.size == 1 && toolCalls[0].tool == "complete") {
+                                handleComplete(toolCalls[0].arguments?.message ?: "Task completed successfully!")
                             }
                             loopCompleted = true
+                            break
                         }
 
                         val hasPlannedEdits = toolCalls.any { 
@@ -3870,8 +3783,49 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                         for (call in toolCalls) {
                             val tool = call.tool
                             val args = call.arguments
+
+                            if (tool == "complete") {
+                                handleComplete(args?.message ?: "Task completed successfully!")
+                                break
+                            }
+
+                            // 1. Evaluate candidate action via AgentLoopProtectionEngine (Antigravity/OpenCode protection)
+                            val protectionDecision = loopProtectionEngine.evaluatePreExecution(
+                                currentCall = call,
+                                currentThought = thoughtText,
+                                turn = turn,
+                                maxTurns = maxActionSteps
+                            )
+                            when (protectionDecision) {
+                                is com.example.agent.AgentLoopProtectionEngine.LoopDecision.AutoComplete -> {
+                                    handleComplete(protectionDecision.summary)
+                                    loopCompleted = true
+                                    break
+                                }
+                                is com.example.agent.AgentLoopProtectionEngine.LoopDecision.InterceptWithResult -> {
+                                    val interceptLog = createAiLog(
+                                        title = protectionDecision.logTitle,
+                                        status = protectionDecision.logStatus,
+                                        details = protectionDecision.logDetails
+                                    )
+                                    _aiActionLogs.value = _aiActionLogs.value + interceptLog
+                                    history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
+                                    history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': ${protectionDecision.toolOutput}"))))
+                                    loopProtectionEngine.recordActionOutcome(tool, args, isSuccess = false, turn = turn)
+                                    continue
+                                }
+                                is com.example.agent.AgentLoopProtectionEngine.LoopDecision.AbortLoop -> {
+                                    _isInterrupted.value = true
+                                    _interruptionReason.value = protectionDecision.reason
+                                    loopCompleted = true
+                                    break
+                                }
+                                is com.example.agent.AgentLoopProtectionEngine.LoopDecision.Proceed -> {
+                                    // Proceed to execution
+                                }
+                            }
                             
-                            if (tool != "complete" && tool != "ai_think" && tool != "ai_response") {
+                            if (tool != "ai_think" && tool != "ai_response") {
                                 // AgentLoopInterceptor: Check for read loops and "already fixed" thought traps
                                 val loopDecision = com.example.agent.AgentLoopInterceptor.evaluate(
                                     recentToolCalls = recentToolCallsHistory,
@@ -3883,12 +3837,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 )
                                 when (loopDecision) {
                                     is com.example.agent.AgentLoopDecision.AutoFinish -> {
-                                        val finishLog = createAiLog(
-                                            title = "AI task auto-finalized",
-                                            status = "success",
-                                            details = loopDecision.summary
-                                        )
-                                        _aiActionLogs.value = _aiActionLogs.value + finishLog
+                                        handleComplete(loopDecision.summary)
                                         loopCompleted = true
                                         break
                                     }
@@ -3909,140 +3858,40 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     }
                                 }
 
-                                // Track tool call to detect infinite loops (direct and oscillating sequence patterns)
-                                recentToolCallsHistory.add(call)
-                                val size = recentToolCallsHistory.size
-                                var loopHandled = false
-
-                                // Pattern-based sequence loop detection for pattern length k from 1 to 4
-                                for (k in 1..4) {
-                                    if (loopHandled) break
-                                    if (size >= k * 2) {
-                                        var isMatch = true
-                                        for (i in 0 until k) {
-                                            if (!isSameWork(recentToolCallsHistory[size - 1 - i], recentToolCallsHistory[size - 1 - k - i])) {
-                                                isMatch = false
-                                                break
-                                            }
-                                        }
-                                        if (isMatch) {
-                                            var cycles = 2
-                                            var offset = size - 1 - 2 * k
-                                            while (offset - k + 1 >= 0) {
-                                                var cycleMatch = true
-                                                for (i in 0 until k) {
-                                                    if (!isSameWork(recentToolCallsHistory[size - 1 - i], recentToolCallsHistory[offset - i])) {
-                                                        cycleMatch = false
-                                                        break
-                                                    }
-                                                }
-                                                if (cycleMatch) {
-                                                    cycles++
-                                                    offset -= k
-                                                } else {
-                                                    break
-                                                }
-                                            }
-
-                                            if (k == 1) {
-                                                if (cycles >= 5) {
-                                                    _isInterrupted.value = true
-                                                    _interruptionReason.value = "Aborted execution: AI was stuck repeating the same action '$tool' $cycles times consecutively."
-                                                    val loopAbortedLog = createAiLog(
-                                                        title = "Infinite Loop Blocked",
-                                                        status = "failed",
-                                                        details = _interruptionReason.value
-                                                    )
-                                                    _aiActionLogs.value = _aiActionLogs.value + loopAbortedLog
-                                                    loopCompleted = true
-                                                    loopHandled = true
-                                                    break
-                                                } else if (cycles >= 3) {
-                                                    val warningText = """
-                                                        SYSTEM ALERT (INFINITE LOOP WARNING):
-                                                        You have performed the exact same action $cycles times consecutively.
-                                                        Tool: $tool
-                                                        Arguments: ${args?.toString() ?: "None"}
-                                                        
-                                                        This has resulted in the same outcome!
-                                                        You MUST stop repeating this action. Use 'grep' or check the file state first before taking another action.
-                                                    """.trimIndent()
-                                                    
-                                                    history.add(Content(
-                                                        role = "user",
-                                                        parts = listOf(Part(text = warningText))
-                                                    ))
-                                                    
-                                                    val warningLog = createAiLog(
-                                                        title = "Loop warning injected",
-                                                        status = "thinking",
-                                                        details = "Injected warning: AI repeated tool '$tool' $cycles times consecutively."
-                                                    )
-                                                    _aiActionLogs.value = _aiActionLogs.value + warningLog
-                                                    loopHandled = true
-                                                }
-                                            } else {
-                                                if (cycles >= 4) {
-                                                    _isInterrupted.value = true
-                                                    val seqNames = (0 until k).map { idx -> recentToolCallsHistory[size - k + idx].tool }.joinToString(" -> ")
-                                                    _interruptionReason.value = "Aborted execution: AI was stuck in a $k-step sequence loop ($seqNames) repeated $cycles cycles."
-                                                    val loopAbortedLog = createAiLog(
-                                                        title = "Sequence Loop Blocked",
-                                                        status = "failed",
-                                                        details = _interruptionReason.value
-                                                    )
-                                                    _aiActionLogs.value = _aiActionLogs.value + loopAbortedLog
-                                                    loopCompleted = true
-                                                    loopHandled = true
-                                                    break
-                                                } else if (cycles >= 2) {
-                                                    val seqNames = (0 until k).map { idx -> recentToolCallsHistory[size - k + idx].tool }.joinToString(" -> ")
-                                                    val warningText = """
-                                                        SYSTEM ALERT (SEQUENCE LOOP DETECTED):
-                                                        You are repeating a $k-step sequence cycle ($seqNames) for $cycles cycles!
-                                                        This indicates an oscillating loop where previous steps keep failing or reverting.
-                                                        
-                                                        You MUST stop this sequence cycle immediately! Try a different approach or inspect code before proceeding.
-                                                    """.trimIndent()
-                                                    
-                                                    history.add(Content(
-                                                        role = "user",
-                                                        parts = listOf(Part(text = warningText))
-                                                    ))
-                                                    
-                                                    val warningLog = createAiLog(
-                                                        title = "Sequence loop warning injected",
-                                                        status = "thinking",
-                                                        details = "Injected warning: $k-step sequence pattern ($seqNames) repeated $cycles times."
-                                                    )
-                                                    _aiActionLogs.value = _aiActionLogs.value + warningLog
-                                                    loopHandled = true
-                                                }
-                                            }
-                                        }
+                                val seqResult = com.example.agent.AgentSequenceLoopChecker.checkSequenceLoop(
+                                    recentToolCallsHistory = recentToolCallsHistory,
+                                    call = call,
+                                    tool = tool,
+                                    argsString = args?.toString(),
+                                    recentLogs = _aiActionLogs.value,
+                                    isSameWork = ::isSameWork
+                                )
+                                when (seqResult) {
+                                    is com.example.agent.SequenceLoopResult.Abort -> {
+                                        _isInterrupted.value = true
+                                        _interruptionReason.value = seqResult.reason
+                                        val loopAbortedLog = createAiLog(
+                                            title = seqResult.logTitle,
+                                            status = "failed",
+                                            details = seqResult.reason
+                                        )
+                                        _aiActionLogs.value = _aiActionLogs.value + loopAbortedLog
+                                        loopCompleted = true
+                                        break
                                     }
-                                }
-
-                                 // Consecutive failures detection (last 3 actions failed)
-                                if (!loopHandled) {
-                                    val recentLogs = _aiActionLogs.value.takeLast(3)
-                                    if (recentLogs.size >= 3 && recentLogs.all { it.status == "failed" }) {
-                                        val warningText = """
-                                            SYSTEM WARNING (CONSECUTIVE FAILURES):
-                                            Your last 3 consecutive tool executions have failed.
-                                            Stop guessing file contents or line ranges!
-                                            
-                                            Before you try any more edits:
-                                            1. Run a 'grep' command to locate the file and exact lines.
-                                            2. Read the surrounding lines of the target file to verify its structure and syntax.
-                                            3. Adjust your path or content matching to be perfectly accurate.
-                                        """.trimIndent()
-                                        
+                                    is com.example.agent.SequenceLoopResult.WarningInjected -> {
                                         history.add(Content(
                                             role = "user",
-                                            parts = listOf(Part(text = warningText))
+                                            parts = listOf(Part(text = seqResult.warningText))
                                         ))
+                                        val warningLog = createAiLog(
+                                            title = seqResult.logTitle,
+                                            status = "thinking",
+                                            details = seqResult.logDetails
+                                        )
+                                        _aiActionLogs.value = _aiActionLogs.value + warningLog
                                     }
+                                    is com.example.agent.SequenceLoopResult.Proceed -> {}
                                 }
 
 
@@ -4064,92 +3913,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                             
                             when (tool) {
                             "complete" -> {
-                                val message = args?.message ?: "Task completed successfully!"
-                                val logEntry = createAiLog(
-                                    title = "AI finished task execution",
-                                    status = "success",
-                                    details = message
-                                )
-                                _aiActionLogs.value = _aiActionLogs.value + logEntry
-
-                                // Serialize logs to save with message
-                                val logsJson = try {
-                                    val listType = Types.newParameterizedType(List::class.java, AiActionLog::class.java)
-                                    moshi.adapter<List<AiActionLog>>(listType).toJson(_aiActionLogs.value)
-                                } catch (e: Exception) {
-                                    null
-                                }
-
-                                // Insert Assistant Final Message to DB
-                                val cleanMessage = message.replace(Regex("(?i)</?tool_call>"), "")
-                                    .replace(Regex("(?i)</?function_call>"), "")
-                                    .trim()
-                                val agentMsg = ChatMessageEntity(
-                                    projectName = project.name,
-                                    role = "assistant",
-                                    content = if (cleanMessage.isNotBlank()) cleanMessage else "Task completed successfully!",
-                                    timestamp = System.currentTimeMillis(),
-                                    aiActionLogsJson = logsJson
-                                )
-                                repository.insertChatMessage(agentMsg)
-                                _chatMessages.value = repository.getChatsForProject(project.name)
-                                
-                                _agentStatus.value = "Changes applied successfully!"
-                                _isInterrupted.value = false
-                                _interruptionReason.value = ""
-                                loopCompleted = true
-                                agentMessageSaved = true
-
-                                // Smart Code Change Tracker: Detect framework and ask to build on Github ONLY if code changed this turn
-                                val hasFileModifications = checkHasCodeChangesThisTurn(editsAtPromptStart)
-                                if (hasFileModifications) {
-                                    val projectDir = repository.getProjectDir(project.name)
-                                    val pFiles = _projectFiles.value
-                                    val isKotlin = java.io.File(projectDir, "build.gradle.kts").exists() || java.io.File(projectDir, "build.gradle").exists() || pFiles.any { it.path.endsWith("build.gradle.kts") || it.path.endsWith("build.gradle") }
-                                    val isFlutter = java.io.File(projectDir, "pubspec.yaml").exists() || pFiles.any { it.path.endsWith("pubspec.yaml") }
-                                    val isNextJs = java.io.File(projectDir, "next.config.js").exists() || java.io.File(projectDir, "next.config.mjs").exists() || pFiles.any { it.path.contains("next.config") }
-                                    val isReactVite = java.io.File(projectDir, "vite.config.js").exists() || java.io.File(projectDir, "vite.config.ts").exists() || pFiles.any { it.path.contains("vite.config") || (it.path.endsWith("package.json") && it.content.contains("vite", ignoreCase = true)) }
-                                    val isWebPackage = java.io.File(projectDir, "package.json").exists() || pFiles.any { it.path.endsWith("package.json") }
-
-                                    if (isKotlin) {
-                                        _detectedFramework.value = "Kotlin/Android"
-                                        if (_allowBuildPush.value) {
-                                            acceptGithubPushPrompt()
-                                        } else {
-                                            _showGithubPushPrompt.value = true
-                                        }
-                                    } else if (isFlutter) {
-                                        _detectedFramework.value = "Flutter"
-                                        if (_allowBuildPush.value) {
-                                            acceptGithubPushPrompt()
-                                        } else {
-                                            _showGithubPushPrompt.value = true
-                                        }
-                                    } else if (isNextJs) {
-                                        _detectedFramework.value = "Next.js"
-                                        if (_allowBuildPush.value) {
-                                            acceptGithubPushPrompt()
-                                        } else {
-                                            _showGithubPushPrompt.value = true
-                                        }
-                                    } else if (isReactVite) {
-                                        _detectedFramework.value = "React Vite"
-                                        if (_allowBuildPush.value) {
-                                            acceptGithubPushPrompt()
-                                        } else {
-                                            _showGithubPushPrompt.value = true
-                                        }
-                                    } else if (isWebPackage) {
-                                        _detectedFramework.value = "Web App"
-                                        if (_allowBuildPush.value) {
-                                            acceptGithubPushPrompt()
-                                        } else {
-                                            _showGithubPushPrompt.value = true
-                                        }
-                                    }
-                                } else {
-                                    _showGithubPushPrompt.value = false
-                                }
+                                handleComplete(args?.message ?: "Task completed successfully!")
+                                loopProtectionEngine.recordActionOutcome("complete", args, isSuccess = true, turn = turn)
                             }
                             "ai_think", "ai_response" -> {
                                 val message = args?.message ?: args?.query ?: args?.content ?: args?.prompt ?: "Analyzing and thinking through task requirements."
@@ -4280,6 +4045,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'read_file': $result"))))
+                                loopProtectionEngine.recordActionOutcome("read_file", args, isSuccess = result.startsWith("--- File:"), turn = turn)
                             }
                             "read_file_range" -> {
                                 val filePath = normalizePath(args?.path ?: "")
@@ -4455,6 +4221,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': $result"))))
+                                loopProtectionEngine.recordActionOutcome(tool, args, isSuccess = isSuccess, turn = turn)
                             }
                             "create_file" -> {
                                 val filePath = normalizePath(args?.path ?: "")
@@ -4481,7 +4248,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                             path = filePath,
                                             lines = "all"
                                         )
-                                        "Successfully created new file '$filePath'"
+                                        "Successfully created new file '$filePath'. Content is saved. DO NOT re-read this file to verify. If all requested changes are done, call 'complete'."
                                     } catch (e: Exception) {
                                         "Error creating file: ${e.localizedMessage}"
                                     }
@@ -4491,6 +4258,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'create_file': $result"))))
+                                loopProtectionEngine.recordActionOutcome("create_file", args, isSuccess = !result.startsWith("Error"), turn = turn)
                             }
                             "write_file", "write" -> {
                                 val filePath = normalizePath(args?.path ?: "")
@@ -4547,9 +4315,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                             lines = "all"
                                         )
                                         if (targetFile != null) {
-                                            "Successfully overwrote existing file '$filePath'"
+                                            "Successfully overwrote existing file '$filePath'. Content is saved. DO NOT re-read this file to verify. If all requested changes are done, call 'complete'."
                                         } else {
-                                            "Successfully created new file '$filePath'"
+                                            "Successfully created new file '$filePath'. Content is saved. DO NOT re-read this file to verify. If all requested changes are done, call 'complete'."
                                         }
                                     } catch (e: Exception) {
                                         "Error writing file: ${e.localizedMessage}"
@@ -4560,6 +4328,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'write_file': $result"))))
+                                loopProtectionEngine.recordActionOutcome("write_file", args, isSuccess = !result.startsWith("Error"), turn = turn)
                             }
                             "append" -> {
                                 val filePath = normalizePath(args?.path ?: "")
@@ -4606,7 +4375,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                             path = filePath,
                                             lines = range
                                         )
-                                        "Successfully appended to '$filePath'"
+                                        "Successfully appended to '$filePath'. Content is saved. DO NOT re-read this file to verify. If all requested changes are done, call 'complete'."
                                     } catch (e: Exception) {
                                         "Error appending to file: ${e.localizedMessage}"
                                     }
@@ -4626,6 +4395,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'append': $result"))))
+                                loopProtectionEngine.recordActionOutcome("append", args, isSuccess = isSuccess, turn = turn)
                             }
                             "edit", "patch", "patch_file", "edit_file" -> {
                                 val filePath = normalizePath(args?.path ?: "")
@@ -4687,7 +4457,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                                     path = filePath,
                                                     lines = foundRange
                                                 )
-                                                "Successfully modified file '$filePath'"
+                                                "Successfully modified file '$filePath'. Changes are saved. DO NOT re-read this file. If all requested changes are done, call 'complete'."
                                             } catch (e: Exception) {
                                                 "Error writing modified file: ${e.localizedMessage}"
                                             }
@@ -4708,6 +4478,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': $result"))))
+                                loopProtectionEngine.recordActionOutcome(tool, args, isSuccess = isSuccess, turn = turn)
                             }
                             "multi_edit_file", "multi_edit", "multi_patch" -> {
                                 val filePath = normalizePath(args?.path ?: args?.targetFile ?: args?.destinationPath ?: "")
@@ -4798,7 +4569,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                                     path = filePath,
                                                     lines = foundRange
                                                 )
-                                                "Successfully multi-edited file '$filePath' ($foundRange)"
+                                                "Successfully multi-edited file '$filePath' ($foundRange). Changes are saved. DO NOT re-read this file. If all requested changes are done, call 'complete'."
                                             } catch (e: Exception) {
                                                 "Error writing modified file: ${e.localizedMessage}"
                                             }
@@ -4819,6 +4590,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': $result"))))
+                                loopProtectionEngine.recordActionOutcome(tool, args, isSuccess = isSuccess, turn = turn)
                             }
                             "mcp_call_tool", "mcp_call", "mcp_execute", "call_mcp_tool", "use_mcp_tool", "mcp_tool", "mcp_list_tools", "mcp_list", "mcp_read_resource" -> {
                                 val result = McpToolHandler.handleMcpToolCall(
