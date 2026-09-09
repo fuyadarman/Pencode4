@@ -46,47 +46,16 @@ object AgentReadToolHandler {
                 )
             }
             "scan_dir" -> {
-                val rawPath = args?.path ?: args?.query ?: ""
-                var targetPath = normalizePath(rawPath)
-                if (targetPath == "." || targetPath == "./" || targetPath == "/") {
-                    targetPath = ""
-                }
-                if (targetPath.isEmpty()) {
-                    val errorMsg = "Error: Scanning the entire project root with 'scan_dir' is strictly forbidden to protect the context limit. You MUST specify a specific target subdirectory path (e.g., 'app', 'app/src', 'app/src/main/java/com/example') to scan its contents. This is a mandatory safety rule."
-                    ReadResult(
-                        output = errorMsg,
-                        isSuccess = false,
-                        logTitle = "Scanned directory (scan_dir)",
-                        logDetails = errorMsg,
-                        lineRange = null
-                    )
-                } else {
-                    val files = repository.getFilesForProject(projectName)
-                    val filteredFiles = files.filter { it.path.startsWith(targetPath) }
-                    val fileDetails = filteredFiles.sortedBy { it.path }.map { file ->
-                        val lineCount = file.content.lines().size
-                        val sizeInBytes = file.content.toByteArray(Charsets.UTF_8).size
-                        val sizeStr = if (sizeInBytes >= 1024 * 1024) {
-                            String.format("%.2f MB", sizeInBytes.toDouble() / (1024 * 1024))
-                        } else {
-                            String.format("%.2f KB", sizeInBytes.toDouble() / 1024)
-                        }
-                        "  - ${file.path} ($lineCount lines, $sizeStr)"
-                    }.joinToString("\n")
-
-                    val result = if (fileDetails.isEmpty()) {
-                        "No files or subdirectories found under '$targetPath'."
-                    } else {
-                        "Recursive scan of directory '$targetPath' succeeded. Found ${filteredFiles.size} files:\n$fileDetails"
-                    }
-                    ReadResult(
-                        output = result,
-                        isSuccess = true,
-                        logTitle = "Scanned directory (scan_dir)",
-                        logDetails = result,
-                        lineRange = null
-                    )
-                }
+                val rawPath = args?.path ?: args?.query ?: args?.targetFile ?: ""
+                val scanResult = AgentDirectoryScanResolver.scanDirectory(rawPath, projectName, repository)
+                ReadResult(
+                    output = scanResult.output,
+                    isSuccess = scanResult.isSuccess,
+                    logTitle = "Scanned directory (scan_dir)",
+                    logDetails = if (scanResult.isSuccess) "Found ${scanResult.fileCount} files in $rawPath" else scanResult.output,
+                    lineRange = null,
+                    pathsRead = scanResult.matchedFiles
+                )
             }
             "read_file" -> {
                 val filePath = normalizePath(args?.path ?: "")
@@ -113,14 +82,27 @@ object AgentReadToolHandler {
                             pathsRead = paths
                         )
                     } else {
-                        val err = "Error: File '$filePath' not found."
-                        ReadResult(
-                            output = err,
-                            isSuccess = false,
-                            logTitle = "Read file",
-                            logDetails = err,
-                            lineRange = "all"
-                        )
+                        val diskResolved = AgentDirectoryScanResolver.resolveFile(args?.path ?: filePath, projectName, repository)
+                        if (diskResolved != null) {
+                            val paths = listOf(filePath, diskResolved.path)
+                            ReadResult(
+                                output = "--- File: ${diskResolved.path} ---\n${diskResolved.content}",
+                                isSuccess = true,
+                                logTitle = "Read file",
+                                logDetails = "Read ${diskResolved.linesCount} lines from ${diskResolved.path}",
+                                lineRange = "all",
+                                pathsRead = paths
+                            )
+                        } else {
+                            val err = "Error: File '$filePath' not found."
+                            ReadResult(
+                                output = err,
+                                isSuccess = false,
+                                logTitle = "Read file",
+                                logDetails = err,
+                                lineRange = "all"
+                            )
+                        }
                     }
                 }
             }
@@ -177,14 +159,31 @@ object AgentReadToolHandler {
                             pathsRead = paths
                         )
                     } else {
-                        val err = "Error: File '$filePath' not found."
-                        ReadResult(
-                            output = err,
-                            isSuccess = false,
-                            logTitle = "read :$filePath",
-                            logDetails = err,
-                            lineRange = "Line $startLine-$endLine"
-                        )
+                        val diskResolved = AgentDirectoryScanResolver.resolveFile(args?.path ?: filePath, projectName, repository)
+                        if (diskResolved != null) {
+                            val paths = listOf(filePath, diskResolved.path)
+                            val lines = diskResolved.content.lines()
+                            val startIdx = (startLine - 1).coerceAtLeast(0).coerceAtMost(lines.size)
+                            val endIdx = endLine.coerceAtLeast(startIdx).coerceAtMost(lines.size)
+                            val selectedLines = lines.subList(startIdx, endIdx).joinToString("\n")
+                            ReadResult(
+                                output = "--- File: ${diskResolved.path} (Lines ${startIdx + 1}-$endIdx) ---\n$selectedLines",
+                                isSuccess = true,
+                                logTitle = "read :${diskResolved.path}",
+                                logDetails = "Read lines $startLine-$endLine from ${diskResolved.path}",
+                                lineRange = "Line $startLine-$endLine",
+                                pathsRead = paths
+                            )
+                        } else {
+                            val err = "Error: File '$filePath' not found."
+                            ReadResult(
+                                output = err,
+                                isSuccess = false,
+                                logTitle = "read :$filePath",
+                                logDetails = err,
+                                lineRange = "Line $startLine-$endLine"
+                            )
+                        }
                     }
                 }
             }
@@ -285,14 +284,36 @@ object AgentReadToolHandler {
                             pathsRead = paths
                         )
                     } else {
-                        val err = "Error: File '$filePath' not found."
-                        ReadResult(
-                            output = err,
-                            isSuccess = false,
-                            logTitle = "read :$filePath",
-                            logDetails = err,
-                            lineRange = "Line $formattedRanges"
-                        )
+                        val diskResolved = AgentDirectoryScanResolver.resolveFile(args?.path ?: args?.targetFile ?: filePath, projectName, repository)
+                        if (diskResolved != null) {
+                            val paths = listOf(filePath, diskResolved.path)
+                            val lines = diskResolved.content.lines()
+                            val blocks = mutableListOf<String>()
+                            for ((st, en) in rangePairs) {
+                                val startIdx = (st - 1).coerceAtLeast(0).coerceAtMost(lines.size)
+                                val endIdx = en.coerceAtLeast(startIdx).coerceAtMost(lines.size)
+                                val selectedLines = lines.subList(startIdx, endIdx).joinToString("\n")
+                                blocks.add("--- File: ${diskResolved.path} (Lines ${startIdx + 1}-$endIdx) ---\n$selectedLines")
+                            }
+                            val result = blocks.joinToString("\n\n")
+                            ReadResult(
+                                output = result,
+                                isSuccess = true,
+                                logTitle = "read :${diskResolved.path}",
+                                logDetails = "Read lines $formattedRanges from ${diskResolved.path}",
+                                lineRange = "Line $formattedRanges",
+                                pathsRead = paths
+                            )
+                        } else {
+                            val err = "Error: File '$filePath' not found."
+                            ReadResult(
+                                output = err,
+                                isSuccess = false,
+                                logTitle = "read :$filePath",
+                                logDetails = err,
+                                lineRange = "Line $formattedRanges"
+                            )
+                        }
                     }
                 }
             }
