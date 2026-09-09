@@ -1236,7 +1236,7 @@ fun ChatTabContent(
 
                     val isLatestUserAndThinking = isThinking && message.role == "user" && (index == messages.size - 1 || messages.subList(index + 1, messages.size).none { it.role == "user" })
 
-                    ChatBubble(
+                    com.example.ui.agent.CodexChatCard(
                         message = message,
                         onDeleteMessage = onDeleteMessage,
                         onEditMessage = onEditMessage,
