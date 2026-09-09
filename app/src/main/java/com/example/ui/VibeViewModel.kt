@@ -433,11 +433,8 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun clearAndroidBuildErrors() {
-        buildWorkflowErrorManager.onUserDismissErrors(
-            buildWorkflowErrorManager.currentTrackingRunId,
-            _detectedAndroidBuildErrors.value
-        )
         _detectedAndroidBuildErrors.value = emptyList()
+        attemptedAndroidErrorKeys.clear()
     }
 
     fun parseAndroidBuildErrors(logs: String, stepName: String, workflowPath: String = ".github/workflows/android.yml"): List<AndroidBuildError> {
@@ -557,11 +554,6 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         val selected = _detectedAndroidBuildErrors.value.filter { it.isSelected }
         if (selected.isEmpty()) return
         
-        buildWorkflowErrorManager.onUserAllowFixErrors(
-            buildWorkflowErrorManager.currentTrackingRunId,
-            selected
-        )
-        
         val project = _currentProject.value ?: return
         
         for (it in selected) {
@@ -678,7 +670,6 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     val allowBackgroundExecution = _allowBackgroundExecution.asStateFlow()
 
     private var lastAutoFixedRunId: Long = -1L
-    private val buildWorkflowErrorManager = com.example.ui.build.BuildWorkflowErrorManager()
     private var isAutoFixingWebErrors = false
 
     private val _githubToken = MutableStateFlow(sharedPrefs.getString("github_token", "") ?: "")
@@ -1362,7 +1353,6 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                         if (!workflowRuns.isNullOrEmpty()) {
                             val latestRun = workflowRuns[0] as? Map<*, *>
                             val runId = (latestRun?.get("id") as? Number)?.toLong()
-                            buildWorkflowErrorManager.updateCurrentRunId(runId)
                             val status = latestRun?.get("status") as? String ?: "unknown"
                             val conclusion = latestRun?.get("conclusion") as? String
                             val runNumber = (latestRun?.get("run_number") as? Number)?.toInt() ?: 1
@@ -1437,28 +1427,25 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                                                 _buildLogs.value = cleanLogs
                                                 
                                                 if (failedStep != null || conclusion == "failure") {
-                                                    val stepTitle = failedStep?.name ?: "Workflow execution"
-                                                    val parsedErrors = parseAndroidBuildErrors(cleanLogs, stepTitle, wfPath)
-                                                    
-                                                    if (buildWorkflowErrorManager.shouldPromptErrors(runId, parsedErrors)) {
-                                                        if (lastAutoFixedRunId != runId) {
-                                                            _detectedAndroidBuildErrors.value = parsedErrors
-                                                            
-                                                            val unattemptedErrors = parsedErrors.filter { err ->
+                                                    if (lastAutoFixedRunId != runId) {
+                                                        val stepTitle = failedStep?.name ?: "Workflow execution"
+                                                        val parsedErrors = parseAndroidBuildErrors(cleanLogs, stepTitle, wfPath)
+                                                        _detectedAndroidBuildErrors.value = parsedErrors
+                                                        
+                                                        val unattemptedErrors = parsedErrors.filter { err ->
+                                                            val key = "${err.filePath}:${err.lineNumber}:${err.message}"
+                                                            !attemptedAndroidErrorKeys.contains(key)
+                                                        }
+                                                        
+                                                        if (_allowAutoFix.value && unattemptedErrors.isNotEmpty()) {
+                                                            lastAutoFixedRunId = runId
+                                                            _detectedAndroidBuildErrors.value = parsedErrors.map { err ->
                                                                 val key = "${err.filePath}:${err.lineNumber}:${err.message}"
-                                                                !attemptedAndroidErrorKeys.contains(key)
+                                                                err.copy(isSelected = !attemptedAndroidErrorKeys.contains(key))
                                                             }
-                                                            
-                                                            if (_allowAutoFix.value && unattemptedErrors.isNotEmpty()) {
-                                                                lastAutoFixedRunId = runId ?: -1L
-                                                                _detectedAndroidBuildErrors.value = parsedErrors.map { err ->
-                                                                    val key = "${err.filePath}:${err.lineNumber}:${err.message}"
-                                                                    err.copy(isSelected = !attemptedAndroidErrorKeys.contains(key))
-                                                                }
-                                                                if (!_isThinking.value) {
-                                                                    viewModelScope.launch(Dispatchers.Main) {
-                                                                        fixSelectedAndroidBuildErrors()
-                                                                    }
+                                                            if (!_isThinking.value) {
+                                                                viewModelScope.launch(Dispatchers.Main) {
+                                                                    fixSelectedAndroidBuildErrors()
                                                                 }
                                                             }
                                                         }
@@ -1503,7 +1490,6 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun triggerWorkflows(selectedWorkflowIds: Set<Long>? = null) {
         lastAutoFixedRunId = -1L
-        buildWorkflowErrorManager.onNewWorkflowTriggered()
         val repoVal = _githubRepo.value.trim()
         val tokenVal = _githubToken.value.trim()
         val branchVal = _githubBranch.value.trim().ifBlank { "main" }
@@ -2273,8 +2259,6 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 _gitProgress.value = progress
             }
             if (result.isSuccess) {
-                lastAutoFixedRunId = -1L
-                buildWorkflowErrorManager.onNewWorkflowTriggered()
                 _gitProgress.value = "Push complete! Workflows & build tracking started."
                 startPollingBuild()
                 onComplete(result)
@@ -3970,7 +3954,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     break
                                 }
                                 actionsCount++
-                                _agentStatus.value = "AI thinking (Turn $turn, Action $actionsCount/$maxActionSteps)..."
+                                _agentStatus.value = "Executing tool '$tool' (Action $actionsCount/$maxActionSteps)..."
                             }
                             
                             when (tool) {

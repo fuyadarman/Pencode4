@@ -95,18 +95,11 @@ fun AgentActivityFeed(
             )
         }
 
-        // 2. Aggregate Tool Execution Summary Bar
-        ToolExecutionSummaryBar(logs = displayLogs)
-
-        // 3. Feed Items (Interleaved Thoughts & Dedicated Tool Execution Indicators)
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            displayLogs.forEach { log ->
-                AgentFeedItemRow(log = log, isGlobalThinking = isThinking)
-            }
-        }
+        // 2. Feed Items: Tool Execution Indicators matching screenshot design
+        ToolExecutionListView(
+            logs = displayLogs,
+            isThinking = isThinking
+        )
     }
 }
 
@@ -115,10 +108,21 @@ private fun AgentFeedItemRow(
     log: AiActionLog,
     isGlobalThinking: Boolean
 ) {
+    var isExpanded by remember { mutableStateOf(false) }
+
     val title = log.title
     val isThought = title.contains("thinking", ignoreCase = true) ||
             title.contains("formulating logic", ignoreCase = true) ||
             title.contains("Thought process", ignoreCase = true)
+    val isSkill = title.contains("skill", ignoreCase = true)
+    val isSubAgent = title.contains("agent", ignoreCase = true) ||
+            title.contains("security boundary", ignoreCase = true) ||
+            title.contains("specialist", ignoreCase = true) ||
+            title.contains("teammate", ignoreCase = true)
+    val isOptimization = title.contains("optimized", ignoreCase = true) ||
+            title.contains("prun", ignoreCase = true) ||
+            title.contains("compressed", ignoreCase = true) ||
+            title.contains("cache", ignoreCase = true)
 
     if (isThought) {
         // Interleaved thought block rendered seamlessly with subtle step title
@@ -155,10 +159,121 @@ private fun AgentFeedItemRow(
             )
         }
     } else {
-        // Dedicated, high-contrast Tool Execution Indicator
-        ToolExecutionIndicatorRow(
-            log = log,
-            isGlobalThinking = isGlobalThinking
-        )
+        // Compact action row with modern icon & clean typography
+        val (icon, iconTint, displayText, statusLabel) = when {
+            isSkill -> {
+                Quad(Icons.Default.AutoAwesome, Color(0xFF8B949E), title, null)
+            }
+            isSubAgent -> {
+                val status = when (log.status) {
+                    "thinking" -> "started working"
+                    "success" -> "finished"
+                    else -> "updated"
+                }
+                Quad(Icons.Default.Bolt, Color(0xFFE3B341), title, status)
+            }
+            isOptimization -> {
+                Quad(Icons.Default.Sync, Color(0xFF8B949E), "Optimized the conversation", null)
+            }
+            title.startsWith("Edit:") || title.startsWith("Patch:") || title.contains("Modified file") -> {
+                Quad(Icons.Default.Edit, Color(0xFF7EE787), title, if (log.status == "thinking") "editing" else null)
+            }
+            title.contains("search", ignoreCase = true) -> {
+                Quad(Icons.Default.Search, Color(0xFF8B949E), title, null)
+            }
+            else -> {
+                val cleanTitle = if (title.contains("Read files") || title.contains("Read:")) {
+                    "Read files, ran commands"
+                } else {
+                    title
+                }
+                Quad(Icons.Default.Description, Color(0xFF8B949E), cleanTitle, null)
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(6.dp))
+                .clickable(enabled = !log.details.isNullOrBlank()) {
+                    isExpanded = !isExpanded
+                }
+                .padding(vertical = 3.dp, horizontal = 2.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f, fill = false)
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = iconTint,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Text(
+                        text = displayText,
+                        fontSize = 13.sp,
+                        fontFamily = FontFamily.SansSerif,
+                        color = Color(0xFFE6EDF3),
+                        maxLines = 1
+                    )
+                }
+
+                if (statusLabel != null) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = statusLabel,
+                        fontSize = 12.sp,
+                        fontFamily = FontFamily.SansSerif,
+                        color = Color(0xFF8B949E)
+                    )
+                } else if (!log.details.isNullOrBlank()) {
+                    Icon(
+                        imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = "Details",
+                        tint = Color(0xFF484F58),
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
+
+            // Expanded details view for file diffs or command logs
+            AnimatedVisibility(visible = isExpanded && !log.details.isNullOrBlank()) {
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = Color(0xFF161B22),
+                    border = BorderStroke(1.dp, Color(0xFF30363D)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 6.dp, start = 22.dp)
+                ) {
+                    Column(modifier = Modifier.padding(8.dp)) {
+                        if (!log.lineRange.isNullOrBlank()) {
+                            Text(
+                                text = log.lineRange,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF58A6FF)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
+                        Text(
+                            text = log.details ?: "",
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color = Color(0xFF8B949E)
+                        )
+                    }
+                }
+            }
+        }
     }
 }
+
+private data class Quad<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)

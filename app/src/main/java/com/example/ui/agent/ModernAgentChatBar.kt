@@ -60,9 +60,9 @@ fun ModernAgentChatBar(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(14.dp),
-        color = Color(0xFF0E121A),
-        border = BorderStroke(1.dp, if (canSend) Color(0xFF38BDF8).copy(alpha = 0.4f) else Color(0xFF252D3D))
+        shape = RoundedCornerShape(12.dp),
+        color = Color(0xFF161B22),
+        border = BorderStroke(1.dp, Color(0xFF30363D))
     ) {
         Column(
             modifier = Modifier
@@ -111,8 +111,8 @@ fun ModernAgentChatBar(
                 onValueChange = onUpdateChatInputText,
                 placeholder = {
                     Text(
-                        text = "Ask Codex Agent (@ files, / skills)...",
-                        color = Color(0xFF6B7280),
+                        text = "Describe your request (@ files, / skills)...",
+                        color = Color(0xFF7D8590),
                         fontSize = 13.sp
                     )
                 },
