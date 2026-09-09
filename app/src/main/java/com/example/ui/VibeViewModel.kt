@@ -4624,6 +4624,22 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': $result"))))
                             }
+                            "generate_pdf", "generate_document" -> {
+                                val result = com.example.document.DocumentToolHandler.handleDocumentTool(
+                                    tool = tool,
+                                    args = args,
+                                    project = project,
+                                    repository = repository,
+                                    context = getApplication<android.app.Application>(),
+                                    createLog = { title, status, details, lineRange -> createAiLog(title = title, status = status, details = details, lineRange = lineRange) },
+                                    addLog = { log -> _aiActionLogs.value = _aiActionLogs.value + log },
+                                    updateLog = { id, status, details -> updateAiLog(id, status, details) },
+                                    setAgentStatus = { status -> _agentStatus.value = status },
+                                    normalizePath = { path -> normalizePath(path) }
+                                )
+                                history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
+                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': $result"))))
+                            }
                             "delete_code" -> {
                                 val filePath = normalizePath(args?.path ?: "")
                                 val searchStr = args?.search ?: ""

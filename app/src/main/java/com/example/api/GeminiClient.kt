@@ -123,7 +123,10 @@ data class ToolArguments(
     val direction: String? = null,
     val amount: Int? = null,
     val text: String? = null,
-    val targetImage: String? = null
+    val targetImage: String? = null,
+    val title: String? = null,
+    val theme: String? = null,
+    val type: String? = null
 )
 
 @JsonClass(generateAdapter = true)

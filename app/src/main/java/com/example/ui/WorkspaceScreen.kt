@@ -220,11 +220,12 @@ fun WorkspaceScreen(
     var showPushDialog by remember { mutableStateOf(false) }
     var showSearchDialog by remember { mutableStateOf(false) }
     var showRestoreDialog by remember { mutableStateOf(false) }
+    var showDocumentStudioDialog by remember { mutableStateOf(false) }
 
     androidx.activity.compose.BackHandler {
         if (showExplorer) {
             showExplorer = false
-        } else if (showSettingsDialog || showAgentSkillsDialog || showMcpDialog || showSelectMcpDialog || showPushDialog || showSearchDialog || showRestoreDialog || showCreateFileDialog) {
+        } else if (showSettingsDialog || showAgentSkillsDialog || showMcpDialog || showSelectMcpDialog || showPushDialog || showSearchDialog || showRestoreDialog || showCreateFileDialog || showDocumentStudioDialog) {
             showSettingsDialog = false
             showAgentSkillsDialog = false
             showMcpDialog = false
@@ -233,6 +234,7 @@ fun WorkspaceScreen(
             showSearchDialog = false
             showRestoreDialog = false
             showCreateFileDialog = false
+            showDocumentStudioDialog = false
         } else {
             onBack()
         }
@@ -344,6 +346,14 @@ fun WorkspaceScreen(
                                 color = Color(0xFFC9D1D9)
                             )
                         }
+                    }
+                    IconButton(onClick = { showDocumentStudioDialog = true }, modifier = Modifier.size(34.dp)) {
+                        Icon(
+                            imageVector = Icons.Default.PictureAsPdf,
+                            contentDescription = "Document & PDF Studio",
+                            tint = Color(0xFFFF7B72),
+                            modifier = Modifier.size(17.dp)
+                        )
                     }
                     IconButton(onClick = { showRestoreDialog = true }, modifier = Modifier.size(34.dp)) {
                         Icon(
@@ -635,6 +645,19 @@ fun WorkspaceScreen(
             onRestoreConfirmed = { backup ->
                 showRestoreDialog = false
                 onRestoreBackup(backup)
+            }
+        )
+    }
+
+    if (showDocumentStudioDialog) {
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val projectBaseDir = java.io.File(context.filesDir, "projects/${project.name}")
+        com.example.ui.document.DocumentStudioDialog(
+            initialTitle = project.name,
+            projectDirectory = projectBaseDir,
+            onDismiss = { showDocumentStudioDialog = false },
+            onDocumentGenerated = { generatedResult ->
+                onSendPrompt("I have generated a new document: ${generatedResult.fileName}. Please review or integrate it if needed.", emptyList())
             }
         )
     }
