@@ -194,6 +194,7 @@ fun WorkspaceScreen(
     webArtifactInfo: WebArtifactInfo? = null,
     onPreviewWebArtifact: () -> Unit = {},
     onFetchLatestArtifact: () -> Unit = {},
+    onRefreshProjectFiles: () -> Unit = {},
     isImportingFiles: Boolean = false,
     importProgress: Float = 0f,
     importProgressMessage: String = "",
@@ -657,6 +658,7 @@ fun WorkspaceScreen(
             projectDirectory = projectBaseDir,
             onDismiss = { showDocumentStudioDialog = false },
             onDocumentGenerated = { generatedResult ->
+                onRefreshProjectFiles()
                 onSendPrompt("I have generated a new document: ${generatedResult.fileName}. Please review or integrate it if needed.", emptyList())
             }
         )

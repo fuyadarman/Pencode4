@@ -3042,6 +3042,14 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         }
     }
 
+    fun refreshProjectFiles(projectName: String? = _currentProject.value?.name) {
+        val name = projectName ?: return
+        viewModelScope.launch {
+            repository.syncStorageToDatabase(name)
+            loadProjectDetails(name)
+        }
+    }
+
     fun createNewFile(path: String) {
         val project = _currentProject.value ?: return
         if (path.isBlank()) return
@@ -3630,6 +3638,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             var agentMessageSaved = false
             var lastThought: String? = null
             var consecutiveThinkOnlyCount = 0
+            var lastEditError: String? = null
+            var consecutiveFailedEdits = 0
+            var consecutiveTurnsWithoutEdits = 0
             val recentToolCallsHistory = mutableListOf<com.example.api.ToolCallItem>()
             val recentThoughtsHistory = mutableListOf<String>()
             val readFilesThisSession = mutableSetOf<String>()
@@ -3765,13 +3776,30 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                         }
 
                         if (toolCalls.isEmpty() || (toolCalls.size == 1 && toolCalls[0].tool == "complete") || consecutiveThinkOnlyCount >= 2) {
-                            if (consecutiveThinkOnlyCount >= 2) {
-                                handleComplete(lastThought ?: "Task completed after reasoning.")
-                            } else if (toolCalls.size == 1 && toolCalls[0].tool == "complete") {
-                                handleComplete(toolCalls[0].arguments?.message ?: "Task completed successfully!")
+                            val completionCheck = com.example.agent.AgentModelExecutionSafeguard.validateTaskCompletion(
+                                userPrompt = userPrompt,
+                                filesModifiedThisPrompt = filesModifiedThisPrompt,
+                                anyFilesModifiedSession = loopProtectionEngine.hasModifiedAnyFiles(),
+                                failedActionsInTurn = consecutiveFailedEdits,
+                                lastErrorSummary = lastEditError
+                            )
+                            if (completionCheck is com.example.agent.AgentModelExecutionSafeguard.CompletionCheckResult.Denied) {
+                                history.add(Content(role = "user", parts = listOf(Part(text = completionCheck.reason))))
+                                val failLog = createAiLog(
+                                    title = "Premature Completion Blocked",
+                                    status = "failed",
+                                    details = completionCheck.reason
+                                )
+                                _aiActionLogs.value = _aiActionLogs.value + failLog
+                            } else {
+                                if (consecutiveThinkOnlyCount >= 2) {
+                                    handleComplete(lastThought ?: "Task completed after reasoning.")
+                                } else if (toolCalls.size == 1 && toolCalls[0].tool == "complete") {
+                                    handleComplete(toolCalls[0].arguments?.message ?: "Task completed successfully!")
+                                }
+                                loopCompleted = true
+                                break
                             }
-                            loopCompleted = true
-                            break
                         }
 
                         val hasPlannedEdits = toolCalls.any { 
@@ -3785,8 +3813,26 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                             val args = call.arguments
 
                             if (tool == "complete") {
-                                handleComplete(args?.message ?: "Task completed successfully!")
-                                break
+                                val completionCheck = com.example.agent.AgentModelExecutionSafeguard.validateTaskCompletion(
+                                    userPrompt = userPrompt,
+                                    filesModifiedThisPrompt = filesModifiedThisPrompt,
+                                    anyFilesModifiedSession = loopProtectionEngine.hasModifiedAnyFiles(),
+                                    failedActionsInTurn = consecutiveFailedEdits,
+                                    lastErrorSummary = lastEditError
+                                )
+                                if (completionCheck is com.example.agent.AgentModelExecutionSafeguard.CompletionCheckResult.Denied) {
+                                    history.add(Content(role = "user", parts = listOf(Part(text = completionCheck.reason))))
+                                    val failLog = createAiLog(
+                                        title = "Premature Completion Blocked",
+                                        status = "failed",
+                                        details = completionCheck.reason
+                                    )
+                                    _aiActionLogs.value = _aiActionLogs.value + failLog
+                                    continue
+                                } else {
+                                    handleComplete(args?.message ?: "Task completed successfully!")
+                                    break
+                                }
                             }
 
                             // 1. Evaluate candidate action via AgentLoopProtectionEngine (Antigravity/OpenCode protection)
@@ -3931,297 +3977,27 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 val toolName = stepResponse.tool ?: "ai_think"
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$toolName': $title logged successfully. Proceed with your plan."))))
                             }
-                            "list_directory" -> {
-                                val targetPath = args?.path ?: "."
-                                val listLog = createAiLog(
-                                    title = "Explored directory",
-                                    status = "thinking",
-                                    details = targetPath
+                            "list_directory", "scan_dir", "read_file", "read_file_range", "multi_read_file", "multi_read" -> {
+                                val readRes = com.example.agent.AgentReadToolHandler.handleReadTool(
+                                    tool = tool,
+                                    args = args,
+                                    projectName = project.name,
+                                    repository = repository
                                 )
-                                _aiActionLogs.value = _aiActionLogs.value + listLog
-
-                                val files = repository.getFilesForProject(project.name)
-                                val fileDetails = files.sortedBy { it.path }.map { file ->
-                                    val lineCount = file.content.lines().size
-                                    val sizeInBytes = file.content.toByteArray(Charsets.UTF_8).size
-                                    val sizeStr = if (sizeInBytes >= 1024 * 1024) {
-                                        String.format("%.2f MB", sizeInBytes.toDouble() / (1024 * 1024))
-                                    } else {
-                                        String.format("%.2f KB", sizeInBytes.toDouble() / 1024)
-                                    }
-                                    "  - ${file.path} ($lineCount lines, $sizeStr)"
-                                }.joinToString("\n")
-                                val result = if (fileDetails.isEmpty()) "Directory is empty." else "Files found:\n$fileDetails"
-
-                                updateAiLog(listLog.id, "success", result)
-
-                                // Append results to history
-                                history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
-                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'list_directory': $result"))))
-                            }
-                            "scan_dir" -> {
-                                val rawPath = args?.path ?: args?.query ?: ""
-                                var targetPath = normalizePath(rawPath)
-                                if (targetPath == "." || targetPath == "./" || targetPath == "/") {
-                                    targetPath = ""
+                                for (p in readRes.pathsRead) {
+                                    readFilesThisSession.add(p)
                                 }
-                                val scanLog = createAiLog(
-                                    title = "Scanned directory (scan_dir)",
-                                    status = "thinking",
-                                    details = if (targetPath.isEmpty()) "Root workspace" else targetPath
-                                )
-                                _aiActionLogs.value = _aiActionLogs.value + scanLog
-
-                                if (targetPath.isEmpty()) {
-                                    val errorMsg = "Error: Scanning the entire project root with 'scan_dir' is strictly forbidden to protect the context limit. You MUST specify a specific target subdirectory path (e.g., 'app', 'app/src', 'app/src/main/java/com/example') to scan its contents. This is a mandatory safety rule."
-                                    updateAiLog(scanLog.id, "failed", errorMsg)
-                                    history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
-                                    history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'scan_dir': $errorMsg"))))
-                                } else {
-                                    val files = repository.getFilesForProject(project.name)
-                                    val filteredFiles = files.filter { it.path.startsWith(targetPath) }
-
-                                    val fileDetails = filteredFiles.sortedBy { it.path }.map { file ->
-                                        val lineCount = file.content.lines().size
-                                        val sizeInBytes = file.content.toByteArray(Charsets.UTF_8).size
-                                        val sizeStr = if (sizeInBytes >= 1024 * 1024) {
-                                            String.format("%.2f MB", sizeInBytes.toDouble() / (1024 * 1024))
-                                        } else {
-                                            String.format("%.2f KB", sizeInBytes.toDouble() / 1024)
-                                        }
-                                        "  - ${file.path} ($lineCount lines, $sizeStr)"
-                                    }.joinToString("\n")
-
-                                    val result = if (fileDetails.isEmpty()) {
-                                        "No files or subdirectories found under '$targetPath'."
-                                    } else {
-                                        "Recursive scan of directory '$targetPath' succeeded. Found ${filteredFiles.size} files:\n$fileDetails"
-                                    }
-
-                                    updateAiLog(scanLog.id, "success", result)
-
-                                    history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
-                                    history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'scan_dir': $result"))))
-                                }
-                            }
-                            "read_file" -> {
-                                val filePath = normalizePath(args?.path ?: "")
                                 val readLog = createAiLog(
-                                    title = "Read file",
-                                    status = "thinking",
-                                    details = filePath,
-                                    lineRange = "all"
+                                    title = readRes.logTitle,
+                                    status = if (readRes.isSuccess) "success" else "failed",
+                                    details = readRes.logDetails,
+                                    lineRange = readRes.lineRange
                                 )
                                 _aiActionLogs.value = _aiActionLogs.value + readLog
 
-                                val result = if (repository.isBinaryExtension(filePath)) {
-                                    "Error: Reading, editing, patching, or appending to binary image or 3D files directly as text is NOT allowed. You can only view their existence via 'list_directory' or perform operations like rename, delete, move, resize, or format change."
-                                } else {
-                                    val files = repository.getFilesForProject(project.name)
-                                    val targetFile = files.find { it.path == filePath || normalizePath(it.path) == filePath || it.path.endsWith(filePath) || filePath.endsWith(it.path) }
-                                    if (targetFile != null) {
-                                        readFilesThisSession.add(filePath)
-                                        readFilesThisSession.add(normalizePath(filePath))
-                                        readFilesThisSession.add(targetFile.path)
-                                        readFilesThisSession.add(normalizePath(targetFile.path))
-                                        "--- File: $filePath ---\n${targetFile.content}"
-                                    } else {
-                                        "Error: File '$filePath' not found."
-                                    }
-                                }
-
-                                val logDetails = if (repository.isBinaryExtension(filePath)) {
-                                    "Error: Cannot read binary files as text"
-                                } else {
-                                    val files = repository.getFilesForProject(project.name)
-                                    val targetFile = files.find { it.path == filePath || normalizePath(it.path) == filePath || it.path.endsWith(filePath) || filePath.endsWith(it.path) }
-                                    if (targetFile != null) {
-                                        "Read ${targetFile.content.lines().size} lines from $filePath"
-                                    } else {
-                                        "Error: File '$filePath' not found."
-                                    }
-                                }
-                                updateAiLog(readLog.id, if (result.startsWith("--- File:")) "success" else "failed", logDetails)
-
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
-                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'read_file': $result"))))
-                                loopProtectionEngine.recordActionOutcome("read_file", args, isSuccess = result.startsWith("--- File:"), turn = turn)
-                            }
-                            "read_file_range" -> {
-                                val filePath = normalizePath(args?.path ?: "")
-                                var rawStartLine = args?.startLine
-                                var rawEndLine = args?.endLine
-                                
-                                val lr = args?.lineRange
-                                if (!lr.isNullOrBlank()) {
-                                    val match = """(\d+)\s*[-:to\.]+\s*(\d+)""".toRegex().find(lr)
-                                    if (match != null) {
-                                        rawStartLine = rawStartLine ?: match.groupValues[1].toIntOrNull()
-                                        rawEndLine = rawEndLine ?: match.groupValues[2].toIntOrNull()
-                                    } else {
-                                        val singleMatch = """(\d+)""".toRegex().find(lr)
-                                        if (singleMatch != null) {
-                                            rawStartLine = rawStartLine ?: singleMatch.groupValues[1].toIntOrNull()
-                                        }
-                                    }
-                                }
-                                
-                                val startLine = rawStartLine ?: 1
-                                var endLineInput = rawEndLine ?: (startLine + 99)
-                                if (endLineInput < startLine) {
-                                    endLineInput = startLine + 99
-                                }
-                                val endLine = endLineInput
-                                val readLog = AiActionLog(
-                                    title = "read :$filePath",
-                                    status = "thinking",
-                                    details = filePath,
-                                    lineRange = "Line $startLine-$endLine"
-                                )
-                                _aiActionLogs.value = _aiActionLogs.value + readLog
-
-                                val result = if (repository.isBinaryExtension(filePath)) {
-                                    "Error: Reading, editing, patching, or appending to binary image or 3D files directly as text is NOT allowed. You can only view their existence via 'list_directory' or perform operations like rename, delete, move, resize, or format change."
-                                } else {
-                                    val files = repository.getFilesForProject(project.name)
-                                    val targetFile = files.find { it.path == filePath || normalizePath(it.path) == filePath || it.path.endsWith(filePath) || filePath.endsWith(it.path) }
-                                    if (targetFile != null) {
-                                        readFilesThisSession.add(filePath)
-                                        readFilesThisSession.add(normalizePath(filePath))
-                                        readFilesThisSession.add(targetFile.path)
-                                        readFilesThisSession.add(normalizePath(targetFile.path))
-                                        val lines = targetFile.content.lines()
-                                        val startIdx = (startLine - 1).coerceAtLeast(0).coerceAtMost(lines.size)
-                                        val endIdx = endLine.coerceAtLeast(startIdx).coerceAtMost(lines.size)
-                                        val selectedLines = lines.subList(startIdx, endIdx).joinToString("\n")
-                                        "--- File: $filePath (Lines ${startIdx + 1}-$endIdx) ---\n$selectedLines"
-                                    } else {
-                                        "Error: File '$filePath' not found."
-                                    }
-                                }
-
-                                val logDetails = if (repository.isBinaryExtension(filePath)) {
-                                    "Error: Cannot read binary files as text"
-                                } else {
-                                    val files = repository.getFilesForProject(project.name)
-                                    val targetFile = files.find { it.path == filePath || normalizePath(it.path) == filePath || it.path.endsWith(filePath) || filePath.endsWith(it.path) }
-                                    if (targetFile != null) {
-                                        "Read lines $startLine-$endLine from $filePath"
-                                    } else {
-                                        "Error: File '$filePath' not found."
-                                    }
-                                }
-                                updateAiLog(readLog.id, if (result.startsWith("--- File:")) "success" else "failed", logDetails)
-
-                                history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
-                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'read_file_range': $result"))))
-                            }
-                            "multi_read_file", "multi_read" -> {
-                                val filePath = normalizePath(args?.path ?: args?.targetFile ?: "")
-                                val rangePairs = mutableListOf<Pair<Int, Int>>()
-
-                                val rawRanges = args?.ranges
-                                val rawRangeList = args?.rangeList
-                                val rawLineRange = args?.lineRange ?: args?.query ?: args?.search ?: ""
-
-                                if (!rawRanges.isNullOrEmpty()) {
-                                    for (item in rawRanges) {
-                                        val s = item.startLine
-                                        val e = item.endLine ?: item.startLine
-                                        if (s != null) {
-                                            rangePairs.add(Pair(s, e ?: s))
-                                        } else if (!item.range.isNullOrBlank()) {
-                                            val match = """(\d+)\s*[-:to\.]+\s*(\d+)""".toRegex().find(item.range)
-                                            if (match != null) {
-                                                val st = match.groupValues[1].toIntOrNull()
-                                                val en = match.groupValues[2].toIntOrNull()
-                                                if (st != null) rangePairs.add(Pair(st, en ?: st))
-                                            } else {
-                                                val single = """(\d+)""".toRegex().find(item.range)?.groupValues?.get(1)?.toIntOrNull()
-                                                if (single != null) rangePairs.add(Pair(single, single))
-                                            }
-                                        }
-                                    }
-                                }
-
-                                if (rangePairs.isEmpty() && !rawRangeList.isNullOrEmpty()) {
-                                    for (str in rawRangeList) {
-                                        val match = """(\d+)\s*[-:to\.]+\s*(\d+)""".toRegex().find(str)
-                                        if (match != null) {
-                                            val st = match.groupValues[1].toIntOrNull()
-                                            val en = match.groupValues[2].toIntOrNull()
-                                            if (st != null) rangePairs.add(Pair(st, en ?: st))
-                                        } else {
-                                            val single = """(\d+)""".toRegex().find(str)?.groupValues?.get(1)?.toIntOrNull()
-                                            if (single != null) rangePairs.add(Pair(single, single))
-                                        }
-                                    }
-                                }
-
-                                if (rangePairs.isEmpty() && rawLineRange.isNotBlank()) {
-                                    val matches = """(\d+)\s*[-:to\.]+\s*(\d+)""".toRegex().findAll(rawLineRange)
-                                    for (m in matches) {
-                                        val st = m.groupValues[1].toIntOrNull()
-                                        val en = m.groupValues[2].toIntOrNull()
-                                        if (st != null) rangePairs.add(Pair(st, en ?: st))
-                                    }
-                                    if (rangePairs.isEmpty()) {
-                                        val singleMatches = """(\d+)""".toRegex().findAll(rawLineRange)
-                                        for (sm in singleMatches) {
-                                            val num = sm.groupValues[1].toIntOrNull()
-                                            if (num != null) rangePairs.add(Pair(num, num))
-                                        }
-                                    }
-                                }
-
-                                if (rangePairs.isEmpty()) {
-                                    rangePairs.add(Pair(1, 30))
-                                }
-
-                                val formattedRanges = rangePairs.joinToString(", ") { (st, en) ->
-                                    if (st == en) "$st" else "$st-$en"
-                                }
-
-                                val readLog = AiActionLog(
-                                    title = "read :$filePath",
-                                    status = "thinking",
-                                    details = filePath,
-                                    lineRange = "Line $formattedRanges"
-                                )
-                                _aiActionLogs.value = _aiActionLogs.value + readLog
-
-                                val result = if (repository.isBinaryExtension(filePath)) {
-                                    "Error: Cannot read binary files as text."
-                                } else {
-                                    val files = repository.getFilesForProject(project.name)
-                                    val targetFile = files.find { it.path == filePath || normalizePath(it.path) == filePath || it.path.endsWith(filePath) || filePath.endsWith(it.path) }
-                                    if (targetFile != null) {
-                                        readFilesThisSession.add(filePath)
-                                        readFilesThisSession.add(normalizePath(filePath))
-                                        readFilesThisSession.add(targetFile.path)
-                                        readFilesThisSession.add(normalizePath(targetFile.path))
-                                        val lines = targetFile.content.lines()
-
-                                        val blocks = mutableListOf<String>()
-                                        for ((st, en) in rangePairs) {
-                                            val startIdx = (st - 1).coerceAtLeast(0).coerceAtMost(lines.size)
-                                            val endIdx = en.coerceAtLeast(startIdx).coerceAtMost(lines.size)
-                                            val selectedLines = lines.subList(startIdx, endIdx).joinToString("\n")
-                                            blocks.add("--- File: $filePath (Lines ${startIdx + 1}-$endIdx) ---\n$selectedLines")
-                                        }
-                                        blocks.joinToString("\n\n")
-                                    } else {
-                                        "Error: File '$filePath' not found."
-                                    }
-                                }
-
-                                val isSuccess = result.startsWith("--- File:")
-                                val logDetails = if (isSuccess) "Read lines $formattedRanges from $filePath" else result
-                                updateAiLog(readLog.id, if (isSuccess) "success" else "failed", logDetails, lineRange = "Line $formattedRanges")
-
-                                history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
-                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': $result"))))
-                                loopProtectionEngine.recordActionOutcome(tool, args, isSuccess = isSuccess, turn = turn)
+                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': ${readRes.output}"))))
+                                loopProtectionEngine.recordActionOutcome(tool, args, isSuccess = readRes.isSuccess, turn = turn)
                             }
                             "create_file" -> {
                                 val filePath = normalizePath(args?.path ?: "")
@@ -4426,49 +4202,34 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     }
                                 } else true
 
-                                val result = if (repository.isBinaryExtension(filePath)) {
-                                    "Error: Reading, editing, patching, or appending to binary image or 3D files directly as text is NOT allowed. You can only view their existence via 'list_directory' or perform operations like rename, delete, move, resize, or format change."
-                                } else if (targetFile != null && !fileHasBeenRead) {
-                                    "Error: SYSTEM REJECTION - You cannot edit or patch file '$filePath' without reading it first! You MUST call 'read_file' or 'read_file_range' on '$filePath' to inspect its exact and current contents before making any changes. Please read the file first."
-                                } else if (targetFile != null) {
-                                    val originalContent = targetFile.content
-                                    if (searchStr.isEmpty()) {
-                                        "Error: 'search' block cannot be empty. You must specify the exact, unique block of code to search and replace. Do not use write_file/create to overwrite an existing file for small edits."
-                                    } else if (!originalContent.contains(searchStr)) {
-                                        "Error: Could not find exact search block in $filePath. Please double-check characters, indentation, and spaces."
-                                    } else {
-                                        val occurrences = originalContent.split(searchStr).size - 1
-                                        if (occurrences > 1) {
-                                            "Error: The search block is not unique. It occurs $occurrences times in the file. Please provide a larger unique block of context code."
-                                        } else {
-                                            val startIndex = originalContent.indexOf(searchStr)
-                                            val linesBefore = originalContent.substring(0, startIndex).count { it == '\n' } + 1
-                                            val linesInSearch = searchStr.count { it == '\n' }
-                                            val endLine = linesBefore + linesInSearch
-                                            foundRange = if (linesBefore == endLine) "line $linesBefore" else "lines $linesBefore-$endLine"
-                                            
-                                            val updatedContent = originalContent.replace(searchStr, replaceStr)
-                                            try {
-                                                repository.saveFile(project.name, filePath, updatedContent)
-                                                filesModifiedThisPrompt = true
-                                                val toolType = if (tool.contains("patch")) "patch" else "edit"
-                                                _editHistory.value = _editHistory.value + EditRecord(
-                                                    tool = toolType,
-                                                    path = filePath,
-                                                    lines = foundRange
-                                                )
-                                                "Successfully modified file '$filePath'. Changes are saved. DO NOT re-read this file. If all requested changes are done, call 'complete'."
-                                            } catch (e: Exception) {
-                                                "Error writing modified file: ${e.localizedMessage}"
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    "Error: File '$filePath' not found."
-                                }
+                                val execResult = com.example.agent.AgentEditToolExecutor.executeEdit(
+                                    tool = tool,
+                                    filePath = filePath,
+                                    searchStr = searchStr,
+                                    replaceStr = replaceStr,
+                                    targetFile = targetFile,
+                                    fileHasBeenRead = fileHasBeenRead,
+                                    projectName = project.name,
+                                    repository = repository
+                                )
 
-                                val isSuccess = result.startsWith("Successfully")
-                                val range = if (foundRange.isNotEmpty()) foundRange else args?.lineRange ?: ""
+                                val (result, isSuccess, range) = when (execResult) {
+                                    is com.example.agent.AgentEditToolExecutor.EditExecutionResult.Success -> {
+                                        filesModifiedThisPrompt = true
+                                        consecutiveFailedEdits = 0
+                                        lastEditError = null
+                                        _editHistory.value = _editHistory.value + execResult.editRecord
+                                        Triple(execResult.message, true, execResult.rangeDesc)
+                                    }
+                                    is com.example.agent.AgentEditToolExecutor.EditExecutionResult.Failure -> {
+                                        if (execResult.markFileAsRead && execResult.filePath != null) {
+                                            readFilesThisSession.add(execResult.filePath)
+                                        }
+                                        consecutiveFailedEdits++
+                                        lastEditError = execResult.errorMessage
+                                        Triple(execResult.errorMessage, false, args?.lineRange ?: "")
+                                    }
+                                }
                                 updateAiLog(
                                     patchLog.id, 
                                     if (isSuccess) "success" else "failed", 
@@ -4980,6 +4741,26 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 if (!lastThought.isNullOrBlank()) {
                     recentThoughtsHistory.add(lastThought!!)
                 }
+                if (filesModifiedThisPrompt) {
+                    consecutiveTurnsWithoutEdits = 0
+                } else {
+                    consecutiveTurnsWithoutEdits++
+                }
+
+                // Pro Model Convergence safeguard: halt endless post-edit verification and thinking loops
+                val proConvergence = com.example.agent.AgentModelExecutionSafeguard.evaluateProModelConvergence(
+                    turn = turn,
+                    consecutiveTurnsWithoutEdits = consecutiveTurnsWithoutEdits,
+                    hasModifiedFiles = filesModifiedThisPrompt || loopProtectionEngine.hasModifiedAnyFiles(),
+                    recentThoughts = recentThoughtsHistory,
+                    currentThought = lastThought
+                )
+                if (proConvergence is com.example.agent.AgentModelExecutionSafeguard.ProConvergenceDecision.ForceAutoComplete) {
+                    handleComplete(proConvergence.summary)
+                    loopCompleted = true
+                    break
+                }
+
                 turn++
                 // Reload project files list inside the loop so changes update dynamically
                 loadProjectDetails(project.name)

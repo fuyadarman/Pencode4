@@ -338,6 +338,9 @@ class MainActivity : ComponentActivity() {
                                 onImportFiles = { uris ->
                                     viewModel.importFilesFromDevice(uris)
                                 },
+                                onRefreshProjectFiles = {
+                                    viewModel.refreshProjectFiles()
+                                },
                                 isImportingFiles = isImportingFiles,
                                 importProgress = importProgress,
                                 importProgressMessage = importProgressMessage,

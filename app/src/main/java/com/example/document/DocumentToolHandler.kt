@@ -67,7 +67,9 @@ object DocumentToolHandler {
                             style = style,
                             destinationDir = baseDir,
                             customFileName = customPath
-                        )
+                        ).also { res ->
+                            DocumentExplorerSyncHelper.syncGeneratedDocument(project.name, repository, res)
+                        }
                     }
 
                     updateLog(
@@ -130,7 +132,9 @@ object DocumentToolHandler {
                             style = style,
                             destinationDir = baseDir,
                             customFileName = customPath
-                        )
+                        ).also { res ->
+                            DocumentExplorerSyncHelper.syncGeneratedDocument(project.name, repository, res)
+                        }
                     }
 
                     updateLog(

@@ -137,9 +137,9 @@ class AgentLoopProtectionEngine {
 
         // 1. Completion Thought Sniffer:
         // If AI thought explicitly states the problem is fixed or changes are complete,
-        // and it has already modified code or thoroughly read the files, AUTO-FINISH!
+        // and it has already modified code, AUTO-FINISH!
         val indicatesFixed = COMPLETION_INDICATORS.any { thought.contains(it, ignoreCase = true) }
-        if (indicatesFixed && (filesModified.isNotEmpty() || filesRead.isNotEmpty())) {
+        if (indicatesFixed && filesModified.isNotEmpty()) {
             if (isReadTool(tool) || tool == "ai_think" || tool == "ai_response") {
                 return LoopDecision.AutoComplete(
                     summary = thought.ifBlank { "Task completed: All requested changes and inspections are complete." },
@@ -277,7 +277,7 @@ class AgentLoopProtectionEngine {
             if (path.isNotEmpty()) {
                 filesRead.add(path)
             }
-        } else {
+        } else if (normTool != "ai_think" && normTool != "ai_response") {
             consecutiveReadCount = 0
         }
 

@@ -59,7 +59,7 @@ class VibeRepository(private val dao: VibeDao, private val context: Context) {
 
     fun isBinaryExtension(path: String): Boolean {
         val ext = path.substringAfterLast(".", "").lowercase()
-        return ext in setOf("png", "jpg", "jpeg", "webp", "gif", "bmp", "ico", "obj", "gltf", "glb", "fbx", "3ds", "stl", "dex", "arsc", "so", "jar", "apk", "zip")
+        return ext in setOf("png", "jpg", "jpeg", "webp", "gif", "bmp", "ico", "pdf", "obj", "gltf", "glb", "fbx", "3ds", "stl", "dex", "arsc", "so", "jar", "apk", "zip")
     }
 
     fun isPhysicalFileBinary(file: File, relativePath: String): Boolean {
@@ -167,6 +167,7 @@ class VibeRepository(private val dao: VibeDao, private val context: Context) {
                             "webp" -> "image/webp"
                             "gif" -> "image/gif"
                             "ico" -> "image/x-icon"
+                            "pdf" -> "application/pdf"
                             else -> "application/octet-stream"
                         }
                         "data:$mimeType;base64," + Base64.encodeToString(bytes, Base64.NO_WRAP)
