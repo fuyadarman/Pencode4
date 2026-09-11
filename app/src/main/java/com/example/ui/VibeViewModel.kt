@@ -4010,8 +4010,13 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 )
                                 _aiActionLogs.value = _aiActionLogs.value + createLog
 
-                                val existingFiles = _projectFiles.value
-                                val fileAlreadyExists = existingFiles.any { it.path == filePath || normalizePath(it.path) == filePath || it.path.endsWith(filePath) || filePath.endsWith(it.path) }
+                                val existingFiles = repository.getFilesForProject(project.name)
+                                _projectFiles.value = existingFiles
+                                val cleanNormalizedPath = normalizePath(filePath)
+                                val fileAlreadyExists = existingFiles.any {
+                                    val exNorm = normalizePath(it.path)
+                                    exNorm == cleanNormalizedPath || it.path == filePath || it.path == cleanNormalizedPath
+                                }
 
                                 val result = if (fileAlreadyExists) {
                                     "Error: File '$filePath' already exists. Overwriting or recreating existing files with 'create_file' is strictly prohibited. You MUST call 'read_file' or 'read_file_range' first and then use 'edit_file' or 'patch_file' to modify existing files."
@@ -4366,7 +4371,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': $result"))))
                             }
-                            "generate_image", "resize_image", "browser_search", "browser_click", "browser_read", "create_todo_list", "complete_todo_task", "delete_file", "rename_file", "move_file",
+                            "generate_image", "pollinations_image", "create_image", "generate_logo", "create_logo",
+                            "copy_file", "duplicate_code", "duplicate_file", "clone_web_ui", "scrape_web_ui",
+                            "fetch_url", "read_url", "scrape_url", "skill_check", "list_skills", "inspect_skill",
+                            "ask_user", "ask_question", "clarify_with_user",
+                            "resize_image", "browser_search", "browser_click", "browser_read", "create_todo_list", "complete_todo_task", "delete_file", "rename_file", "move_file",
                             "open_url", "navigate", "browse_url", "get_page_source", "inspect_dom", "inspect_css", "get_computed_styles", "take_screenshot", "click", "type", "scroll", "get_links", "get_images", "get_fonts", "run_javascript", "execute_javascript", "eval_js", "compare_screenshot" -> {
                                 val result = ExtraToolHandlers.handleExtraToolCall(
                                     tool = tool,
@@ -4380,8 +4389,15 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     addLog = { log -> _aiActionLogs.value = _aiActionLogs.value + log },
                                     updateLog = { id, status, details -> updateAiLog(id, status, details) },
                                     setAgentStatus = { status -> _agentStatus.value = status },
-                                    normalizePath = { path -> normalizePath(path) }
+                                    normalizePath = { path -> normalizePath(path) },
+                                    activeSkills = _agentSkills.value
                                 )
+
+                                if (result.startsWith("Successfully") || result.contains("Successfully")) {
+                                    filesModifiedThisPrompt = true
+                                    _projectFiles.value = repository.getFilesForProject(project.name)
+                                }
+
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': $result"))))
                             }

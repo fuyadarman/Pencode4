@@ -186,6 +186,8 @@ object AgentInstructionEngine {
         tools.add("'ai_think'(message [MANDATORY before operations/debug])")
         tools.add("'complete'(message [Final task summary])")
         tools.add("'ai_response'(message)")
+        tools.add("'ask_user'(question, options?: [string]) [Ask clarification/confirmation when confused or deciding; resumes upon reply]")
+        tools.add("'skill_check'(query?: string) [Query/inspect active skills and instructions]")
 
         // Code / File tools
         if (intents.contains(PromptIntent.CODE_MODIFICATION_OR_FEATURE) || intents.contains(PromptIntent.DEBUG_AND_ERROR_FIXING) || intents.contains(PromptIntent.GENERAL_AGENT_TASK) || intents.contains(PromptIntent.SEARCH_AND_EXPLORATION)) {
@@ -194,22 +196,30 @@ object AgentInstructionEngine {
             tools.add("'multi_read_file'(path, ranges:[{startLine,endLine}])")
             tools.add("'create_file'(path, content)")
             tools.add("'edit_file'(path, search, replace)")
-            tools.add("'multi_edit_file'(path, chunks:[{search,replace}]) [Apply multiple search & replace edits to one file. Supports 'chunks' or 'replacementChunks']")
+            tools.add("'multi_edit_file'(path, chunks:[{search,replace}]) [Apply multiple search & replace edits to one file]")
             tools.add("'patch_file'(path, search, replace)")
             tools.add("'append'(path, content)")
-            tools.add("'delete_file'(path)")
+            tools.add("'copy_file'(path, destinationPath)")
+            tools.add("'duplicate_file'(path, count?: number, targetPaths?: [string])")
             tools.add("'move_file'(path, destinationPath)")
+            tools.add("'delete_file'(path)")
             tools.add("'scan_dir'(path: folder name)")
             tools.add("'global_search'(query)")
+            tools.add("'generate_image'(prompt, path?: 'assets/image.png', width?: 1024, height?: 1024, isLogo?: boolean)")
+            tools.add("'generate_logo'(prompt, path?: 'assets/logo.png', width?: 512, height?: 512)")
             tools.add("'create_todo_list'(query)")
             tools.add("'complete_todo_task'(query)")
             tools.add("'generate_pdf'(title, content, theme: 'modern'|'elegant'|'minimal'|'cyberpunk'|'dark', path?: optional filename)")
             tools.add("'generate_document'(type: 'pdf'|'html'|'md'|'txt', title, content, theme?: string, path?: string)")
         }
 
-        // Web / Browser inspection tools
+        // Web / Internet / Browser inspection & cloning tools
+        tools.add("'browser_search'(query [Search web or navigate URL])")
+        tools.add("'browser_read'() [Read current webpage/article]")
+        tools.add("'fetch_url'(url, targetFile?: string) [Fetch raw web page / article text]")
+        tools.add("'clone_web_ui'(url, targetFilePath?: string) [Scrape website UI, extract design tokens and clone layout]")
+
         if (intents.contains(PromptIntent.WEB_AND_UI_INSPECTION)) {
-            tools.add("'browser_search'(query)")
             tools.add("'open_url'(url)")
             tools.add("'inspect_dom'(selector)")
             tools.add("'inspect_css'(selector)")

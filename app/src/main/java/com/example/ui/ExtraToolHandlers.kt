@@ -24,66 +24,176 @@ object ExtraToolHandlers {
         addLog: (AiActionLog) -> Unit,
         updateLog: (id: String, status: String, details: String) -> Unit,
         setAgentStatus: (String) -> Unit,
-        normalizePath: (String) -> String
+        normalizePath: (String) -> String,
+        activeSkills: List<AgentSkill> = emptyList()
     ): String {
         return when (tool) {
-            "generate_image" -> {
-                val filePath = normalizePath(args?.path ?: "image.png")
-                val imagePrompt = args?.prompt ?: "beautiful abstract digital art"
-                val width = args?.width ?: 1024
-                val height = args?.height ?: 1024
+            "generate_image", "pollinations_image", "create_image", "generate_logo", "create_logo" -> {
+                val isLogo = tool == "generate_logo" || tool == "create_logo" || args?.isLogo == true
+                val filePath = normalizePath(if (!args?.path.isNullOrBlank()) args.path else if (!args?.targetFile.isNullOrBlank()) args.targetFile else if (isLogo) "assets/logo.png" else "assets/image.png")
+                val imagePrompt = args?.prompt ?: args?.query ?: args?.message ?: if (isLogo) "modern sleek app logo icon" else "beautiful abstract digital art"
+                val width = args?.width ?: if (isLogo) 512 else 1024
+                val height = args?.height ?: if (isLogo) 512 else 1024
 
                 val genLog = createLog(
-                    "Generate image",
+                    if (isLogo) "Generate Logo" else "Generate image",
                     "thinking",
                     "Generating: \"$imagePrompt\" ($width x $height)",
                     "pollinations"
                 )
                 addLog(genLog)
-                setAgentStatus("Generating image using Pollinations AI...")
+                setAgentStatus("Generating ${if (isLogo) "logo" else "image"} with Pollinations AI...")
 
-                val result = try {
-                    withContext(Dispatchers.IO) {
-                        val client = okhttp3.OkHttpClient()
-                        val encodedPrompt = java.net.URLEncoder.encode(imagePrompt, "UTF-8")
-                        val randomSeed = (1..1000000).random()
-                        val url = "https://image.pollinations.ai/prompt/$encodedPrompt?width=$width&height=$height&seed=$randomSeed&model=flux&nologo=true"
-
-                        val request = okhttp3.Request.Builder()
-                            .url(url)
-                            .get()
-                            .build()
-
-                        val response = client.newCall(request).execute()
-                        if (response.isSuccessful) {
-                            val bytes = response.body?.bytes()
-                            if (bytes != null) {
-                                val mimeType = when (filePath.substringAfterLast(".", "").lowercase()) {
-                                    "png" -> "image/png"
-                                    "jpg", "jpeg" -> "image/jpeg"
-                                    "webp" -> "image/webp"
-                                    "gif" -> "image/gif"
-                                    "ico" -> "image/x-icon"
-                                    else -> "image/png"
-                                }
-                                val base64Content = "data:$mimeType;base64," + android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
-                                repository.saveFile(project.name, filePath, base64Content)
-                                "Successfully generated and saved image to '$filePath'"
-                            } else {
-                                "Error: Image response body was empty."
-                            }
-                        } else {
-                            "Error: Failed to fetch image from Pollinations (HTTP ${response.code})."
-                        }
-                    }
-                } catch (e: Exception) {
-                    val errorMsg = e.localizedMessage ?: e.javaClass.simpleName
-                    "Error generating image: $errorMsg"
-                }
+                val result = com.example.agent.PollinationsImageGenerationEngine.generateImageOrLogo(
+                    projectName = project.name,
+                    prompt = imagePrompt,
+                    targetPath = filePath,
+                    width = width,
+                    height = height,
+                    isLogo = isLogo,
+                    repository = repository,
+                    normalizePath = normalizePath
+                )
 
                 val isSuccess = result.startsWith("Successfully")
                 updateLog(genLog.id, if (isSuccess) "success" else "failed", result)
                 result
+            }
+            "copy_file", "duplicate_code" -> {
+                val srcPath = args?.path ?: args?.sourcePath ?: args?.oldPath ?: ""
+                val dstPath = args?.destinationPath ?: args?.targetFile ?: args?.newPath ?: ""
+                val copyLog = createLog(
+                    "Copy File",
+                    "thinking",
+                    "Copying '$srcPath' to '$dstPath'",
+                    null
+                )
+                addLog(copyLog)
+                setAgentStatus("Copying file to $dstPath...")
+
+                val result = com.example.agent.ExtendedFileOperationsEngine.copyFile(
+                    projectName = project.name,
+                    sourcePath = srcPath,
+                    destinationPath = dstPath,
+                    repository = repository,
+                    normalizePath = normalizePath
+                )
+
+                val isSuccess = result.startsWith("Successfully")
+                updateLog(copyLog.id, if (isSuccess) "success" else "failed", result)
+                result
+            }
+            "duplicate_file" -> {
+                val srcPath = args?.path ?: args?.sourcePath ?: ""
+                val dupLog = createLog(
+                    "Duplicate File",
+                    "thinking",
+                    "Creating duplicates of '$srcPath'",
+                    null
+                )
+                addLog(dupLog)
+                setAgentStatus("Duplicating file $srcPath...")
+
+                val result = com.example.agent.ExtendedFileOperationsEngine.duplicateFile(
+                    projectName = project.name,
+                    sourcePath = srcPath,
+                    targetPaths = args?.targetPaths,
+                    count = args?.count,
+                    repository = repository,
+                    normalizePath = normalizePath
+                )
+
+                val isSuccess = result.startsWith("Successfully")
+                updateLog(dupLog.id, if (isSuccess) "success" else "failed", result)
+                result
+            }
+            "clone_web_ui", "scrape_web_ui" -> {
+                val targetUrl = (args?.url ?: args?.query ?: args?.message ?: "").trim()
+                val targetFile = args?.targetFile ?: args?.destinationPath ?: args?.path
+                val cloneLog = createLog(
+                    "Clone Web UI",
+                    "thinking",
+                    "Scraping and cloning UI from: $targetUrl",
+                    "web-clone"
+                )
+                addLog(cloneLog)
+                setAgentStatus("Scraping and cloning UI design from $targetUrl...")
+
+                val result = com.example.agent.WebScraperAndUiCloneEngine.cloneWebUi(
+                    url = targetUrl,
+                    targetFilePath = targetFile,
+                    projectName = project.name,
+                    repository = repository,
+                    backgroundBrowser = backgroundBrowser,
+                    normalizePath = normalizePath
+                )
+
+                val isSuccess = result.startsWith("Successfully")
+                updateLog(cloneLog.id, if (isSuccess) "success" else "failed", result.take(300))
+                result
+            }
+            "fetch_url", "read_url", "scrape_url" -> {
+                val targetUrl = (args?.url ?: args?.query ?: args?.message ?: "").trim()
+                val targetFile = args?.targetFile ?: args?.path
+                val fetchLog = createLog(
+                    "Fetch Web URL",
+                    "thinking",
+                    "Fetching web page content: $targetUrl",
+                    "background-browser"
+                )
+                addLog(fetchLog)
+                setAgentStatus("Fetching remote URL content: $targetUrl...")
+
+                val result = com.example.agent.WebScraperAndUiCloneEngine.fetchUrlContent(
+                    url = targetUrl,
+                    projectName = project.name,
+                    repository = repository,
+                    saveToWorkspace = true,
+                    targetFile = targetFile,
+                    normalizePath = normalizePath
+                )
+
+                val isSuccess = result.startsWith("Successfully")
+                updateLog(fetchLog.id, if (isSuccess) "success" else "failed", result.take(250))
+                result
+            }
+            "skill_check", "list_skills", "inspect_skill" -> {
+                val queryVal = args?.query ?: args?.prompt ?: args?.message
+                val skillLog = createLog(
+                    "Skill Check",
+                    "thinking",
+                    "Checking available skills for '${queryVal ?: "all"}'",
+                    "skills"
+                )
+                addLog(skillLog)
+
+                val result = com.example.agent.SkillCheckAndExecutionEngine.performSkillCheck(
+                    query = queryVal,
+                    activeSkills = activeSkills
+                )
+
+                updateLog(skillLog.id, "success", "Checked skills: ${result.take(150)}...")
+                result
+            }
+            "ask_user", "ask_question", "clarify_with_user" -> {
+                val question = args?.question ?: args?.message ?: args?.prompt ?: args?.query ?: "Could you please clarify your request?"
+                val options = args?.options
+                val askLog = createLog(
+                    "Ask User Clarification",
+                    "thinking",
+                    question,
+                    "user-input"
+                )
+                addLog(askLog)
+                setAgentStatus("Waiting for user answer: $question")
+
+                val formattedQuestion = com.example.agent.InteractiveUserClarificationEngine.formatClarificationQuestion(
+                    question = question,
+                    options = options
+                )
+
+                updateLog(askLog.id, "success", "Asked user: $formattedQuestion")
+                "[USER QUESTION PROMPT]: $formattedQuestion\n\n(Agent paused awaiting user input. Once answered, continuation will proceed automatically.)"
             }
             "resize_image" -> {
                 val sourcePath = normalizePath(args?.path ?: "")
@@ -325,7 +435,7 @@ object ExtraToolHandlers {
                     "Error deleting file: ${e.localizedMessage}"
                 }
 
-                updateLog(deleteLog.id, "success", result)
+                updateLog(deleteLog.id, if (result.startsWith("Successfully")) "success" else "failed", result)
                 result
             }
             "rename_file" -> {

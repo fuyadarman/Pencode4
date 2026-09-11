@@ -126,7 +126,13 @@ data class ToolArguments(
     val targetImage: String? = null,
     val title: String? = null,
     val theme: String? = null,
-    val type: String? = null
+    val type: String? = null,
+    val question: String? = null,
+    val options: List<String>? = null,
+    val isLogo: Boolean? = null,
+    val targetPaths: List<String>? = null,
+    val count: Int? = null,
+    val sourcePath: String? = null
 )
 
 @JsonClass(generateAdapter = true)
