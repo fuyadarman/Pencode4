@@ -289,6 +289,9 @@ object GeminiClient {
             val amount = argMap["amount"]?.toIntOrNull()
             val text = argMap["text"] ?: argMap["value"]
             val targetImage = argMap["targetimage"] ?: argMap["image"]
+            val width = argMap["width"]?.toIntOrNull()
+            val height = argMap["height"]?.toIntOrNull()
+            val format = argMap["format"]
 
             val thoughtText = rawText.substringBefore("<arg_key>").substringBefore(".$inferredTool").replace(Regex("<[^>]+>"), "").trim()
 
@@ -309,6 +312,9 @@ object GeminiClient {
                     startLine = startLine,
                     endLine = endLine,
                     prompt = prompt,
+                    width = width,
+                    height = height,
+                    format = format,
                     url = url,
                     selector = selector,
                     properties = properties,
@@ -340,11 +346,15 @@ object GeminiClient {
         val thought = extractField(rawText, "thought") ?: extractXmlField(rawText, "thought")
         val message = extractField(rawText, "message") ?: extractXmlField(rawText, "message")
         val path = extractField(rawText, "path") ?: extractXmlField(rawText, "path") ?: extractField(rawText, "targetFile") ?: extractXmlField(rawText, "targetFile")
+        val destinationPath = extractField(rawText, "destinationPath") ?: extractXmlField(rawText, "destinationPath") ?: extractField(rawText, "dest") ?: extractXmlField(rawText, "dest")
         val content = extractField(rawText, "content") ?: extractXmlField(rawText, "content")
         val command = extractField(rawText, "command") ?: extractXmlField(rawText, "command")
         val search = extractField(rawText, "search") ?: extractXmlField(rawText, "search") ?: extractField(rawText, "targetContent") ?: extractXmlField(rawText, "targetContent")
         val replace = extractField(rawText, "replace") ?: extractXmlField(rawText, "replace") ?: extractField(rawText, "replacementContent") ?: extractXmlField(rawText, "replacementContent")
         val query = extractField(rawText, "query") ?: extractXmlField(rawText, "query")
+        val width = (extractField(rawText, "width") ?: extractXmlField(rawText, "width"))?.toIntOrNull()
+        val height = (extractField(rawText, "height") ?: extractXmlField(rawText, "height"))?.toIntOrNull()
+        val format = extractField(rawText, "format") ?: extractXmlField(rawText, "format")
         val parsedChunks = com.example.agent.MultiEditChunkParser.parseChunksFromRawString(rawText).ifEmpty {
             com.example.agent.MultiEditChunkParser.parseChunksFromRawText(rawText)
         }
@@ -357,11 +367,15 @@ object GeminiClient {
                     message = message,
                     path = path,
                     targetFile = path,
+                    destinationPath = destinationPath,
                     content = content,
                     command = command,
                     search = search,
                     replace = replace,
                     query = query,
+                    width = width,
+                    height = height,
+                    format = format,
                     chunks = parsedChunks.ifEmpty { null },
                     replacementChunks = parsedChunks.ifEmpty { null }
                 ),

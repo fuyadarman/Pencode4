@@ -3064,6 +3064,15 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         }
     }
 
+    fun saveFileContent(path: String, content: String) {
+        val project = _currentProject.value ?: return
+        if (path.isBlank()) return
+        viewModelScope.launch {
+            repository.saveFile(project.name, path, content)
+            loadProjectDetails(project.name)
+        }
+    }
+
     fun deleteCurrentFile(path: String) {
         val project = _currentProject.value ?: return
         val lowerPath = path.lowercase().trim()
@@ -4375,7 +4384,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                             "copy_file", "duplicate_code", "duplicate_file", "clone_web_ui", "scrape_web_ui",
                             "fetch_url", "read_url", "scrape_url", "skill_check", "list_skills", "inspect_skill",
                             "ask_user", "ask_question", "clarify_with_user",
-                            "resize_image", "browser_search", "browser_click", "browser_read", "create_todo_list", "complete_todo_task", "delete_file", "rename_file", "move_file",
+                            "resize_image", "scale_image", "image_resize", "compress_image", "browser_search", "browser_click", "browser_read", "create_todo_list", "complete_todo_task", "delete_file", "rename_file", "move_file",
                             "open_url", "navigate", "browse_url", "get_page_source", "inspect_dom", "inspect_css", "get_computed_styles", "take_screenshot", "click", "type", "scroll", "get_links", "get_images", "get_fonts", "run_javascript", "execute_javascript", "eval_js", "compare_screenshot" -> {
                                 val result = ExtraToolHandlers.handleExtraToolCall(
                                     tool = tool,

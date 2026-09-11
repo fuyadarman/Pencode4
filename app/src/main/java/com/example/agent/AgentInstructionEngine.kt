@@ -78,6 +78,11 @@ object AgentInstructionEngine {
             intents.add(PromptIntent.CODE_MODIFICATION_OR_FEATURE)
         }
 
+        // Image generation, resizing & manipulation
+        if (p.contains("resize") || p.contains("scale") || p.contains("image") || p.contains("crop") || p.contains("ছবি") || p.contains("রিসাইজ") || p.contains("compress")) {
+            intents.add(PromptIntent.CODE_MODIFICATION_OR_FEATURE)
+        }
+
         // Code modification / New features
         if (hasTaggedFiles || p.contains("create") || p.contains("add") || p.contains("build") || p.contains("implement") || p.contains("modify") || p.contains("update") || p.contains("change") || p.contains("write") || p.contains("edit") || p.contains("screen") || p.contains("ui") || p.contains("button") || p.contains("feature") || p.contains("design") || p.contains("code") || p.contains("refactor") || p.contains("make")) {
             intents.add(PromptIntent.CODE_MODIFICATION_OR_FEATURE)
@@ -207,6 +212,7 @@ object AgentInstructionEngine {
             tools.add("'global_search'(query)")
             tools.add("'generate_image'(prompt, path?: 'assets/image.png', width?: 1024, height?: 1024, isLogo?: boolean)")
             tools.add("'generate_logo'(prompt, path?: 'assets/logo.png', width?: 512, height?: 512)")
+            tools.add("'resize_image'(path, width?: number, height?: number, destinationPath?: string, format?: 'png'|'jpg'|'webp') [Resize, scale, convert, or compress an image]")
             tools.add("'create_todo_list'(query)")
             tools.add("'complete_todo_task'(query)")
             tools.add("'generate_pdf'(title, content, theme: 'modern'|'elegant'|'minimal'|'cyberpunk'|'dark', path?: optional filename)")

@@ -175,6 +175,29 @@ object ToolExecutionItemMapper {
                     details = log.details
                 )
             }
+            lowerTitle.startsWith("resize image") || lowerTitle.contains("resize_image") || lowerTitle.contains("scale_image") || lowerTitle.contains("resized image") -> {
+                val target = details.lineSequence().firstOrNull()?.trim() ?: "image"
+                ToolStyleSpec(
+                    actionTitle = "Resized image",
+                    targetLabel = target,
+                    icon = Icons.Default.Crop,
+                    iconColor = Color(0xFFFFB86C),
+                    isExecuting = isExecuting,
+                    details = log.details
+                )
+            }
+            lowerTitle.startsWith("generate image") || lowerTitle.startsWith("generate logo") || lowerTitle.contains("generate_image") || lowerTitle.contains("generate_logo") -> {
+                val isLogo = lowerTitle.contains("logo")
+                val target = details.lineSequence().firstOrNull()?.trim() ?: title
+                ToolStyleSpec(
+                    actionTitle = if (isLogo) "Generated logo" else "Generated image",
+                    targetLabel = target,
+                    icon = Icons.Default.Image,
+                    iconColor = Color(0xFFFF79C6),
+                    isExecuting = isExecuting,
+                    details = log.details
+                )
+            }
             lowerTitle.startsWith("mcp:") || lowerTitle.contains("mcp") -> {
                 ToolStyleSpec(
                     actionTitle = "Executed MCP tool",

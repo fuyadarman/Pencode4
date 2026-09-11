@@ -195,67 +195,34 @@ object ExtraToolHandlers {
                 updateLog(askLog.id, "success", "Asked user: $formattedQuestion")
                 "[USER QUESTION PROMPT]: $formattedQuestion\n\n(Agent paused awaiting user input. Once answered, continuation will proceed automatically.)"
             }
-            "resize_image" -> {
-                val sourcePath = normalizePath(args?.path ?: "")
-                val destPath = normalizePath(args?.destinationPath ?: "")
-                val targetWidth = args?.width ?: 512
-                val targetHeight = args?.height ?: 512
-                val outputFormatStr = args?.format ?: destPath.substringAfterLast(".", "png")
+            "resize_image", "scale_image", "image_resize", "compress_image" -> {
+                val sourcePath = normalizePath(args?.path ?: args?.targetFile ?: args?.sourcePath ?: args?.targetImage ?: "")
+                val destPath = if (!args?.destinationPath.isNullOrBlank()) normalizePath(args.destinationPath) else if (!args?.newPath.isNullOrBlank()) normalizePath(args.newPath) else sourcePath
+                val targetWidth = args?.width
+                val targetHeight = args?.height
+                val outputFormatStr = args?.format
 
                 val resizeLog = createLog(
                     "Resize image",
                     "thinking",
-                    "Resizing $sourcePath to $destPath ($targetWidth x $targetHeight, format: $outputFormatStr)",
-                    "android-graphics"
+                    "Resizing $sourcePath to $destPath (${targetWidth ?: "auto"} x ${targetHeight ?: "auto"})",
+                    "image-resize"
                 )
                 addLog(resizeLog)
+                setAgentStatus("Resizing image $sourcePath...")
 
-                val files = repository.getFilesForProject(project.name)
-                val sourceFile = files.find { it.path == sourcePath }
-
-                val result = if (sourceFile == null) {
-                    "Error: Source image file '$sourcePath' not found."
-                } else {
-                    try {
-                        val base64String = sourceFile.content
-                        val isBase64Image = base64String.startsWith("data:") && base64String.contains(";base64,")
-                        val cleanBase64 = if (isBase64Image) base64String.substringAfter(";base64,") else base64String
-                        val bytes = android.util.Base64.decode(cleanBase64, android.util.Base64.DEFAULT)
-
-                        val originalBitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                        if (originalBitmap != null) {
-                            val resizedBitmap = android.graphics.Bitmap.createScaledBitmap(originalBitmap, targetWidth, targetHeight, true)
-                            val stream = java.io.ByteArrayOutputStream()
-                            val compressFormat = when (outputFormatStr.lowercase()) {
-                                "jpg", "jpeg" -> android.graphics.Bitmap.CompressFormat.JPEG
-                                "webp" -> android.graphics.Bitmap.CompressFormat.WEBP
-                                else -> android.graphics.Bitmap.CompressFormat.PNG
-                            }
-                            resizedBitmap.compress(compressFormat, 100, stream)
-                            val resizedBytes = stream.toByteArray()
-
-                            val destMimeType = when (destPath.substringAfterLast(".", "").lowercase()) {
-                                "png" -> "image/png"
-                                "jpg", "jpeg" -> "image/jpeg"
-                                "webp" -> "image/webp"
-                                "gif" -> "image/gif"
-                                "ico" -> "image/x-icon"
-                                else -> "image/png"
-                            }
-                            val destBase64 = "data:$destMimeType;base64," + android.util.Base64.encodeToString(resizedBytes, android.util.Base64.NO_WRAP)
-                            repository.saveFile(project.name, destPath, destBase64)
-
-                            originalBitmap.recycle()
-                            resizedBitmap.recycle()
-
-                            "Successfully resized and saved image to '$destPath' ($targetWidth x $targetHeight, format: ${compressFormat.name})"
-                        } else {
-                            "Error: Failed to decode image bytes from '$sourcePath'."
-                        }
-                    } catch (e: Exception) {
-                        "Error resizing image: ${e.localizedMessage}"
-                    }
-                }
+                val result = com.example.agent.ImageResizeEngine.resizeImage(
+                    projectName = project.name,
+                    sourcePath = sourcePath,
+                    destinationPath = destPath,
+                    targetWidth = targetWidth,
+                    targetHeight = targetHeight,
+                    format = outputFormatStr,
+                    maintainAspectRatio = true,
+                    quality = 90,
+                    repository = repository,
+                    normalizePath = normalizePath
+                )
 
                 val isSuccess = result.startsWith("Successfully")
                 updateLog(resizeLog.id, if (isSuccess) "success" else "failed", result)
