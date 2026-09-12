@@ -405,9 +405,17 @@ object ExtraToolHandlers {
                 updateLog(deleteLog.id, if (result.startsWith("Successfully")) "success" else "failed", result)
                 result
             }
-            "rename_file" -> {
-                val oldPath = normalizePath(if (!args?.oldPath.isNullOrBlank()) args.oldPath else args?.path ?: "")
-                val newPath = normalizePath(if (!args?.newPath.isNullOrBlank()) args.newPath else args?.destinationPath ?: "")
+            "rename_file", "rename" -> {
+                val oldPath = normalizePath(
+                    if (!args?.oldPath.isNullOrBlank()) args.oldPath
+                    else if (!args?.sourcePath.isNullOrBlank()) args.sourcePath
+                    else args?.path ?: ""
+                )
+                val newPath = normalizePath(
+                    if (!args?.newPath.isNullOrBlank()) args.newPath
+                    else if (!args?.destinationPath.isNullOrBlank()) args.destinationPath
+                    else args?.targetPath ?: ""
+                )
                 val renameLog = createLog(
                     "Renamed file",
                     "thinking",
@@ -424,15 +432,23 @@ object ExtraToolHandlers {
                         "Successfully renamed '$oldPath' to '$newPath'"
                     }
                 } catch (e: Exception) {
-                    "Error renaming file: ${e.localizedMessage}"
+                    "Error renaming file: ${e.localizedMessage ?: e.javaClass.simpleName}"
                 }
 
                 updateLog(renameLog.id, if (result.startsWith("Successfully")) "success" else "failed", result)
                 result
             }
-            "move_file" -> {
-                val oldPath = normalizePath(if (!args?.oldPath.isNullOrBlank()) args.oldPath else args?.path ?: "")
-                val newPath = normalizePath(if (!args?.newPath.isNullOrBlank()) args.newPath else args?.destinationPath ?: "")
+            "move_file", "move" -> {
+                val oldPath = normalizePath(
+                    if (!args?.oldPath.isNullOrBlank()) args.oldPath
+                    else if (!args?.sourcePath.isNullOrBlank()) args.sourcePath
+                    else args?.path ?: ""
+                )
+                val newPath = normalizePath(
+                    if (!args?.newPath.isNullOrBlank()) args.newPath
+                    else if (!args?.destinationPath.isNullOrBlank()) args.destinationPath
+                    else args?.targetPath ?: ""
+                )
                 val moveLog = createLog(
                     "Moved file",
                     "thinking",
@@ -449,10 +465,70 @@ object ExtraToolHandlers {
                         "Successfully moved '$oldPath' to '$newPath'"
                     }
                 } catch (e: Exception) {
-                    "Error moving file: ${e.localizedMessage}"
+                    "Error moving file: ${e.localizedMessage ?: e.javaClass.simpleName}"
                 }
 
                 updateLog(moveLog.id, if (result.startsWith("Successfully")) "success" else "failed", result)
+                result
+            }
+            "transfer_code_chunk", "copy_code_chunk", "move_code_chunk", "copy_code_block", "move_code_block" -> {
+                val isMoveCall = tool == "move_code_chunk" || tool == "move_code_block" || args?.isMove == true
+                val sourcePath = if (!args?.sourcePath.isNullOrBlank()) args.sourcePath else if (!args?.oldPath.isNullOrBlank()) args.oldPath else args?.path ?: ""
+                val targetPath = if (!args?.targetPath.isNullOrBlank()) args.targetPath else if (!args?.newPath.isNullOrBlank()) args.newPath else args?.destinationPath ?: ""
+                val chunk = if (!args?.codeChunk.isNullOrBlank()) args.codeChunk else if (!args?.sourceBlock.isNullOrBlank()) args.sourceBlock else args?.search ?: ""
+
+                val transferLog = createLog(
+                    if (isMoveCall) "Moved code block" else "Copied code block",
+                    "thinking",
+                    "${if (isMoveCall) "Moving" else "Copying"} code block from '$sourcePath' to '$targetPath'",
+                    null
+                )
+                addLog(transferLog)
+
+                val result = when (val res = com.example.agent.CodeChunkTransferEngine.transferCodeChunk(
+                    sourcePath = sourcePath,
+                    targetPath = targetPath,
+                    codeChunk = chunk,
+                    targetAnchor = args?.targetAnchor,
+                    insertAt = args?.insertAt,
+                    isMove = isMoveCall,
+                    project = project,
+                    repository = repository,
+                    normalizePath = normalizePath
+                )) {
+                    is com.example.agent.CodeChunkTransferEngine.TransferResult.Success -> res.message
+                    is com.example.agent.CodeChunkTransferEngine.TransferResult.Failure -> res.errorMessage
+                }
+
+                updateLog(transferLog.id, if (result.startsWith("Successfully")) "success" else "failed", result)
+                result
+            }
+            "delete_code_chunk", "delete_code_block", "remove_code_chunk", "remove_code_block" -> {
+                val filePath = if (!args?.path.isNullOrBlank()) args.path else if (!args?.targetFile.isNullOrBlank()) args.targetFile else args?.sourcePath ?: ""
+                val chunk = if (!args?.codeChunk.isNullOrBlank()) args.codeChunk else if (!args?.sourceBlock.isNullOrBlank()) args.sourceBlock else args?.search ?: ""
+                val deleteAll = args?.deleteAllOccurrences ?: false
+
+                val deleteLog = createLog(
+                    "Deleted code block",
+                    "thinking",
+                    "Deleting code block from '$filePath'",
+                    null
+                )
+                addLog(deleteLog)
+
+                val result = when (val res = com.example.agent.CodeChunkDeleteEngine.deleteCodeChunk(
+                    filePath = filePath,
+                    codeChunk = chunk,
+                    deleteAllOccurrences = deleteAll,
+                    project = project,
+                    repository = repository,
+                    normalizePath = normalizePath
+                )) {
+                    is com.example.agent.CodeChunkDeleteEngine.DeleteResult.Success -> res.message
+                    is com.example.agent.CodeChunkDeleteEngine.DeleteResult.Failure -> res.errorMessage
+                }
+
+                updateLog(deleteLog.id, if (result.startsWith("Successfully")) "success" else "failed", result)
                 result
             }
             "open_url", "navigate", "browse_url" -> {
@@ -790,6 +866,72 @@ object ExtraToolHandlers {
                 }
 
                 updateLog(compLog.id, "success", result)
+                result
+            }
+            "browser_snapshot", "browser_inspect_interactive", "inspect_interactive", "browser_elements" -> {
+                val snapLog = createLog(
+                    "Browser Interactive Snapshot",
+                    "thinking",
+                    "Scanning clickable, typable, and form elements on page...",
+                    "web-clone"
+                )
+                addLog(snapLog)
+                setAgentStatus("Scanning interactive elements on webpage...")
+
+                val result = com.example.browser.BrowserControllerAgentEngine.getInteractiveSnapshot(backgroundBrowser)
+                updateLog(snapLog.id, "success", "Captured interactive elements snapshot.")
+                result
+            }
+            "browser_controller", "browser_interact", "browser_action" -> {
+                val act = args?.action ?: if (!args?.text.isNullOrBlank()) "type" else if (args?.elementIndex != null || !args?.selector.isNullOrBlank()) "click" else "scroll"
+                val actLog = createLog(
+                    "Browser Controller Action",
+                    "thinking",
+                    "Executing browser action: $act",
+                    "web-clone"
+                )
+                addLog(actLog)
+                setAgentStatus("Performing browser action: $act...")
+
+                val result = com.example.browser.BrowserControllerAgentEngine.executeBrowserAction(
+                    action = act,
+                    selector = args?.selector,
+                    elementIndex = args?.elementIndex,
+                    text = args?.text ?: args?.content,
+                    clearBefore = args?.clearBefore ?: true,
+                    pressEnter = args?.pressEnter ?: false,
+                    direction = args?.direction,
+                    amount = args?.amount,
+                    backgroundBrowser = backgroundBrowser
+                )
+
+                val isSuccess = !result.startsWith("Error")
+                updateLog(actLog.id, if (isSuccess) "success" else "failed", result)
+                result
+            }
+            "deep_clone_web_ui" -> {
+                val targetUrl = (args?.url ?: args?.query ?: args?.message ?: "").trim()
+                val targetFile = args?.targetFile ?: args?.destinationPath ?: args?.path
+                val cloneLog = createLog(
+                    "Deep Clone Web UI",
+                    "thinking",
+                    "Deeply inspecting & cloning layout and design tokens from: $targetUrl",
+                    "web-clone"
+                )
+                addLog(cloneLog)
+                setAgentStatus("Deeply cloning UI design from $targetUrl...")
+
+                val result = com.example.browser.BrowserControllerAgentEngine.deepCloneWebUi(
+                    url = targetUrl,
+                    targetFilePath = targetFile,
+                    projectName = project.name,
+                    repository = repository,
+                    backgroundBrowser = backgroundBrowser,
+                    normalizePath = normalizePath
+                )
+
+                val isSuccess = result.startsWith("Successfully")
+                updateLog(cloneLog.id, if (isSuccess) "success" else "failed", result.take(300))
                 result
             }
             else -> "Error: Unknown tool '$tool'"

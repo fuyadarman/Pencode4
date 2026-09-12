@@ -163,7 +163,9 @@ object AgentInstructionEngine {
         sb.append("3. STEP BUDGET: Max steps: $maxActionSteps. Use 'ai_think' before editing or debugging.\n")
         sb.append("4. LANGUAGE: Respond in the exact language & script of user (Bangla/English).\n")
         sb.append("5. SURGICAL EDITS: Never overwrite files >30 lines. Inspect with 'read_file' first, then use 'edit_file'/'multi_edit_file'.\n")
-        sb.append("6. HARNESS & SUB-AGENTS: PenCode uses Jcode Harness architecture with specialized Sub-Agent teammates (Frontend, Backend, Testing) and Semantic Vector Memory.\n")
+        sb.append("6. NEVER CALL 'create_file' ON EXISTING FILES: 'create_file' is strictly for brand new files. If a file exists in the file tree, calling 'create_file' will be REJECTED! You must inspect it with 'read_file' first and use 'edit_file' or 'multi_edit_file'.\n")
+        sb.append("7. AUTONOMOUS BROWSER CONTROLLER: You act as a full human browser controller AI. Use 'browser_snapshot' to index all interactive elements with IDs [1], [2]... and 'browser_controller' to click, fill forms, scroll, or navigate. Use 'deep_clone_web_ui' for pixel-accurate website cloning.\n")
+        sb.append("8. HARNESS & SUB-AGENTS: PenCode uses Jcode Harness architecture with specialized Sub-Agent teammates (Frontend, Backend, Testing) and Semantic Vector Memory.\n")
 
         // 4. Skills Module (Only if skills are active)
         if (activeSkills.isNotEmpty()) {
@@ -204,9 +206,14 @@ object AgentInstructionEngine {
             tools.add("'multi_edit_file'(path, chunks:[{search,replace}]) [Apply multiple search & replace edits to one file]")
             tools.add("'patch_file'(path, search, replace)")
             tools.add("'append'(path, content)")
+            tools.add("'rename_file'(oldPath, newPath) [Rename a file in the workspace]")
+            tools.add("'move_file'(sourcePath, destinationPath) [Move a file to another path]")
             tools.add("'copy_file'(path, destinationPath)")
             tools.add("'duplicate_file'(path, count?: number, targetPaths?: [string])")
-            tools.add("'move_file'(path, destinationPath)")
+            tools.add("'transfer_code_chunk'(sourcePath, targetPath, codeChunk, targetAnchor?: string, insertAt?: 'start'|'end'|'append'|'before'|'after'|'replace', isMove?: boolean) [Transfer, copy, or move code blocks/chunks between files]")
+            tools.add("'copy_code_chunk'(sourcePath, targetPath, codeChunk, targetAnchor?: string, insertAt?: string) [Copy a code block from one file to another]")
+            tools.add("'move_code_chunk'(sourcePath, targetPath, codeChunk, targetAnchor?: string, insertAt?: string) [Move a code block from one file to another, removing it from source]")
+            tools.add("'delete_code_chunk'(path, codeChunk, deleteAllOccurrences?: boolean) [Delete a specific code block or chunk from a file without leaving corrupt syntax or excessive empty lines]")
             tools.add("'delete_file'(path)")
             tools.add("'scan_dir'(path: folder name)")
             tools.add("'global_search'(query)")
@@ -222,8 +229,11 @@ object AgentInstructionEngine {
         // Web / Internet / Browser inspection & cloning tools
         tools.add("'browser_search'(query [Search web or navigate URL])")
         tools.add("'browser_read'() [Read current webpage/article]")
+        tools.add("'browser_snapshot'() [Scan all clickable, typable, and form elements on page with numeric tags [1], [2]...]")
+        tools.add("'browser_controller'(action: 'click'|'type'|'scroll'|'select', elementIndex?: number, selector?: string, text?: string, pressEnter?: boolean, clearBefore?: boolean) [Control webpage like a human: click buttons, type in search/form fields, submit]")
         tools.add("'fetch_url'(url, targetFile?: string) [Fetch raw web page / article text]")
         tools.add("'clone_web_ui'(url, targetFilePath?: string) [Scrape website UI, extract design tokens and clone layout]")
+        tools.add("'deep_clone_web_ui'(url, targetFilePath?: string) [Deeply clone website UI: extract complete DOM structure, color palette, typography tokens, and layout]")
 
         if (intents.contains(PromptIntent.WEB_AND_UI_INSPECTION)) {
             tools.add("'open_url'(url)")

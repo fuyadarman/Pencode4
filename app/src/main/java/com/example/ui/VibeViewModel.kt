@@ -4022,13 +4022,14 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 val existingFiles = repository.getFilesForProject(project.name)
                                 _projectFiles.value = existingFiles
                                 val cleanNormalizedPath = normalizePath(filePath)
+                                val projectDir = repository.getProjectDir(project.name)
                                 val fileAlreadyExists = existingFiles.any {
                                     val exNorm = normalizePath(it.path)
-                                    exNorm == cleanNormalizedPath || it.path == filePath || it.path == cleanNormalizedPath
-                                }
+                                    exNorm == cleanNormalizedPath || it.path == filePath || it.path == cleanNormalizedPath || exNorm.trimStart('/') == cleanNormalizedPath.trimStart('/')
+                                } || java.io.File(projectDir, cleanNormalizedPath.trimStart('/')).exists()
 
                                 val result = if (fileAlreadyExists) {
-                                    "Error: File '$filePath' already exists. Overwriting or recreating existing files with 'create_file' is strictly prohibited. You MUST call 'read_file' or 'read_file_range' first and then use 'edit_file' or 'patch_file' to modify existing files."
+                                    "Error: SYSTEM REJECTION - File '$filePath' ALREADY EXISTS! You are strictly prohibited from calling 'create_file' on an existing file. If you call 'create_file' on an existing file, it will ALWAYS be rejected. You MUST call 'read_file' or 'read_file_range' on '$filePath' first, and then use 'edit_file' or 'multi_edit_file' to modify it."
                                 } else {
                                     try {
                                         repository.saveFile(project.name, filePath, fileContent)
@@ -4382,10 +4383,15 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': $result"))))
                             }
                             "generate_image", "pollinations_image", "create_image", "generate_logo", "create_logo",
-                            "copy_file", "duplicate_code", "duplicate_file", "clone_web_ui", "scrape_web_ui",
+                            "copy_file", "duplicate_code", "duplicate_file", "clone_web_ui", "scrape_web_ui", "deep_clone_web_ui",
                             "fetch_url", "read_url", "scrape_url", "skill_check", "list_skills", "inspect_skill",
                             "ask_user", "ask_question", "clarify_with_user",
-                            "resize_image", "scale_image", "image_resize", "compress_image", "browser_search", "browser_click", "browser_read", "create_todo_list", "complete_todo_task", "delete_file", "rename_file", "move_file",
+                            "resize_image", "scale_image", "image_resize", "compress_image", "browser_search", "browser_click", "browser_read", "create_todo_list", "complete_todo_task",
+                            "delete_file", "rename_file", "rename", "move_file", "move",
+                            "transfer_code_chunk", "copy_code_chunk", "move_code_chunk", "copy_code_block", "move_code_block",
+                            "delete_code_chunk", "delete_code_block", "remove_code_chunk", "remove_code_block",
+                            "browser_snapshot", "browser_inspect_interactive", "inspect_interactive", "browser_elements",
+                            "browser_controller", "browser_interact", "browser_action",
                             "open_url", "navigate", "browse_url", "get_page_source", "inspect_dom", "inspect_css", "get_computed_styles", "take_screenshot", "click", "type", "scroll", "get_links", "get_images", "get_fonts", "run_javascript", "execute_javascript", "eval_js", "compare_screenshot" -> {
                                 val result = ExtraToolHandlers.handleExtraToolCall(
                                     tool = tool,

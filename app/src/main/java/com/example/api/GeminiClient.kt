@@ -132,7 +132,18 @@ data class ToolArguments(
     val isLogo: Boolean? = null,
     val targetPaths: List<String>? = null,
     val count: Int? = null,
-    val sourcePath: String? = null
+    val sourcePath: String? = null,
+    val sourceBlock: String? = null,
+    val codeChunk: String? = null,
+    val targetAnchor: String? = null,
+    val insertAt: String? = null,
+    val isMove: Boolean? = null,
+    val targetPath: String? = null,
+    val clearBefore: Boolean? = null,
+    val pressEnter: Boolean? = null,
+    val elementIndex: Int? = null,
+    val action: String? = null,
+    val deleteAllOccurrences: Boolean? = null
 )
 
 @JsonClass(generateAdapter = true)

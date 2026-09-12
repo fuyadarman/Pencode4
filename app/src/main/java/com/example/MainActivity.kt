@@ -39,6 +39,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         try {
+            com.example.crash.AppCrashGuard.install(applicationContext)
             android.webkit.WebView.enableSlowWholeDocumentDraw()
         } catch (e: Exception) {
             e.printStackTrace()

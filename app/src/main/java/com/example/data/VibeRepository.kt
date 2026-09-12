@@ -321,17 +321,23 @@ class VibeRepository(private val dao: VibeDao, private val context: Context) {
     }
 
     suspend fun renameFile(projectName: String, oldPath: String, newPath: String) = withContext(Dispatchers.IO) {
+        val cleanOld = oldPath.trim().trimStart('/')
+        val cleanNew = newPath.trim().trimStart('/')
         val projectDir = getProjectDir(projectName)
-        val oldFile = File(projectDir, oldPath)
-        val newFile = File(projectDir, newPath)
+        val oldFile = File(projectDir, cleanOld)
+        val newFile = File(projectDir, cleanNew)
         
-        val dbFile = dao.getFileByPath(projectName, oldPath)
+        val dbFile = dao.getFileByPath(projectName, cleanOld)
+            ?: dao.getFileByPath(projectName, "/$cleanOld")
+            ?: dao.getFileByPath(projectName, oldPath)
+            
         if (!oldFile.exists() && dbFile == null) {
             throw java.io.FileNotFoundException("Source file '$oldPath' does not exist.")
         }
 
+        newFile.parentFile?.mkdirs()
+
         if (oldFile.exists()) {
-            newFile.parentFile?.mkdirs()
             val renameResult = oldFile.renameTo(newFile)
             if (!renameResult) {
                 try {
@@ -341,11 +347,19 @@ class VibeRepository(private val dao: VibeDao, private val context: Context) {
                     throw Exception("Failed to rename file on disk: ${e.message}")
                 }
             }
+        } else if (dbFile != null) {
+            try {
+                newFile.writeText(dbFile.content)
+            } catch (e: Exception) {
+                // Ignore disk write failure
+            }
         }
         
         if (dbFile != null) {
+            dao.deleteFile(projectName, cleanNew)
+            dao.deleteFile(projectName, "/$cleanNew")
             dao.deleteFile(projectName, newPath)
-            dao.updateFile(dbFile.copy(path = newPath))
+            dao.updateFile(dbFile.copy(path = cleanNew))
         } else {
             syncStorageToDatabase(projectName)
         }

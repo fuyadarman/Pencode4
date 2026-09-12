@@ -208,12 +208,61 @@ object MultiEditChunkParser {
                 argsObj.optString("text", "").ifBlank { null }
             }
         }
-        val oldPath = argsObj.optString("oldPath", "").ifBlank {
-            argsObj.optString("old_path", "").ifBlank { null }
-        }
-        val newPath = argsObj.optString("newPath", "").ifBlank {
-            argsObj.optString("new_path", "").ifBlank { null }
-        }
+        val oldPath = argsObj.optString("oldPath", "")
+            .ifBlank { argsObj.optString("old_path", "") }
+            .ifBlank { argsObj.optString("sourcePath", "") }
+            .ifBlank { argsObj.optString("source_path", "") }
+            .ifBlank { argsObj.optString("from", "") }
+            .ifBlank { argsObj.optString("oldName", "") }
+            .ifBlank { null }
+        val newPath = argsObj.optString("newPath", "")
+            .ifBlank { argsObj.optString("new_path", "") }
+            .ifBlank { argsObj.optString("destinationPath", "") }
+            .ifBlank { argsObj.optString("destination_path", "") }
+            .ifBlank { argsObj.optString("targetPath", "") }
+            .ifBlank { argsObj.optString("target_path", "") }
+            .ifBlank { argsObj.optString("to", "") }
+            .ifBlank { argsObj.optString("newName", "") }
+            .ifBlank { null }
+        val sourcePath = argsObj.optString("sourcePath", "")
+            .ifBlank { argsObj.optString("source_path", "") }
+            .ifBlank { argsObj.optString("fromPath", "") }
+            .ifBlank { oldPath }
+        val targetPath = argsObj.optString("targetPath", "")
+            .ifBlank { argsObj.optString("target_path", "") }
+            .ifBlank { argsObj.optString("toPath", "") }
+            .ifBlank { newPath }
+        val sourceBlock = argsObj.optString("sourceBlock", "")
+            .ifBlank { argsObj.optString("codeChunk", "") }
+            .ifBlank { argsObj.optString("code_chunk", "") }
+            .ifBlank { argsObj.optString("chunk", "") }
+            .ifBlank { argsObj.optString("code", "") }
+            .ifBlank { extractFirstString(argsObj, SEARCH_KEYS) }
+        val targetAnchor = argsObj.optString("targetAnchor", "")
+            .ifBlank { argsObj.optString("target_anchor", "") }
+            .ifBlank { argsObj.optString("anchor", "") }
+            .ifBlank { argsObj.optString("after", "") }
+            .ifBlank { argsObj.optString("before", "") }
+            .ifBlank { null }
+        val insertAt = argsObj.optString("insertAt", "")
+            .ifBlank { argsObj.optString("insert_at", "") }
+            .ifBlank { argsObj.optString("position", "") }
+            .ifBlank { null }
+        val isMove = if (argsObj.has("isMove")) argsObj.optBoolean("isMove")
+            else if (argsObj.has("is_move")) argsObj.optBoolean("is_move")
+            else if (argsObj.has("move")) argsObj.optBoolean("move")
+            else null
+        val clearBefore = if (argsObj.has("clearBefore")) argsObj.optBoolean("clearBefore")
+            else if (argsObj.has("clear_before")) argsObj.optBoolean("clear_before")
+            else null
+        val pressEnter = if (argsObj.has("pressEnter")) argsObj.optBoolean("pressEnter")
+            else if (argsObj.has("press_enter")) argsObj.optBoolean("press_enter")
+            else null
+        val elementIndex = if (argsObj.has("elementIndex")) argsObj.optInt("elementIndex")
+            else if (argsObj.has("element_index")) argsObj.optInt("element_index")
+            else if (argsObj.has("index")) argsObj.optInt("index")
+            else null
+        val action = argsObj.optString("action", "").ifBlank { null }
         val command = argsObj.optString("command", "").ifBlank {
             argsObj.optString("cmd", "").ifBlank { null }
         }
@@ -227,7 +276,7 @@ object MultiEditChunkParser {
         val query = argsObj.optString("query", "").ifBlank { null }
         val destinationPath = argsObj.optString("destinationPath", "").ifBlank {
             argsObj.optString("destination_path", "").ifBlank {
-                argsObj.optString("dest", "").ifBlank { null }
+                argsObj.optString("dest", "").ifBlank { targetPath }
             }
         }
         val destinationSearch = argsObj.optString("destinationSearch", "").ifBlank {
@@ -330,6 +379,21 @@ object MultiEditChunkParser {
                     if (rawStr.isNotBlank()) rawStr else if (argsObj.length() > 0) argsObj.toString() else null
                 }
             },
+            sourcePath = sourcePath,
+            sourceBlock = sourceBlock,
+            codeChunk = sourceBlock,
+            targetAnchor = targetAnchor,
+            insertAt = insertAt,
+            isMove = isMove,
+            targetPath = targetPath,
+            clearBefore = clearBefore,
+            pressEnter = pressEnter,
+            elementIndex = elementIndex,
+            action = action,
+            deleteAllOccurrences = if (argsObj.has("deleteAllOccurrences")) argsObj.optBoolean("deleteAllOccurrences")
+                else if (argsObj.has("delete_all")) argsObj.optBoolean("delete_all")
+                else if (argsObj.has("all")) argsObj.optBoolean("all")
+                else null,
             resourceUri = argsObj.optString("resourceUri", "")
                 .ifBlank { argsObj.optString("uri", "") }
                 .ifBlank { null }

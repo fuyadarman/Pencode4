@@ -56,14 +56,228 @@ object ToolExecutionItemMapper {
                 log.status.equals("executing", ignoreCase = true)) && isGlobalThinking
 
         return when {
+            lowerTitle.contains("moved code block") || lowerTitle.contains("move_code") || lowerTitle.contains("transfer_code") || lowerTitle.contains("transfer code") -> {
+                val targetText = details.lineSequence().firstOrNull()?.trim()?.take(80) ?: title
+                ToolStyleSpec(
+                    actionTitle = "Moved code block",
+                    targetLabel = targetText,
+                    icon = Icons.Default.OpenWith,
+                    iconColor = Color(0xFF79C0FF),
+                    isExecuting = isExecuting,
+                    details = log.details
+                )
+            }
+            lowerTitle.contains("copied code block") || lowerTitle.contains("copy_code_chunk") || lowerTitle.contains("copy_code_block") || lowerTitle.contains("copy_code") -> {
+                val targetText = details.lineSequence().firstOrNull()?.trim()?.take(80) ?: title
+                ToolStyleSpec(
+                    actionTitle = "Copied code block",
+                    targetLabel = targetText,
+                    icon = Icons.Default.ContentCopy,
+                    iconColor = Color(0xFF79C0FF),
+                    isExecuting = isExecuting,
+                    details = log.details
+                )
+            }
+            lowerTitle.contains("deleted code block") || lowerTitle.contains("delete_code") || lowerTitle.contains("remove_code") -> {
+                val target = extractPath(title, details, "Deleted code block:").ifBlank { details.lineSequence().firstOrNull()?.trim() ?: "code block" }
+                ToolStyleSpec(
+                    actionTitle = "Deleted code block",
+                    targetLabel = target.take(80),
+                    icon = Icons.Default.DeleteSweep,
+                    iconColor = Color(0xFFFFA198),
+                    isExecuting = isExecuting,
+                    details = log.details
+                )
+            }
+            lowerTitle.startsWith("renamed file") || lowerTitle.contains("rename_file") || lowerTitle.startsWith("rename") -> {
+                val target = details.lineSequence().firstOrNull()?.trim() ?: extractPath(title, details, "Renamed file:")
+                ToolStyleSpec(
+                    actionTitle = "Renamed file",
+                    targetLabel = target.ifBlank { "file" },
+                    icon = Icons.Default.DriveFileRenameOutline,
+                    iconColor = Color(0xFF58A6FF),
+                    isExecuting = isExecuting,
+                    details = log.details
+                )
+            }
             lowerTitle.startsWith("moved file") || lowerTitle.contains("move_file") || lowerTitle.contains("extracted code") -> {
                 val target = extractPath(title, details, "Moved file:").ifBlank { "notes.txt" }
                 val targetText = if (lineRange.isNotBlank()) "$target ($lineRange)" else target
                 ToolStyleSpec(
-                    actionTitle = "Moved / Extracted code",
+                    actionTitle = "Moved file",
                     targetLabel = targetText,
-                    icon = Icons.Default.OpenWith,
+                    icon = Icons.Default.DriveFileMove,
                     iconColor = Color(0xFF79C0FF),
+                    isExecuting = isExecuting,
+                    details = log.details
+                )
+            }
+            lowerTitle.contains("browser controller") || lowerTitle.contains("browser action") || lowerTitle.contains("browser_controller") || lowerTitle.contains("browser_action") -> {
+                val target = details.lineSequence().firstOrNull()?.trim() ?: "Action executed"
+                ToolStyleSpec(
+                    actionTitle = "Browser action",
+                    targetLabel = target.take(80),
+                    icon = Icons.Default.TouchApp,
+                    iconColor = Color(0xFF00D8A5),
+                    isExecuting = isExecuting,
+                    details = log.details
+                )
+            }
+            lowerTitle.contains("browser interactive snapshot") || lowerTitle.contains("browser snapshot") || lowerTitle.contains("browser_snapshot") -> {
+                ToolStyleSpec(
+                    actionTitle = "Browser snapshot",
+                    targetLabel = "Scanned clickable, typable & form elements",
+                    icon = Icons.Default.FilterCenterFocus,
+                    iconColor = Color(0xFF39D353),
+                    isExecuting = isExecuting,
+                    details = log.details
+                )
+            }
+            lowerTitle.contains("deep clone web ui") || lowerTitle.contains("clone web ui") || lowerTitle.contains("clone_web_ui") || lowerTitle.contains("scrape_web_ui") -> {
+                val target = details.lineSequence().firstOrNull()?.trim() ?: title
+                ToolStyleSpec(
+                    actionTitle = "Cloned Web UI",
+                    targetLabel = target.take(80),
+                    icon = Icons.Default.DashboardCustomize,
+                    iconColor = Color(0xFFD2A8FF),
+                    isExecuting = isExecuting,
+                    details = log.details
+                )
+            }
+            lowerTitle.contains("open web url") || lowerTitle.contains("open_url") || lowerTitle.contains("navigate") || lowerTitle.contains("browse_url") -> {
+                val target = details.lineSequence().firstOrNull()?.trim() ?: title.removePrefix("Open Web URL:").trim()
+                ToolStyleSpec(
+                    actionTitle = "Navigated to URL",
+                    targetLabel = target.ifBlank { "webpage" }.take(80),
+                    icon = Icons.Default.Language,
+                    iconColor = Color(0xFF58A6FF),
+                    isExecuting = isExecuting,
+                    details = log.details
+                )
+            }
+            lowerTitle.contains("click element") || lowerTitle.contains("click web") || (lowerTitle.startsWith("click") && !lowerTitle.contains("code")) -> {
+                val target = details.lineSequence().firstOrNull()?.trim() ?: "element"
+                ToolStyleSpec(
+                    actionTitle = "Clicked element",
+                    targetLabel = target.take(80),
+                    icon = Icons.Default.TouchApp,
+                    iconColor = Color(0xFF79C0FF),
+                    isExecuting = isExecuting,
+                    details = log.details
+                )
+            }
+            lowerTitle.contains("type text") || (lowerTitle.startsWith("type") && !lowerTitle.contains("code")) -> {
+                val target = details.lineSequence().firstOrNull()?.trim() ?: "input field"
+                ToolStyleSpec(
+                    actionTitle = "Typed text",
+                    targetLabel = target.take(80),
+                    icon = Icons.Default.Keyboard,
+                    iconColor = Color(0xFF7EE787),
+                    isExecuting = isExecuting,
+                    details = log.details
+                )
+            }
+            lowerTitle.contains("scroll web") || lowerTitle.startsWith("scroll") -> {
+                val target = details.lineSequence().firstOrNull()?.trim() ?: "page"
+                ToolStyleSpec(
+                    actionTitle = "Scrolled page",
+                    targetLabel = target.take(80),
+                    icon = Icons.Default.SwapVert,
+                    iconColor = Color(0xFF8B949E),
+                    isExecuting = isExecuting,
+                    details = log.details
+                )
+            }
+            lowerTitle.contains("get links") || lowerTitle.contains("get_links") -> {
+                ToolStyleSpec(
+                    actionTitle = "Extracted links",
+                    targetLabel = "Navigation links & hrefs",
+                    icon = Icons.Default.Link,
+                    iconColor = Color(0xFF58A6FF),
+                    isExecuting = isExecuting,
+                    details = log.details
+                )
+            }
+            lowerTitle.contains("get images") || lowerTitle.contains("get_images") -> {
+                ToolStyleSpec(
+                    actionTitle = "Extracted images",
+                    targetLabel = "Page images, icons & SVGs",
+                    icon = Icons.Default.Image,
+                    iconColor = Color(0xFFFF79C6),
+                    isExecuting = isExecuting,
+                    details = log.details
+                )
+            }
+            lowerTitle.contains("get fonts") || lowerTitle.contains("get_fonts") -> {
+                ToolStyleSpec(
+                    actionTitle = "Extracted typography",
+                    targetLabel = "Font families & CSS tokens",
+                    icon = Icons.Default.TextFields,
+                    iconColor = Color(0xFFFFB86C),
+                    isExecuting = isExecuting,
+                    details = log.details
+                )
+            }
+            lowerTitle.contains("run javascript") || lowerTitle.contains("execute_javascript") || lowerTitle.contains("eval_js") -> {
+                ToolStyleSpec(
+                    actionTitle = "Executed JavaScript",
+                    targetLabel = details.lineSequence().firstOrNull()?.trim()?.take(80) ?: "script",
+                    icon = Icons.Default.Code,
+                    iconColor = Color(0xFFE3B341),
+                    isExecuting = isExecuting,
+                    details = log.details
+                )
+            }
+            lowerTitle.contains("screenshot") -> {
+                ToolStyleSpec(
+                    actionTitle = "Captured screenshot",
+                    targetLabel = details.lineSequence().firstOrNull()?.trim()?.take(80) ?: "viewport",
+                    icon = Icons.Default.CameraAlt,
+                    iconColor = Color(0xFF79C0FF),
+                    isExecuting = isExecuting,
+                    details = log.details
+                )
+            }
+            lowerTitle.contains("browser search") || lowerTitle.contains("browser_search") -> {
+                val query = details.lineSequence().firstOrNull()?.trim() ?: title
+                ToolStyleSpec(
+                    actionTitle = "Searched web",
+                    targetLabel = query.take(80),
+                    icon = Icons.Default.TravelExplore,
+                    iconColor = Color(0xFF58A6FF),
+                    isExecuting = isExecuting,
+                    details = log.details
+                )
+            }
+            lowerTitle.contains("browser read") || lowerTitle.contains("fetch_url") || lowerTitle.contains("read_url") -> {
+                val target = details.lineSequence().firstOrNull()?.trim() ?: "web content"
+                ToolStyleSpec(
+                    actionTitle = "Read webpage",
+                    targetLabel = target.take(80),
+                    icon = Icons.Default.Article,
+                    iconColor = Color(0xFF58A6FF),
+                    isExecuting = isExecuting,
+                    details = log.details
+                )
+            }
+            lowerTitle.contains("pdf") || lowerTitle.contains("generate_document") || lowerTitle.contains("generated document") -> {
+                val doc = details.lineSequence().firstOrNull()?.trim() ?: "document"
+                ToolStyleSpec(
+                    actionTitle = "Generated document",
+                    targetLabel = doc.take(80),
+                    icon = Icons.Default.PictureAsPdf,
+                    iconColor = Color(0xFFFF7B72),
+                    isExecuting = isExecuting,
+                    details = log.details
+                )
+            }
+            lowerTitle.contains("todo") -> {
+                val isComplete = lowerTitle.contains("complete")
+                ToolStyleSpec(
+                    actionTitle = if (isComplete) "Completed todo task" else "Created todo list",
+                    targetLabel = details.lineSequence().firstOrNull()?.trim()?.take(80) ?: "todo item",
+                    icon = Icons.Default.Checklist,
+                    iconColor = Color(0xFF39D353),
                     isExecuting = isExecuting,
                     details = log.details
                 )
@@ -153,10 +367,10 @@ object ToolExecutionItemMapper {
                     details = log.details
                 )
             }
-            lowerTitle.startsWith("copied file") || lowerTitle.contains("copy_file") -> {
+            lowerTitle.startsWith("copied file") || lowerTitle.contains("copy_file") || lowerTitle.contains("duplicate") -> {
                 val target = extractPath(title, details, "Copied file:").ifBlank { "file" }
                 ToolStyleSpec(
-                    actionTitle = "Copied file",
+                    actionTitle = if (lowerTitle.contains("duplicate")) "Duplicated file" else "Copied file",
                     targetLabel = target,
                     icon = Icons.Default.ContentCopy,
                     iconColor = Color(0xFF79C0FF),
@@ -203,6 +417,26 @@ object ToolExecutionItemMapper {
                     actionTitle = "Executed MCP tool",
                     targetLabel = title.removePrefix("MCP:").trim().ifBlank { details },
                     icon = Icons.Default.Extension,
+                    iconColor = Color(0xFFD2A8FF),
+                    isExecuting = isExecuting,
+                    details = log.details
+                )
+            }
+            lowerTitle.contains("ask user") || lowerTitle.contains("ask_user") -> {
+                ToolStyleSpec(
+                    actionTitle = "Asked user",
+                    targetLabel = details.lineSequence().firstOrNull()?.trim()?.take(80) ?: "question",
+                    icon = Icons.Default.QuestionAnswer,
+                    iconColor = Color(0xFFFFB86C),
+                    isExecuting = isExecuting,
+                    details = log.details
+                )
+            }
+            lowerTitle.contains("skill") -> {
+                ToolStyleSpec(
+                    actionTitle = "Agent Skill",
+                    targetLabel = details.lineSequence().firstOrNull()?.trim()?.take(80) ?: title,
+                    icon = Icons.Default.AutoAwesome,
                     iconColor = Color(0xFFD2A8FF),
                     isExecuting = isExecuting,
                     details = log.details
@@ -404,6 +638,20 @@ fun ToolExecutionIndicatorRow(
                         modifier = Modifier.size(12.dp),
                         strokeWidth = 1.5.dp,
                         color = spec.iconColor
+                    )
+                } else if (log.status.equals("failed", ignoreCase = true) || log.status.equals("error", ignoreCase = true)) {
+                    Icon(
+                        imageVector = Icons.Default.Cancel,
+                        contentDescription = "Failed",
+                        tint = Color(0xFFF85149),
+                        modifier = Modifier.size(14.dp)
+                    )
+                } else if (log.status.equals("success", ignoreCase = true)) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = "Success",
+                        tint = Color(0xFF3FB950),
+                        modifier = Modifier.size(14.dp)
                     )
                 }
             }
