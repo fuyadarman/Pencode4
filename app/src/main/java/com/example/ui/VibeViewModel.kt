@@ -4375,7 +4375,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     mcpManager = mcpManager,
                                     createLog = { title, details -> createAiLog(title = title, status = "thinking", details = details) },
                                     updateLog = { id, status, details -> updateAiLog(id, status, details) },
-                                    addLog = { log -> _aiActionLogs.value = _aiActionLogs.value + log }
+                                    addLog = { log -> _aiActionLogs.value = _aiActionLogs.value + log },
+                                    selectedServerIds = _selectedMcpServerIds.value
                                 )
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': $result"))))
@@ -4723,7 +4724,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                         mcpManager = mcpManager,
                                         createLog = { title, details -> createAiLog(title = title, status = "thinking", details = details) },
                                         updateLog = { id, status, details -> updateAiLog(id, status, details) },
-                                        addLog = { log -> _aiActionLogs.value = _aiActionLogs.value + log }
+                                        addLog = { log -> _aiActionLogs.value = _aiActionLogs.value + log },
+                                        selectedServerIds = _selectedMcpServerIds.value
                                     )
                                     history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                     history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': $result"))))

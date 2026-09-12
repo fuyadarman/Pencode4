@@ -62,7 +62,14 @@ class McpManager(private val context: Context) {
         if (!json.isNullOrBlank()) {
             try {
                 val wrapper = serverListAdapter.fromJson(json)
-                _servers.value = wrapper?.servers ?: emptyList()
+                val loaded = wrapper?.servers ?: emptyList()
+                val updated = loaded.map { server ->
+                    if (server.availableTools.isEmpty()) {
+                        val presets = getPresetToolsForPlatform(server.platform, server.name)
+                        if (presets.isNotEmpty()) server.copy(availableTools = presets) else server
+                    } else server
+                }
+                _servers.value = updated
                 for (server in _servers.value) {
                     if (server.availableTools.isNotEmpty()) {
                         toolRegistry.registerToolsForServer(server, server.availableTools)
@@ -95,10 +102,22 @@ class McpManager(private val context: Context) {
                 name = "Google Search Console",
                 url = "https://searchconsole.googleapis.com/mcp",
                 platform = "GOOGLE_SEARCH_CONSOLE",
-                status = "Disconnected"
+                status = "Disconnected",
+                availableTools = GoogleSearchConsoleMcpService.getAvailableTools()
             )
         }
-        _servers.value = uniqueMap.values.toList()
+        val refreshed = uniqueMap.values.map { server ->
+            if (server.availableTools.isEmpty()) {
+                val presets = getPresetToolsForPlatform(server.platform, server.name)
+                if (presets.isNotEmpty()) server.copy(availableTools = presets) else server
+            } else server
+        }
+        _servers.value = refreshed
+        for (server in refreshed) {
+            if (server.availableTools.isNotEmpty()) {
+                toolRegistry.registerToolsForServer(server, server.availableTools)
+            }
+        }
         saveServers()
     }
 
@@ -115,38 +134,46 @@ class McpManager(private val context: Context) {
                 name = "Supabase MCP",
                 url = "https://api.supabase.com/mcp",
                 platform = "SUPABASE",
-                status = "Disconnected"
+                status = "Disconnected",
+                availableTools = getPresetToolsForPlatform("SUPABASE", "Supabase MCP")
             ),
             McpServer(
                 id = UUID.randomUUID().toString(),
                 name = "Cloudflare MCP",
                 url = "https://mcp.cloudflare.com",
                 platform = "CLOUDFLARE",
-                status = "Disconnected"
+                status = "Disconnected",
+                availableTools = getPresetToolsForPlatform("CLOUDFLARE", "Cloudflare MCP")
             ),
             McpServer(
                 id = UUID.randomUUID().toString(),
                 name = "Vercel MCP",
                 url = "https://mcp.vercel.com",
                 platform = "VERCEL",
-                status = "Disconnected"
+                status = "Disconnected",
+                availableTools = getPresetToolsForPlatform("VERCEL", "Vercel MCP")
             ),
             McpServer(
                 id = UUID.randomUUID().toString(),
                 name = "Google Search Console",
                 url = "https://searchconsole.googleapis.com/mcp",
                 platform = "GOOGLE_SEARCH_CONSOLE",
-                status = "Disconnected"
+                status = "Disconnected",
+                availableTools = GoogleSearchConsoleMcpService.getAvailableTools()
             ),
             McpServer(
                 id = UUID.randomUUID().toString(),
                 name = "Google Stitch MCP",
                 url = "https://stitch.googleapis.com/mcp",
                 platform = "GOOGLE_STITCH",
-                status = "Disconnected"
+                status = "Disconnected",
+                availableTools = getPresetToolsForPlatform("GOOGLE_STITCH", "Google Stitch MCP")
             )
         )
         _servers.value = presets
+        for (server in presets) {
+            toolRegistry.registerToolsForServer(server, server.availableTools)
+        }
         saveServers()
     }
 
@@ -475,6 +502,7 @@ class McpManager(private val context: Context) {
                     parametersJsonSchema = """{"type":"object","properties":{"key":{"type":"string"},"value":{"type":"string"},"target":{"type":"string","enum":["production","preview","development"]}},"required":["key","value"]}"""
                 )
             )
+            "GOOGLE_SEARCH_CONSOLE" -> GoogleSearchConsoleMcpService.getAvailableTools()
             "GOOGLE_STITCH" -> listOf(
                 McpToolInfo(
                     name = "stitch_sync_schema",

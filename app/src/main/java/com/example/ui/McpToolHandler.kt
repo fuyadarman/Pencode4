@@ -13,31 +13,27 @@ object McpToolHandler {
         mcpManager: McpManager,
         createLog: (title: String, details: String) -> AiActionLog,
         updateLog: (id: String, status: String, details: String) -> Unit,
-        addLog: (AiActionLog) -> Unit
+        addLog: (AiActionLog) -> Unit,
+        selectedServerIds: Set<String> = emptySet()
     ): String {
         return when (tool) {
             "mcp_call_tool", "mcp_call", "mcp_execute", "call_mcp_tool", "use_mcp_tool", "mcp_tool" -> {
                 val serverIdOrName = args?.mcpServerId ?: args?.mcpServerName ?: args?.path ?: ""
                 val toolName = args?.toolName ?: args?.command ?: args?.query ?: "query"
-                val mcpArgsJson = args?.mcpArgsJson ?: args?.content ?: args?.query ?: ""
+                val mcpArgsJson = com.example.data.mcp.McpExecutionEngine.extractMcpPayload(args)
 
                 val enabledServers = mcpManager.getEnabledServersForWorkspace(project.name)
                 val allServers = mcpManager.servers.value
-                val searchServers = if (enabledServers.isNotEmpty()) enabledServers else allServers
-                val targetServer = searchServers.find { 
-                    it.id == serverIdOrName || 
-                    it.name.equals(serverIdOrName, ignoreCase = true) || 
-                    it.platform.equals(serverIdOrName, ignoreCase = true) ||
-                    it.name.replace(" ", "_").equals(serverIdOrName, ignoreCase = true)
-                } ?: searchServers.find { s -> 
-                    s.availableTools.any { 
-                        it.name.equals(toolName, ignoreCase = true) || 
-                        it.name.equals(toolName.substringAfterLast("__"), ignoreCase = true) 
-                    } 
-                } ?: searchServers.firstOrNull { it.status.startsWith("Connected") } ?: searchServers.firstOrNull()
+                val targetServer = com.example.data.mcp.McpExecutionEngine.resolveTargetServer(
+                    serverIdOrName = serverIdOrName,
+                    toolName = toolName,
+                    allServers = allServers,
+                    selectedServerIds = selectedServerIds,
+                    enabledServers = enabledServers
+                )
 
                 val serverName = targetServer?.name ?: serverIdOrName.ifEmpty { "MCP Remote" }
-                val cleanToolName = if (toolName.contains("__")) toolName.substringAfterLast("__") else toolName
+                val cleanToolName = com.example.data.mcp.McpExecutionEngine.cleanToolName(toolName)
                 val mcpLog = createLog(
                     "$serverName: $cleanToolName",
                     "Executing '$cleanToolName' on $serverName (${targetServer?.url ?: ""})"
@@ -60,15 +56,22 @@ object McpToolHandler {
             }
             "mcp_list_tools", "mcp_list" -> {
                 val enabledServers = mcpManager.getEnabledServersForWorkspace(project.name)
+                val allServers = mcpManager.servers.value
+                val displayServers = when {
+                    selectedServerIds.isNotEmpty() -> allServers.filter { selectedServerIds.contains(it.id) }
+                    enabledServers.isNotEmpty() -> enabledServers
+                    else -> allServers
+                }
+
                 val mcpLog = createLog(
                     "MCP List Tools",
-                    "Listing tools for ${enabledServers.size} active MCP servers"
+                    "Listing tools for ${displayServers.size} active MCP servers"
                 )
                 addLog(mcpLog)
 
-                val result = if (enabledServers.isNotEmpty()) {
+                val result = if (displayServers.isNotEmpty()) {
                     val sb = StringBuilder("=== ACTIVE MCP SERVERS & TOOLS ===\n")
-                    for (server in enabledServers) {
+                    for (server in displayServers) {
                         sb.append("\n• ${server.name} [${server.platform}] (${server.url})\n")
                         sb.append("  Status: ${server.status}\n")
                         if (server.availableTools.isNotEmpty()) {
@@ -82,10 +85,10 @@ object McpToolHandler {
                     }
                     sb.toString()
                 } else {
-                    "No active MCP servers enabled for workspace '${project.name}'. User can enable MCP servers in Workspace MCP Settings."
+                    "No active MCP servers found. You can add or enable MCP servers in Workspace MCP Settings."
                 }
 
-                updateLog(mcpLog.id, "success", "Listed tools for ${enabledServers.size} active MCP servers")
+                updateLog(mcpLog.id, "success", "Listed tools for ${displayServers.size} active MCP servers")
                 result
             }
             "mcp_read_resource" -> {
@@ -93,11 +96,17 @@ object McpToolHandler {
                 val resourceUri = args?.resourceUri ?: args?.path ?: args?.query ?: ""
 
                 val enabledServers = mcpManager.getEnabledServersForWorkspace(project.name)
-                val targetServer = enabledServers.find { 
+                val allServers = mcpManager.servers.value
+                val searchServers = when {
+                    selectedServerIds.isNotEmpty() -> allServers.filter { selectedServerIds.contains(it.id) }
+                    enabledServers.isNotEmpty() -> enabledServers
+                    else -> allServers
+                }
+                val targetServer = searchServers.find { 
                     it.id == serverIdOrName || 
                     it.name.equals(serverIdOrName, ignoreCase = true) || 
                     it.platform.equals(serverIdOrName, ignoreCase = true) 
-                } ?: enabledServers.firstOrNull()
+                } ?: searchServers.firstOrNull()
 
                 val serverName = targetServer?.name ?: "MCP Remote"
                 val mcpLog = createLog(
@@ -126,7 +135,7 @@ object McpToolHandler {
                             "Executing Google Search Console operation '$tool'"
                         )
                         addLog(mcpLog)
-                        val mcpArgsJson = args?.mcpArgsJson ?: args?.content ?: args?.query ?: ""
+                        val mcpArgsJson = com.example.data.mcp.McpExecutionEngine.extractMcpPayload(args)
                         val result = mcpManager.executeMcpToolCall(gscServer.id, tool, mcpArgsJson)
                         val isSuccess = !result.startsWith("Error:") && !result.startsWith("MCP Call Error:")
                         updateLog(mcpLog.id, if (isSuccess) "success" else "failed", if (isSuccess) "GSC ($tool)" else result)
@@ -137,8 +146,13 @@ object McpToolHandler {
                 // Check tool registry & enabled servers for direct tool invocations (e.g. supabase_mcp__query or list_tables)
                 val enabledServers = mcpManager.getEnabledServersForWorkspace(project.name)
                 val allServers = mcpManager.servers.value
-                val candidateServers = if (enabledServers.isNotEmpty()) enabledServers else allServers
+                val candidateServers = when {
+                    selectedServerIds.isNotEmpty() -> allServers.filter { selectedServerIds.contains(it.id) }
+                    enabledServers.isNotEmpty() -> enabledServers
+                    else -> allServers
+                }
                 val matched = mcpManager.toolRegistry.findToolInServers(tool, candidateServers)
+                    ?: mcpManager.toolRegistry.findToolInServers(tool, allServers)
                 if (matched != null) {
                     val (server, toolInfo) = matched
                     val cleanToolName = toolInfo.name
@@ -147,7 +161,7 @@ object McpToolHandler {
                         "Executing '$cleanToolName' on ${server.name} (${server.url})"
                     )
                     addLog(mcpLog)
-                    val mcpArgsJson = args?.mcpArgsJson ?: args?.content ?: args?.query ?: args?.message ?: ""
+                    val mcpArgsJson = com.example.data.mcp.McpExecutionEngine.extractMcpPayload(args)
                     val result = mcpManager.executeMcpToolCall(server.id, cleanToolName, mcpArgsJson)
                     val isSuccess = !result.startsWith("Error:") && !result.startsWith("MCP Call Error:")
                     updateLog(mcpLog.id, if (isSuccess) "success" else "failed", if (isSuccess) "${server.name} ($cleanToolName)" else result)

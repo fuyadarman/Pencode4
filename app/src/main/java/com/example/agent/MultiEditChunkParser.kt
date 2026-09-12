@@ -299,11 +299,40 @@ object MultiEditChunkParser {
             amount = if (argsObj.has("amount")) argsObj.optInt("amount") else null,
             text = argsObj.optString("text", "").ifBlank { null },
             targetImage = argsObj.optString("targetImage", "").ifBlank { null },
-            mcpServerId = argsObj.optString("mcpServerId", "").ifBlank { null },
-            mcpServerName = argsObj.optString("mcpServerName", "").ifBlank { null },
-            toolName = argsObj.optString("toolName", "").ifBlank { null },
-            mcpArgsJson = argsObj.optString("mcpArgsJson", "").ifBlank { null },
-            resourceUri = argsObj.optString("resourceUri", "").ifBlank { null }
+            mcpServerId = argsObj.optString("mcpServerId", "")
+                .ifBlank { argsObj.optString("serverId", "") }
+                .ifBlank { argsObj.optString("server_id", "") }
+                .ifBlank { argsObj.optString("server", "") }
+                .ifBlank { null },
+            mcpServerName = argsObj.optString("mcpServerName", "")
+                .ifBlank { argsObj.optString("serverName", "") }
+                .ifBlank { argsObj.optString("server_name", "") }
+                .ifBlank { null },
+            toolName = argsObj.optString("toolName", "")
+                .ifBlank { argsObj.optString("tool_name", "") }
+                .ifBlank { argsObj.optString("tool", "") }
+                .ifBlank { argsObj.optString("action", "") }
+                .ifBlank { argsObj.optString("method", "") }
+                .ifBlank { null },
+            mcpArgsJson = run {
+                val directObj = argsObj.optJSONObject("arguments")
+                    ?: argsObj.optJSONObject("args")
+                    ?: argsObj.optJSONObject("params")
+                    ?: argsObj.optJSONObject("parameters")
+                    ?: argsObj.optJSONObject("mcpArgs")
+                if (directObj != null) {
+                    directObj.toString()
+                } else {
+                    val rawStr = argsObj.optString("mcpArgsJson", "")
+                        .ifBlank { argsObj.optString("arguments", "") }
+                        .ifBlank { argsObj.optString("args", "") }
+                        .ifBlank { argsObj.optString("params", "") }
+                    if (rawStr.isNotBlank()) rawStr else if (argsObj.length() > 0) argsObj.toString() else null
+                }
+            },
+            resourceUri = argsObj.optString("resourceUri", "")
+                .ifBlank { argsObj.optString("uri", "") }
+                .ifBlank { null }
         )
     }
 

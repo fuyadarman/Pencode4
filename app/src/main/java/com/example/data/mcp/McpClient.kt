@@ -134,6 +134,7 @@ class McpClient(
                     b.addHeader("Authorization", "Bearer $key")
                     b.addHeader("X-Goog-Api-Key", key)
                     b.addHeader("x-api-key", key)
+                    b.addHeader("apikey", key)
                 } else if (!auth.isNullOrBlank()) {
                     b.addHeader("Authorization", auth)
                 }
@@ -407,7 +408,12 @@ class McpClient(
                         if (text.isNotBlank()) sb.append(text).append("\n")
                     }
                     if (sb.isNotBlank()) {
-                        return@withContext Result.success(sb.toString().trim())
+                        val isErr = resultObj.optBoolean("isError", false)
+                        return@withContext if (isErr) {
+                            Result.failure(Exception("MCP Tool Error ($actualToolName): ${sb.toString().trim()}"))
+                        } else {
+                            Result.success(sb.toString().trim())
+                        }
                     }
                 }
             }
