@@ -148,54 +148,41 @@ class AgentLoopProtectionEngine {
             }
         }
 
-        // 2. Post-Edit Re-read Interception (Antigravity & OpenCode pattern):
-        // Never allow the AI to immediately re-read a file that it just successfully edited.
-        if (isReadTool(tool) && path.isNotEmpty() && filesModified.contains(path)) {
+        // 2. Post-Edit Re-read Interception:
+        // Allow the AI to re-read files if it needs to inspect lines for further edits,
+        // unless it is stuck in a pathological loop (> 5 consecutive identical reads).
+        val previousReadsOfThisFile = actionHistory.count {
+            isReadTool(it.tool) && it.path == path
+        }
+        val isPermitted = AgentReadLoopPolicy.shouldPermitRead(
+            tool = tool,
+            args = args,
+            path = path,
+            consecutiveSameFileReads = previousReadsOfThisFile,
+            hasModifiedFile = filesModified.contains(path)
+        )
+
+        if (isReadTool(tool) && !isPermitted && previousReadsOfThisFile >= 6) {
             return LoopDecision.InterceptWithResult(
-                toolOutput = "SYSTEM DIRECTIVE (ANTI-READ-LOOP): File '$path' was successfully modified in this session. " +
-                        "Re-reading files immediately after editing to 'verify' is prohibited. " +
-                        "If all requested changes are complete, call 'complete' with your summary. " +
-                        "If other files require changes, proceed to edit them now.",
-                logTitle = "Post-edit read intercepted",
+                toolOutput = AgentReadLoopPolicy.buildGentleActionGuidance(path),
+                logTitle = "Gentle edit guidance",
                 logStatus = "thinking",
-                logDetails = "Prevented verification re-read on modified file '$path'."
+                logDetails = "Provided edit guidance for '$path'."
             )
         }
 
-        // 3. Duplicate Read Deduplication:
-        // If the entire file was already read in full earlier, intercept redundant reads.
-        if (isReadTool(tool) && path.isNotEmpty() && filesRead.contains(path)) {
-            val previousReadsOfThisFile = actionHistory.count { 
-                isReadTool(it.tool) && it.path == path 
-            }
-            if (previousReadsOfThisFile >= 2) {
+        // 3. Consecutive Read Ceiling:
+        // Do not prematurely auto-complete tasks just because of 3 reads.
+        // Complex projects need multiple reads across files. Only prompt after 8+ consecutive reads.
+        if (isReadTool(tool) && consecutiveReadCount >= 8) {
+            if (filesModified.isEmpty()) {
                 return LoopDecision.InterceptWithResult(
-                    toolOutput = "SYSTEM NOTICE: File '$path' has already been read into your context $previousReadsOfThisFile times. " +
-                            "Do not re-read this file. Please apply your edits using 'edit_file' / 'multi_edit_file', or call 'complete' to finalize.",
-                    logTitle = "Redundant read intercepted",
+                    toolOutput = "SYSTEM DIRECTIVE: You have performed $consecutiveReadCount inspections. " +
+                            "Please apply your planned code edits with 'edit_file' or 'multi_edit_file'.",
+                    logTitle = "Action guidance",
                     logStatus = "thinking",
-                    logDetails = "Suppressed duplicate file dump for '$path'."
+                    logDetails = "Prompted code edit application after $consecutiveReadCount reads."
                 )
-            }
-        }
-
-        // 4. Consecutive Read Ceiling (Force transition from Read -> Act -> Complete):
-        if (isReadTool(tool)) {
-            if (consecutiveReadCount >= 3) {
-                if (filesModified.isNotEmpty()) {
-                    return LoopDecision.AutoComplete(
-                        summary = "Task completed: Code changes were successfully applied.",
-                        reason = "AI performed 3 consecutive reads after making edits. Auto-completing to protect against infinite inspection loop."
-                    )
-                } else if (consecutiveReadCount >= 4) {
-                    return LoopDecision.InterceptWithResult(
-                        toolOutput = "SYSTEM DIRECTIVE (ACTION REQUIRED): You have performed 4 consecutive read operations without applying modifications. " +
-                                "You have gathered sufficient context. Proceed directly with your code edits or call 'complete'.",
-                        logTitle = "Read ceiling reached",
-                        logStatus = "thinking",
-                        logDetails = "Enforced action requirement after 4 consecutive reads."
-                    )
-                }
             }
         }
 

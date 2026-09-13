@@ -77,7 +77,7 @@ object AgentLoopInterceptor {
             }
         }
 
-        // 2. Check read loops on the same file (regardless of differing line ranges)
+        // 2. Check read loops on the same file
         if (isRead && currentPath.isNotEmpty()) {
             val normalizedCurrent = normalizePath(currentPath)
             var consecutiveSameFileReads = 0
@@ -92,29 +92,24 @@ object AgentLoopInterceptor {
                 }
             }
 
-            if (consecutiveSameFileReads >= 3) {
+            // If the call specifies line ranges or queries, it is not a pathological loop
+            val isPermitted = AgentReadLoopPolicy.shouldPermitRead(
+                tool = tool,
+                args = currentCall.arguments,
+                path = currentPath,
+                consecutiveSameFileReads = consecutiveSameFileReads,
+                hasModifiedFile = false
+            )
+
+            if (!isPermitted && consecutiveSameFileReads >= 5) {
                 val warning = """
-                    SYSTEM DIRECTIVE (ACTION REQUIRED):
-                    You have inspected '$currentPath' $consecutiveSameFileReads times without making modifications.
-                    DO NOT read this file again.
-                    If changes are needed, apply them now using 'edit_file' or 'multi_edit_file'.
-                    If the code is already correct, call the 'complete' tool with your summary.
+                    SYSTEM DIRECTIVE:
+                    You have inspected '$currentPath' $consecutiveSameFileReads times.
+                    Please proceed to apply your code edits using 'edit_file' or 'multi_edit_file'.
                 """.trimIndent()
                 return AgentLoopDecision.InjectWarning(
                     warning = warning,
-                    logTitle = "Action required on $currentPath"
-                )
-            } else if (consecutiveSameFileReads >= 2) {
-                val warning = """
-                    SYSTEM DIRECTIVE (ANTI-READ-LOOP):
-                    You have already inspected '$currentPath' multiple times.
-                    DO NOT re-read or scan this file again.
-                    If the problem is solved, call the 'complete' tool immediately!
-                    If changes are required, apply them now using 'edit_file' or 'multi_edit_file'.
-                """.trimIndent()
-                return AgentLoopDecision.InjectWarning(
-                    warning = warning,
-                    logTitle = "Read loop warning on $currentPath"
+                    logTitle = "Action suggestion on $currentPath"
                 )
             }
         }
