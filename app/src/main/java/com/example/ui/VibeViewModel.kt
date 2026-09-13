@@ -735,7 +735,8 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val listType = com.squareup.moshi.Types.newParameterizedType(List::class.java, com.example.ui.AgentSkill::class.java)
                 val adapter = moshi.adapter<List<com.example.ui.AgentSkill>>(listType)
-                adapter.fromJson(json) ?: emptyList()
+                val parsed = adapter.fromJson(json) ?: emptyList()
+                com.example.agent.AgentSkillRegistry.filterCleanSkills(parsed)
             } catch (e: Exception) {
                 emptyList()
             }
@@ -826,7 +827,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
 
-        val finalSkills = mergedDefaults + customLoaded + extraDiskSkills
+        val finalSkills = com.example.agent.AgentSkillRegistry.filterCleanSkills(mergedDefaults + customLoaded + extraDiskSkills)
         _agentSkills.value = finalSkills
         saveAgentSkillsInternal()
 
@@ -838,6 +839,19 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             _isFetchingSkills.value = true
             var newCount = 0
             try {
+                // 1. Purge any dummy/demo skills from current list
+                val currentCleaned = com.example.agent.AgentSkillRegistry.filterCleanSkills(_agentSkills.value)
+                val currentIds = currentCleaned.map { it.id }.toSet()
+
+                // 2. Fetch platform skills via AgentSkillRegistry
+                val registrySkills = com.example.agent.AgentSkillRegistry.fetchOnlinePlatformSkills(currentCleaned)
+                val fetchedList = mutableListOf<com.example.ui.AgentSkill>()
+                for (s in registrySkills) {
+                    if (s.id !in currentIds && fetchedList.none { it.id == s.id }) {
+                        fetchedList.add(s)
+                    }
+                }
+
                 val repos = listOf(
                     Triple("vercel-labs", "agent-skills", "https://github.com/vercel-labs/agent-skills"),
                     Triple("anthropics", "courses", "https://github.com/anthropics/courses"),
@@ -847,8 +861,6 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                     Triple("humanlayer", "humanlayer", "https://github.com/humanlayer/humanlayer"),
                     Triple("langchain-ai", "langchain", "https://github.com/langchain-ai/langchain")
                 )
-
-                val fetchedList = mutableListOf<com.example.ui.AgentSkill>()
 
                 for ((orgName, repo, githubUrl) in repos) {
                     try {
@@ -932,9 +944,13 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
 
+                val cleanedCurrent = com.example.agent.AgentSkillRegistry.filterCleanSkills(_agentSkills.value)
                 if (fetchedList.isNotEmpty()) {
                     newCount = fetchedList.size
-                    _agentSkills.value = _agentSkills.value + fetchedList
+                    _agentSkills.value = cleanedCurrent + fetchedList
+                    saveAgentSkillsInternal()
+                } else if (cleanedCurrent.size != _agentSkills.value.size) {
+                    _agentSkills.value = cleanedCurrent
                     saveAgentSkillsInternal()
                 }
             } catch (e: Exception) {

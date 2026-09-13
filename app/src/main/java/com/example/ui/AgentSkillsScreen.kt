@@ -49,64 +49,7 @@ data class AgentSkill(
     val rawFileUrl: String = ""
 )
 
-val defaultAgentSkills = listOf(
-    AgentSkill(
-        id = "vercel-react-best-practices",
-        name = "React & Next.js Composition",
-        author = "vercel-labs/agent-skills",
-        installs = "GitHub Skill",
-        description = "React composition patterns that scale. Eliminate boolean prop proliferation, build flexible component libraries, and optimize state rendering.",
-        githubUrl = "https://github.com/vercel-labs/agent-skills",
-        rawFileUrl = "https://raw.githubusercontent.com/vercel-labs/agent-skills/main/skills/react-best-practices/SKILL.md",
-        skillPrompt = """
-            Skill: React & Next.js Composition Best Practices
-            - Avoid boolean prop proliferation; use composition and sub-components.
-            - Ensure state stays local where possible and lift state cleanly.
-        """.trimIndent()
-    ),
-    AgentSkill(
-        id = "anthropic-claude-prompt-engineering",
-        name = "Claude Prompt Engineering",
-        author = "anthropics/courses",
-        installs = "GitHub Skill",
-        description = "Advanced prompt design for AI models: XML tags structuring, chain-of-thought reasoning, and system prompt optimization.",
-        githubUrl = "https://github.com/anthropics/courses",
-        rawFileUrl = "https://raw.githubusercontent.com/anthropics/courses/main/README.md",
-        skillPrompt = """
-            Skill: Anthropic Claude Prompt Engineering
-            - Structure context using XML tags like <context>, <instructions>, and <examples>.
-            - Request step-by-step thinking inside <thinking> tags before producing final output.
-        """.trimIndent()
-    ),
-    AgentSkill(
-        id = "google-gemini-cookbook",
-        name = "Gemini API Optimization",
-        author = "google-gemini/cookbook",
-        installs = "GitHub Skill",
-        description = "Production patterns for Gemini 1.5/2.0 Pro and Flash models, structured JSON outputs, multimodal reasoning, and function calling.",
-        githubUrl = "https://github.com/google-gemini/cookbook",
-        rawFileUrl = "https://raw.githubusercontent.com/google-gemini/cookbook/main/README.md",
-        skillPrompt = """
-            Skill: Gemini API Cookbook
-            - Use responseSchema for deterministic JSON generation.
-            - Leverage system instructions and safety settings properly.
-        """.trimIndent()
-    ),
-    AgentSkill(
-        id = "android-compose-architecture",
-        name = "Jetpack Compose MVVM",
-        author = "android/architecture-samples",
-        installs = "Android Skill",
-        description = "Clean Architecture with Jetpack Compose, ViewModels, StateFlow, Coroutines, and Material 3 design system.",
-        githubUrl = "https://github.com/android/architecture-samples",
-        rawFileUrl = "https://raw.githubusercontent.com/android/architecture-samples/main/README.md",
-        skillPrompt = """
-            Skill: Jetpack Compose MVVM & Clean Architecture
-            - Unidirectional data flow with StateFlow and collectAsStateWithLifecycle.
-            - Material 3 design system compliance with 48dp minimum touch targets.
-        """.trimIndent()
-    )
-)
+val defaultAgentSkills = com.example.agent.AgentSkillRegistry.curatedPlatformSkills
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -128,7 +71,7 @@ fun AgentSkillsDialog(
     var showAddCustomDialog by remember { mutableStateOf(false) }
     var inspectingSkill by remember { mutableStateOf<AgentSkill?>(null) }
 
-    val categories = listOf("All", "Installed", "Vercel Labs", "Anthropic", "Google Gemini", "Browser Use", "Composio", "LangChain")
+    val categories = listOf("All", "Installed", "Google Gemini", "Android", "Anthropic", "Vercel", "Browser Use", "Composio", "LangChain", "Supabase", "Cloudflare")
 
     LaunchedEffect(Unit) {
         if (skills.isEmpty()) {
@@ -144,12 +87,16 @@ fun AgentSkillsDialog(
                 skill.description.contains(searchQuery, ignoreCase = true)
 
             val matchesCategory = when (selectedCategory) {
-                "CloudAI-X" -> skill.author.contains("cloudai-x", ignoreCase = true)
-                "Vercel Labs" -> skill.author.contains("vercel", ignoreCase = true)
-                "Anthropic" -> skill.author.contains("anthropic", ignoreCase = true)
-                "Expo" -> skill.author.contains("expo", ignoreCase = true)
-                "NextLevelBuilder" -> skill.author.contains("nextlevelbuilder", ignoreCase = true)
                 "Installed" -> skill.isInstalled
+                "Google Gemini" -> skill.author.contains("google", ignoreCase = true) || skill.author.contains("gemini", ignoreCase = true) || skill.name.contains("gemini", ignoreCase = true) || skill.id.contains("gemini", ignoreCase = true)
+                "Android" -> skill.author.contains("android", ignoreCase = true) || skill.name.contains("android", ignoreCase = true) || skill.name.contains("compose", ignoreCase = true) || skill.id.contains("android", ignoreCase = true)
+                "Anthropic" -> skill.author.contains("anthropic", ignoreCase = true) || skill.name.contains("claude", ignoreCase = true) || skill.id.contains("anthropic", ignoreCase = true)
+                "Vercel" -> skill.author.contains("vercel", ignoreCase = true) || skill.name.contains("react", ignoreCase = true) || skill.name.contains("next", ignoreCase = true) || skill.id.contains("vercel", ignoreCase = true)
+                "Browser Use" -> skill.author.contains("browser", ignoreCase = true) || skill.name.contains("browser", ignoreCase = true) || skill.id.contains("browser", ignoreCase = true)
+                "Composio" -> skill.author.contains("composio", ignoreCase = true) || skill.name.contains("composio", ignoreCase = true) || skill.id.contains("composio", ignoreCase = true)
+                "LangChain" -> skill.author.contains("langchain", ignoreCase = true) || skill.name.contains("langchain", ignoreCase = true) || skill.id.contains("langchain", ignoreCase = true)
+                "Supabase" -> skill.author.contains("supabase", ignoreCase = true) || skill.name.contains("supabase", ignoreCase = true) || skill.id.contains("supabase", ignoreCase = true)
+                "Cloudflare" -> skill.author.contains("cloudflare", ignoreCase = true) || skill.name.contains("cloudflare", ignoreCase = true) || skill.id.contains("cloudflare", ignoreCase = true)
                 else -> true
             }
 
@@ -277,7 +224,7 @@ fun AgentSkillsDialog(
                 )
 
                 Text(
-                    text = "Extend your Agent with skills from Vercel-labs, Anthropic, Expo & NextLevelBuilder.",
+                    text = "Extend your Agent with real skills across Google Gemini, Android, Anthropic, Vercel, Browser Use, and more.",
                     fontSize = 13.sp,
                     color = Color(0xFF94A3B8),
                     modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
@@ -287,7 +234,7 @@ fun AgentSkillsDialog(
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    placeholder = { Text("Search skills (e.g., Anthropic, Expo, Vercel)...", color = Color(0xFF64748B), fontSize = 13.sp) },
+                    placeholder = { Text("Search skills (e.g., Gemini, Android, Claude, Browser)...", color = Color(0xFF64748B), fontSize = 13.sp) },
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Default.Search,
@@ -455,12 +402,33 @@ fun AgentSkillsDialog(
                                     verticalAlignment = Alignment.Top
                                 ) {
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = skill.name,
-                                            fontSize = 18.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.White
-                                        )
+                                        val platform = com.example.agent.AgentSkillRegistry.getSkillPlatform(skill)
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Text(
+                                                text = skill.name,
+                                                fontSize = 17.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White,
+                                                modifier = Modifier.weight(1f, fill = false)
+                                            )
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .background(Color(platform.colorHex).copy(alpha = 0.15f))
+                                                    .border(BorderStroke(0.5.dp, Color(platform.colorHex).copy(alpha = 0.5f)), RoundedCornerShape(6.dp))
+                                                    .padding(horizontal = 7.dp, vertical = 2.dp)
+                                            ) {
+                                                Text(
+                                                    text = platform.name,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = Color(platform.colorHex)
+                                                )
+                                            }
+                                        }
 
                                         Text(
                                             text = "${skill.author} • ${skill.installs}",
