@@ -3711,13 +3711,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                         $systemInstruction
                         
                         ${com.example.agent.ReadLoopSafetyManager.SYSTEM_READ_WARNING}
-                        
-                        DYNAMIC AGENT TOOL EXECUTION BUDGET (CRITICAL UPDATES):
-                        - Total Step Execution Limit: $maxActionSteps
-                        - Steps Already Executed: $actionsCount
-                        - Steps Remaining: $remainingSteps
-                        - You are currently at step ${actionsCount + 1}. You have exactly $remainingSteps actions/tool calls remaining for this task.
-                        - Plan your tasks and use the 'complete' tool to terminate before you run out of actions!
+                        [Step ${actionsCount + 1}/$maxActionSteps | Remaining: $remainingSteps actions. Call 'complete' when done.]
                     """.trimIndent()
 
                     val stepResponse = GeminiClient.generateAgentStep(
@@ -4388,6 +4382,55 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 )
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': $result"))))
+                            }
+                            "read_preview_errors", "get_preview_errors", "preview_errors", "console_errors" -> {
+                                val logEntry = createAiLog(
+                                    title = "Read preview errors",
+                                    status = "thinking",
+                                    details = "Preview errors"
+                                )
+                                _aiActionLogs.value = _aiActionLogs.value + logEntry
+
+                                val result = com.example.agent.AgentErrorLogsEngine.readPreviewErrors(
+                                    logs = _webConsoleLogs.value,
+                                    args = args
+                                )
+
+                                updateAiLog(logEntry.id, "success", result.take(300))
+                                history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
+                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool':\n$result"))))
+                            }
+                            "read_build_errors", "get_build_errors", "build_errors", "github_action_errors" -> {
+                                val logEntry = createAiLog(
+                                    title = "Read build errors",
+                                    status = "thinking",
+                                    details = "Build errors"
+                                )
+                                _aiActionLogs.value = _aiActionLogs.value + logEntry
+
+                                val result = com.example.agent.AgentErrorLogsEngine.readBuildErrors(
+                                    buildLogs = _buildLogs.value,
+                                    buildStatus = _buildStatus.value,
+                                    args = args
+                                )
+
+                                updateAiLog(logEntry.id, "success", result.take(300))
+                                history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
+                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool':\n$result"))))
+                            }
+                            "list_all_tools", "get_all_tools", "all_tools", "tools_help", "help_tools" -> {
+                                val logEntry = createAiLog(
+                                    title = "Listed all tools",
+                                    status = "thinking",
+                                    details = "Tools registry"
+                                )
+                                _aiActionLogs.value = _aiActionLogs.value + logEntry
+
+                                val result = com.example.agent.AgentToolRegistryEngine.ALL_TOOLS_DOCUMENTATION
+
+                                updateAiLog(logEntry.id, "success", "Retrieved all tools specifications")
+                                history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
+                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool':\n$result"))))
                             }
                             "read_console_logs", "preview_console_logs", "get_console_logs", "console_logs" -> {
                                 val logEntry = createAiLog(

@@ -158,14 +158,12 @@ object AgentInstructionEngine {
 
         // 3. Lean Core Directives (Optimized for KV Cache & low token footprint)
         sb.append("=== CORE DIRECTIVES ===\n")
-        sb.append("1. CURRENT PROMPT SUPREMACY: Focus 100% of your actions on the user's LATEST (current) prompt. Conversation history shows completed past actions—do NOT re-execute, repeat, or prioritize older requests over the current prompt.\n")
-        sb.append("2. SCOPE: Execute EXACTLY what user requested without unsolicited bloat. Call 'complete' when done.\n")
-        sb.append("3. STEP BUDGET: Max steps: $maxActionSteps. Use 'ai_think' before editing or debugging.\n")
-        sb.append("4. LANGUAGE: Respond in the exact language & script of user (Bangla/English).\n")
-        sb.append("5. SURGICAL EDITS: Never overwrite files >30 lines. Inspect with 'read_file' first, then use 'edit_file'/'multi_edit_file'.\n")
-        sb.append("6. NEVER CALL 'create_file' ON EXISTING FILES: 'create_file' is strictly for brand new files. If a file exists in the file tree, calling 'create_file' will be REJECTED! You must inspect it with 'read_file' first and use 'edit_file' or 'multi_edit_file'.\n")
-        sb.append("7. AUTONOMOUS BROWSER CONTROLLER: You act as a full human browser controller AI. Use 'browser_snapshot' to index all interactive elements with IDs [1], [2]... and 'browser_controller' to click, fill forms, scroll, or navigate. Use 'deep_clone_web_ui' for pixel-accurate website cloning.\n")
-        sb.append("8. HARNESS & SUB-AGENTS: PenCode uses Jcode Harness architecture with specialized Sub-Agent teammates (Frontend, Backend, Testing) and Semantic Vector Memory.\n")
+        sb.append("1. LATEST PROMPT: Execute current user prompt faithfully without unsolicited bloat. Call 'complete' when finished.\n")
+        sb.append("2. BUDGET: Max steps: $maxActionSteps. Language: match user (Bangla/English).\n")
+        sb.append("3. SURGICAL EDITS: Never overwrite files >30 lines. Read once before editing with 'edit_file'/'multi_edit_file'.\n")
+        sb.append("4. NEW FILES: Use 'create_file' ONLY for new files. Existing files must be edited.\n")
+        sb.append("5. DIAGNOSTICS: Use 'read_preview_errors' for preview bugs and 'read_build_errors' for build failures.\n")
+        sb.append("6. TOOL CATALOG: If any tool command is omitted or you need full documentation, invoke 'list_all_tools' to see all available tools and usage.\n")
 
         // 4. Skills Module (Only if skills are active)
         if (activeSkills.isNotEmpty()) {
@@ -173,7 +171,7 @@ object AgentInstructionEngine {
             activeSkills.forEach { skill ->
                 sb.append("• [${skill.name}]: ${skill.description}\n")
                 if (skill.skillPrompt.isNotBlank()) {
-                    sb.append("  Instructions: ${skill.skillPrompt.take(300)}\n")
+                    sb.append("  Instructions: ${skill.skillPrompt.take(200)}\n")
                 }
             }
             sb.append("\n")
@@ -190,74 +188,54 @@ object AgentInstructionEngine {
         val tools = mutableListOf<String>()
         
         // Base / Universal tools
-        tools.add("'ai_think'(message [MANDATORY before operations/debug])")
-        tools.add("'complete'(message [Final task summary])")
-        tools.add("'ai_response'(message)")
-        tools.add("'ask_user'(question, options?: [string]) [Ask clarification/confirmation when confused or deciding; resumes upon reply]")
-        tools.add("'skill_check'(query?: string) [Query/inspect active skills and instructions]")
+        tools.add("'ai_think'(message)")
+        tools.add("'complete'(message)")
+        tools.add("'ask_user'(question, options?: [string])")
+        tools.add("'list_all_tools'() [View all tools with full documentation]")
+        tools.add("'read_preview_errors'(query?: string, maxLines?: number) [Read ONLY Preview tab errors & exceptions]")
+        tools.add("'read_build_errors'(query?: string, maxLines?: number) [Read ONLY Build tab compilation & GitHub Action errors]")
+        tools.add("'read_console_logs'(filter?, query?, maxLines?)")
+        tools.add("'read_build_logs'(filter?, query?, maxLines?)")
 
         // Code / File tools
         if (intents.contains(PromptIntent.CODE_MODIFICATION_OR_FEATURE) || intents.contains(PromptIntent.DEBUG_AND_ERROR_FIXING) || intents.contains(PromptIntent.GENERAL_AGENT_TASK) || intents.contains(PromptIntent.SEARCH_AND_EXPLORATION)) {
             tools.add("'read_file'(path)")
             tools.add("'read_file_range'(path, startLine, endLine)")
             tools.add("'multi_read_file'(path, ranges:[{startLine,endLine}])")
-            tools.add("'create_file'(path, content)")
+            tools.add("'create_file'(path, content) [Brand new files only]")
             tools.add("'edit_file'(path, search, replace)")
-            tools.add("'multi_edit_file'(path, chunks:[{search,replace}]) [Apply multiple search & replace edits to one file]")
-            tools.add("'patch_file'(path, search, replace)")
-            tools.add("'append'(path, content)")
-            tools.add("'rename_file'(oldPath, newPath) [Rename a file in the workspace]")
-            tools.add("'move_file'(sourcePath, destinationPath) [Move a file to another path]")
-            tools.add("'copy_file'(path, destinationPath)")
-            tools.add("'duplicate_file'(path, count?: number, targetPaths?: [string])")
-            tools.add("'transfer_code_chunk'(sourcePath, targetPath, codeChunk, targetAnchor?: string, insertAt?: 'start'|'end'|'append'|'before'|'after'|'replace', isMove?: boolean) [Transfer, copy, or move code blocks/chunks between files]")
-            tools.add("'copy_code_chunk'(sourcePath, targetPath, codeChunk, targetAnchor?: string, insertAt?: string) [Copy a code block from one file to another]")
-            tools.add("'move_code_chunk'(sourcePath, targetPath, codeChunk, targetAnchor?: string, insertAt?: string) [Move a code block from one file to another, removing it from source]")
-            tools.add("'delete_code_chunk'(path, codeChunk, deleteAllOccurrences?: boolean) [Delete a specific code block or chunk from a file without leaving corrupt syntax or excessive empty lines]")
+            tools.add("'multi_edit_file'(path, chunks:[{search,replace}])")
             tools.add("'delete_file'(path)")
-            tools.add("'scan_dir'(path: folder name)")
+            tools.add("'scan_dir'(path)")
             tools.add("'global_search'(query)")
-            tools.add("'generate_image'(prompt, path?: 'assets/image.png', width?: 1024, height?: 1024, isLogo?: boolean)")
-            tools.add("'generate_logo'(prompt, path?: 'assets/logo.png', width?: 512, height?: 512)")
-            tools.add("'resize_image'(path, width?: number, height?: number, destinationPath?: string, format?: 'png'|'jpg'|'webp') [Resize, scale, convert, or compress an image]")
-            tools.add("'create_todo_list'(query)")
-            tools.add("'complete_todo_task'(query)")
-            tools.add("'generate_pdf'(title, content, theme: 'modern'|'elegant'|'minimal'|'cyberpunk'|'dark', path?: optional filename)")
-            tools.add("'generate_document'(type: 'pdf'|'html'|'md'|'txt', title, content, theme?: string, path?: string)")
-            tools.add("'read_console_logs'(filter?: 'all'|'error'|'warn'|'info', query?: string, maxLines?: number) [Read Preview tab web console logs to diagnose runtime errors and logs]")
-            tools.add("'read_build_logs'(filter?: 'all'|'error', query?: string, maxLines?: number) [Read Build tab GitHub Actions compilation and build logs to diagnose build failures]")
+            tools.add("'delete_code_chunk'(path, codeChunk)")
+            tools.add("'copy_code_chunk'(sourcePath, targetPath, codeChunk, targetAnchor?)")
+            tools.add("'move_code_chunk'(sourcePath, targetPath, codeChunk, targetAnchor?)")
+            tools.add("'generate_image'(prompt, path?)")
+            tools.add("'generate_pdf'(title, content, theme?, path?)")
         }
 
         // Web / Internet / Browser inspection & cloning tools
-        tools.add("'browser_search'(query [Search web or navigate URL])")
-        tools.add("'browser_read'() [Read current webpage/article]")
-        tools.add("'browser_snapshot'() [Scan all clickable, typable, and form elements on page with numeric tags [1], [2]...]")
-        tools.add("'browser_controller'(action: 'click'|'type'|'scroll'|'select', elementIndex?: number, selector?: string, text?: string, pressEnter?: boolean, clearBefore?: boolean) [Control webpage like a human: click buttons, type in search/form fields, submit]")
-        tools.add("'fetch_url'(url, targetFile?: string) [Fetch raw web page / article text]")
-        tools.add("'clone_web_ui'(url, targetFilePath?: string) [Scrape website UI, extract design tokens and clone layout]")
-        tools.add("'deep_clone_web_ui'(url, targetFilePath?: string) [Deeply clone website UI: extract complete DOM structure, color palette, typography tokens, and layout]")
+        tools.add("'browser_search'(query)")
+        tools.add("'browser_read'()")
+        tools.add("'browser_snapshot'()")
+        tools.add("'browser_controller'(action: 'click'|'type'|'scroll', elementIndex?, selector?, text?)")
+        tools.add("'fetch_url'(url, targetFile?)")
+        tools.add("'clone_web_ui'(url, targetFilePath?)")
+        tools.add("'deep_clone_web_ui'(url, targetFilePath?)")
 
         if (intents.contains(PromptIntent.WEB_AND_UI_INSPECTION)) {
             tools.add("'open_url'(url)")
             tools.add("'inspect_dom'(selector)")
             tools.add("'inspect_css'(selector)")
-            tools.add("'get_computed_styles'(selector, properties)")
             tools.add("'take_screenshot'(path)")
-            tools.add("'click'(selector)")
-            tools.add("'type'(selector, text)")
-            tools.add("'scroll'(direction, amount)")
-            tools.add("'get_links'()")
-            tools.add("'get_images'()")
-            tools.add("'get_fonts'()")
             tools.add("'run_javascript'(script)")
-            tools.add("'compare_screenshot'(targetImage)")
         }
 
         // MCP Tools
         if (intents.contains(PromptIntent.DATABASE_AND_MCP) || effectiveMcpServers.isNotEmpty()) {
-            tools.add("'mcp_call_tool'(mcpServerId/mcpServerName, toolName, mcpArgsJson)")
+            tools.add("'mcp_call_tool'(mcpServerId, toolName, mcpArgsJson)")
             tools.add("'mcp_list_tools'(mcpServerId)")
-            tools.add("'mcp_read_resource'(mcpServerId, resourceUri)")
         }
 
         tools.forEach { t -> sb.append("- ").append(t).append("\n") }
@@ -270,14 +248,9 @@ object AgentInstructionEngine {
 
 === MANDATORY FORMAT ===
 Return ONLY raw JSON object.
-
-Standard & Required Format (ALWAYS BATCH 2+ OPERATIONS):
-{"thought":"Your formulated master plan for multiple upcoming operations","tools":[{"tool":"tool_1","arguments":{...}},{"tool":"tool_2","arguments":{...}}]}
-
-Single Operation Format (ONLY for genuinely complex/unpredictable investigations):
-{"thought":"Detailed reasoning explaining why this single step must be explored first","tool":"tool_name","arguments":{"path":"...","search":"...","replace":"...","message":"..."}}
-
-- Call 'complete' with Markdown summary when all tasks are finished.
+Batch format (Standard): {"thought":"...","tools":[{"tool":"read_file","arguments":{"path":"..."}},{"tool":"edit_file","arguments":{...}}]}
+Single format (Exploratory only): {"thought":"...","tool":"global_search","arguments":{"query":"..."}}
+Call 'complete' with Markdown summary when finished.
         """.trimIndent())
 
         return sb.toString()

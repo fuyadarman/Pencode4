@@ -436,6 +436,38 @@ object ToolExecutionItemMapper {
                     details = log.details
                 )
             }
+            lowerTitle.contains("preview error") -> {
+                val target = details.lineSequence().firstOrNull()?.trim() ?: "Preview errors"
+                ToolStyleSpec(
+                    actionTitle = "Read preview errors",
+                    targetLabel = target.take(80),
+                    icon = Icons.Default.BugReport,
+                    iconColor = Color(0xFFFF5555),
+                    isExecuting = isExecuting,
+                    details = log.details
+                )
+            }
+            lowerTitle.contains("build error") -> {
+                val target = details.lineSequence().firstOrNull()?.trim() ?: "Build errors"
+                ToolStyleSpec(
+                    actionTitle = "Read build errors",
+                    targetLabel = target.take(80),
+                    icon = Icons.Default.ErrorOutline,
+                    iconColor = Color(0xFFFF5555),
+                    isExecuting = isExecuting,
+                    details = log.details
+                )
+            }
+            lowerTitle.contains("all tools") || lowerTitle.contains("tool registry") -> {
+                ToolStyleSpec(
+                    actionTitle = "Listed all tools",
+                    targetLabel = "PenCode tools catalog",
+                    icon = Icons.Default.MenuBook,
+                    iconColor = Color(0xFFBD93F9),
+                    isExecuting = isExecuting,
+                    details = log.details
+                )
+            }
             lowerTitle.contains("console") -> {
                 val target = details.lineSequence().firstOrNull()?.trim() ?: "Preview console"
                 ToolStyleSpec(
