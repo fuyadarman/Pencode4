@@ -64,7 +64,7 @@ object AgentInstructionEngine {
         }
 
         // Debug / Error fixing
-        if (p.contains("error") || p.contains("bug") || p.contains("fix") || p.contains("exception") || p.contains("failed") || p.contains("crash") || p.contains("not working") || p.contains("issue") || p.contains("build failed")) {
+        if (p.contains("error") || p.contains("bug") || p.contains("fix") || p.contains("exception") || p.contains("failed") || p.contains("crash") || p.contains("not working") || p.contains("issue") || p.contains("build failed") || p.contains("console") || p.contains("log") || p.contains("action") || p.contains("workflow") || p.contains("preview")) {
             intents.add(PromptIntent.DEBUG_AND_ERROR_FIXING)
         }
 
@@ -224,6 +224,8 @@ object AgentInstructionEngine {
             tools.add("'complete_todo_task'(query)")
             tools.add("'generate_pdf'(title, content, theme: 'modern'|'elegant'|'minimal'|'cyberpunk'|'dark', path?: optional filename)")
             tools.add("'generate_document'(type: 'pdf'|'html'|'md'|'txt', title, content, theme?: string, path?: string)")
+            tools.add("'read_console_logs'(filter?: 'all'|'error'|'warn'|'info', query?: string, maxLines?: number) [Read Preview tab web console logs to diagnose runtime errors and logs]")
+            tools.add("'read_build_logs'(filter?: 'all'|'error', query?: string, maxLines?: number) [Read Build tab GitHub Actions compilation and build logs to diagnose build failures]")
         }
 
         // Web / Internet / Browser inspection & cloning tools

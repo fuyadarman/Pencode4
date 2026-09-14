@@ -356,8 +356,10 @@ object ToolExecutionItemMapper {
                     details = log.details
                 )
             }
-            lowerTitle.startsWith("deleted file") || lowerTitle.contains("delete_file") -> {
-                val target = extractPath(title, details, "Deleted file:").ifBlank { "file" }
+            lowerTitle.startsWith("deleted file") || lowerTitle.startsWith("delete file") || lowerTitle.contains("delete_file") -> {
+                val target = extractPath(title, details, "Deleted file:").ifBlank {
+                    extractPath(title, details, "Delete file:").ifBlank { "file" }
+                }
                 ToolStyleSpec(
                     actionTitle = "Deleted file",
                     targetLabel = target,
@@ -367,8 +369,10 @@ object ToolExecutionItemMapper {
                     details = log.details
                 )
             }
-            lowerTitle.startsWith("copied file") || lowerTitle.contains("copy_file") || lowerTitle.contains("duplicate") -> {
-                val target = extractPath(title, details, "Copied file:").ifBlank { "file" }
+            lowerTitle.startsWith("copied file") || lowerTitle.startsWith("copy file") || lowerTitle.contains("copy_file") || lowerTitle.contains("duplicate") -> {
+                val target = extractPath(title, details, "Copied file:").ifBlank {
+                    extractPath(title, details, "Copy file:").ifBlank { "file" }
+                }
                 ToolStyleSpec(
                     actionTitle = if (lowerTitle.contains("duplicate")) "Duplicated file" else "Copied file",
                     targetLabel = target,
@@ -378,7 +382,7 @@ object ToolExecutionItemMapper {
                     details = log.details
                 )
             }
-            lowerTitle.startsWith("search:") || lowerTitle.contains("find_in_files") || lowerTitle.contains("grep") -> {
+            lowerTitle.startsWith("search:") || lowerTitle.contains("search files") || lowerTitle.contains("searched files") || lowerTitle.contains("find_in_files") || lowerTitle.contains("grep") -> {
                 val query = extractPath(title, details, "Search:").ifBlank { details }
                 ToolStyleSpec(
                     actionTitle = "Searched files",
@@ -432,6 +436,49 @@ object ToolExecutionItemMapper {
                     details = log.details
                 )
             }
+            lowerTitle.contains("console") -> {
+                val target = details.lineSequence().firstOrNull()?.trim() ?: "Preview console"
+                ToolStyleSpec(
+                    actionTitle = "Read console logs",
+                    targetLabel = target.take(80),
+                    icon = Icons.Default.Terminal,
+                    iconColor = Color(0xFF58A6FF),
+                    isExecuting = isExecuting,
+                    details = log.details
+                )
+            }
+            lowerTitle.contains("build log") || lowerTitle.contains("action log") || lowerTitle.contains("workflow log") || lowerTitle.contains("github log") -> {
+                val target = details.lineSequence().firstOrNull()?.trim() ?: "GitHub Actions"
+                ToolStyleSpec(
+                    actionTitle = "Read build logs",
+                    targetLabel = target.take(80),
+                    icon = Icons.Default.Build,
+                    iconColor = Color(0xFFF1E05A),
+                    isExecuting = isExecuting,
+                    details = log.details
+                )
+            }
+            lowerTitle.contains("directory") || lowerTitle.contains("scan_dir") || lowerTitle.contains("list_dir") -> {
+                val target = details.lineSequence().firstOrNull()?.trim() ?: "workspace folder"
+                ToolStyleSpec(
+                    actionTitle = "Scanned directory",
+                    targetLabel = target.take(80),
+                    icon = Icons.Default.FolderOpen,
+                    iconColor = Color(0xFF79C0FF),
+                    isExecuting = isExecuting,
+                    details = log.details
+                )
+            }
+            lowerTitle.contains("task completed") || lowerTitle.contains("complete") -> {
+                ToolStyleSpec(
+                    actionTitle = "Task completed",
+                    targetLabel = details.lineSequence().firstOrNull()?.trim()?.take(80) ?: "Finished",
+                    icon = Icons.Default.CheckCircle,
+                    iconColor = Color(0xFF39D353),
+                    isExecuting = isExecuting,
+                    details = log.details
+                )
+            }
             lowerTitle.contains("skill") -> {
                 ToolStyleSpec(
                     actionTitle = "Agent Skill",
@@ -455,11 +502,26 @@ object ToolExecutionItemMapper {
                 )
             }
             else -> {
+                val fallbackIcon = when {
+                    lowerTitle.contains("read") || lowerTitle.contains("get") || lowerTitle.contains("fetch") || lowerTitle.contains("inspect") -> Icons.Default.Visibility
+                    lowerTitle.contains("delete") || lowerTitle.contains("remove") -> Icons.Default.Delete
+                    lowerTitle.contains("copy") -> Icons.Default.ContentCopy
+                    lowerTitle.contains("move") -> Icons.Default.DriveFileMove
+                    lowerTitle.contains("write") || lowerTitle.contains("create") || lowerTitle.contains("edit") -> Icons.Default.Edit
+                    lowerTitle.contains("search") || lowerTitle.contains("find") -> Icons.Default.Search
+                    else -> Icons.Default.Code
+                }
+                val fallbackColor = when {
+                    lowerTitle.contains("delete") || lowerTitle.contains("remove") -> Color(0xFFFFA198)
+                    lowerTitle.contains("write") || lowerTitle.contains("create") || lowerTitle.contains("edit") -> Color(0xFF00D8A5)
+                    lowerTitle.contains("search") || lowerTitle.contains("find") -> Color(0xFFFF7B72)
+                    else -> Color(0xFF58A6FF)
+                }
                 ToolStyleSpec(
                     actionTitle = title,
                     targetLabel = details.lineSequence().firstOrNull()?.trim() ?: "",
-                    icon = Icons.Default.PlayArrow,
-                    iconColor = Color(0xFF8B949E),
+                    icon = fallbackIcon,
+                    iconColor = fallbackColor,
                     isExecuting = isExecuting,
                     details = log.details
                 )

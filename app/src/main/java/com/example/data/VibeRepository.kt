@@ -42,14 +42,29 @@ class VibeRepository(private val dao: VibeDao, private val context: Context) {
 
     // Helper to get physical directory for project on device memory
     fun getProjectDir(projectName: String): File {
+        val sanitizedName = projectName.replace(Regex("[\\\\/:*?\"<>|]"), "_")
         val publicDocBase = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOCUMENTS)?.resolve("pencode")
+        val extFilesBase = context.getExternalFilesDir(null)?.resolve("pencode")
+        val internalBase = context.filesDir.resolve("pencode")
+
+        // 1. If project already exists in any candidate location with files, reuse it to NEVER lose user files!
+        val candidates = listOfNotNull(
+            publicDocBase?.resolve(sanitizedName),
+            extFilesBase?.resolve(sanitizedName),
+            internalBase.resolve(sanitizedName)
+        )
+        for (candidate in candidates) {
+            if (candidate.exists() && candidate.isDirectory && (candidate.list()?.isNotEmpty() == true)) {
+                return candidate
+            }
+        }
+
+        // 2. Otherwise pick preferred writable directory
         val base = if (publicDocBase != null && isDirWritable(publicDocBase)) {
             publicDocBase
         } else {
-            context.getExternalFilesDir(null)?.resolve("pencode") 
-                ?: context.filesDir.resolve("pencode")
+            extFilesBase ?: internalBase
         }
-        val sanitizedName = projectName.replace(Regex("[\\\\/:*?\"<>|]"), "_")
         val projectDir = File(base, sanitizedName)
         if (!projectDir.exists()) {
             projectDir.mkdirs()
@@ -300,6 +315,7 @@ class VibeRepository(private val dao: VibeDao, private val context: Context) {
 
     suspend fun deleteFile(projectName: String, path: String) = withContext(Dispatchers.IO) {
         val cleanPath = path.trim().removePrefix("/")
+        if (cleanPath.isBlank()) return@withContext
         val lowerPath = cleanPath.lowercase()
         if (lowerPath == "android.yml" || lowerPath.endsWith("/android.yml") || lowerPath.endsWith("\\android.yml")) {
             throw IllegalArgumentException("The 'android.yml' workflow file is protected and cannot be deleted.")

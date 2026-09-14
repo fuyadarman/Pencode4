@@ -49,7 +49,7 @@ object DocumentToolHandler {
 
                 try {
                     val result = withContext(Dispatchers.IO) {
-                        val baseDir = File(context.filesDir, "projects/${project.name}")
+                        val baseDir = repository.getProjectDir(project.name)
                         val style = DocumentStyleConfig(
                             theme = selectedTheme,
                             fontSize = 14,
@@ -119,7 +119,7 @@ object DocumentToolHandler {
 
                 try {
                     val result = withContext(Dispatchers.IO) {
-                        val baseDir = File(context.filesDir, "projects/${project.name}")
+                        val baseDir = repository.getProjectDir(project.name)
                         val style = DocumentStyleConfig(
                             theme = selectedTheme,
                             author = "PenCode AI"

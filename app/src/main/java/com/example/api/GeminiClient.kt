@@ -143,7 +143,9 @@ data class ToolArguments(
     val pressEnter: Boolean? = null,
     val elementIndex: Int? = null,
     val action: String? = null,
-    val deleteAllOccurrences: Boolean? = null
+    val deleteAllOccurrences: Boolean? = null,
+    val filter: String? = null,
+    val maxLines: Int? = null
 )
 
 @JsonClass(generateAdapter = true)

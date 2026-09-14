@@ -171,20 +171,11 @@ class AgentLoopProtectionEngine {
             )
         }
 
-        // 3. Consecutive Read Ceiling:
-        // Do not prematurely auto-complete tasks just because of 3 reads.
-        // Complex projects need multiple reads across files. Only prompt after 8+ consecutive reads.
-        if (isReadTool(tool) && consecutiveReadCount >= 8) {
-            if (filesModified.isEmpty()) {
-                return LoopDecision.InterceptWithResult(
-                    toolOutput = "SYSTEM DIRECTIVE: You have performed $consecutiveReadCount inspections. " +
-                            "Please apply your planned code edits with 'edit_file' or 'multi_edit_file'.",
-                    logTitle = "Action guidance",
-                    logStatus = "thinking",
-                    logDetails = "Prompted code edit application after $consecutiveReadCount reads."
-                )
-            }
-        }
+        // 3. Consecutive Read Check:
+        // Complex multi-file projects require reading and inspecting many files.
+        // We do not intercept normal multi-file reading loops unless the exact same file
+        // is being read pathologically without edits (which is already evaluated by AgentReadLoopPolicy above).
+
 
         // 5. Sequence Oscillation Breaker (e.g. Read -> Edit -> Read -> Edit):
         val historySize = actionHistory.size

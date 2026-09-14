@@ -2788,9 +2788,9 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             startPollingBuild()
             
             try {
-                // Sync files on startup to verify integrity
-                repository.syncDatabaseToStorage(project.name)
+                // Sync physical storage to database FIRST so files on disk are never lost
                 repository.syncStorageToDatabase(project.name)
+                repository.syncDatabaseToStorage(project.name)
                 loadProjectDetails(project.name)
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -2842,20 +2842,6 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
 
     private suspend fun loadProjectDetails(projectName: String) {
         var files = repository.getFilesForProject(projectName)
-        
-        // Clean up accidental build artifacts from database
-        val unwantedPrefixes = listOf("_next/", ".next/", "node_modules/", "out/", "dist/", "build/", "web-dist/")
-        val toDelete = files.filter { file ->
-            unwantedPrefixes.any { prefix -> 
-                file.path.startsWith(prefix) || file.path.contains("/$prefix") || file.path.endsWith("web-dist.zip")
-            }
-        }
-        if (toDelete.isNotEmpty()) {
-            for (f in toDelete) {
-                repository.deleteFile(projectName, f.path)
-            }
-            files = repository.getFilesForProject(projectName)
-        }
 
         // Auto-migrate old/broken react_vite projects to a modern Vite+React+Tailwind structure
         val hasPackageJson = files.any { it.path == "package.json" }
@@ -4050,6 +4036,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     try {
                                         repository.saveFile(project.name, filePath, fileContent)
                                         filesModifiedThisPrompt = true
+                                        _projectFiles.value = repository.getFilesForProject(project.name)
                                         _editHistory.value = _editHistory.value + EditRecord(
                                             tool = "create_file",
                                             path = filePath,
@@ -4116,6 +4103,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     try {
                                         repository.saveFile(project.name, filePath, fileContent)
                                         filesModifiedThisPrompt = true
+                                        _projectFiles.value = repository.getFilesForProject(project.name)
                                         _editHistory.value = _editHistory.value + EditRecord(
                                             tool = "write_file",
                                             path = filePath,
@@ -4173,6 +4161,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                         val newContent = targetFile.content + "\n" + fileContent
                                         repository.saveFile(project.name, filePath, newContent)
                                         filesModifiedThisPrompt = true
+                                        _projectFiles.value = repository.getFilesForProject(project.name)
                                         val startLine = targetFile.content.lines().size + 1
                                         val addedLines = fileContent.lines().size
                                         val endLine = startLine + addedLines - 1
@@ -4250,6 +4239,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                         consecutiveFailedEdits = 0
                                         lastEditError = null
                                         _editHistory.value = _editHistory.value + execResult.editRecord
+                                        _projectFiles.value = repository.getFilesForProject(project.name)
                                         Triple(execResult.message, true, execResult.rangeDesc)
                                     }
                                     is com.example.agent.AgentEditToolExecutor.EditExecutionResult.Failure -> {
@@ -4356,6 +4346,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                             try {
                                                 repository.saveFile(project.name, filePath, currentContent)
                                                 filesModifiedThisPrompt = true
+                                                _projectFiles.value = repository.getFilesForProject(project.name)
                                                 _editHistory.value = _editHistory.value + EditRecord(
                                                     tool = "multi_edit",
                                                     path = filePath,
@@ -4397,6 +4388,41 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 )
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': $result"))))
+                            }
+                            "read_console_logs", "preview_console_logs", "get_console_logs", "console_logs" -> {
+                                val logEntry = createAiLog(
+                                    title = "Read console logs",
+                                    status = "thinking",
+                                    details = "Preview web console"
+                                )
+                                _aiActionLogs.value = _aiActionLogs.value + logEntry
+
+                                val result = com.example.agent.AgentWorkspaceLogsReader.readConsoleLogs(
+                                    logs = _webConsoleLogs.value,
+                                    args = args
+                                )
+
+                                updateAiLog(logEntry.id, "success", result.take(300))
+                                history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
+                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool':\n$result"))))
+                            }
+                            "read_build_logs", "github_action_logs", "read_github_logs", "build_logs", "get_build_logs", "workflow_logs" -> {
+                                val logEntry = createAiLog(
+                                    title = "Read build logs",
+                                    status = "thinking",
+                                    details = "Build GitHub Actions"
+                                )
+                                _aiActionLogs.value = _aiActionLogs.value + logEntry
+
+                                val result = com.example.agent.AgentWorkspaceLogsReader.readBuildLogs(
+                                    buildLogs = _buildLogs.value,
+                                    buildStatus = _buildStatus.value,
+                                    args = args
+                                )
+
+                                updateAiLog(logEntry.id, "success", result.take(300))
+                                history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
+                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool':\n$result"))))
                             }
                             "generate_image", "pollinations_image", "create_image", "generate_logo", "create_logo",
                             "copy_file", "duplicate_code", "duplicate_file", "clone_web_ui", "scrape_web_ui", "deep_clone_web_ui",
@@ -4446,12 +4472,12 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     setAgentStatus = { status -> _agentStatus.value = status },
                                     normalizePath = { path -> normalizePath(path) }
                                 )
+                                _projectFiles.value = repository.getFilesForProject(project.name)
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': $result"))))
                             }
                             "delete_code" -> {
                                 val filePath = normalizePath(args?.path ?: "")
-                                val searchStr = args?.search ?: ""
                                 val deleteCodeLog = AiActionLog(
                                     title = "Deleted code block",
                                     status = "thinking",
@@ -4459,30 +4485,14 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 )
                                 _aiActionLogs.value = _aiActionLogs.value + deleteCodeLog
 
-                                val files = repository.getFilesForProject(project.name)
-                                val targetFile = files.find { it.path == filePath }
-                                val result = if (targetFile != null) {
-                                    val originalContent = targetFile.content
-                                    if (searchStr.isEmpty()) {
-                                        "Error: 'search' block cannot be empty for code deletion. You must specify the exact, unique block of code you want to delete in the 'search' argument."
-                                    } else if (!originalContent.contains(searchStr)) {
-                                        "Error: Could not find exact code block in $filePath to delete."
-                                    } else {
-                                        val occurrences = originalContent.split(searchStr).size - 1
-                                        if (occurrences > 1) {
-                                            "Error: The code block to delete is not unique ($occurrences matches). Provide more context."
-                                        } else {
-                                            val updatedContent = originalContent.replace(searchStr, "")
-                                            try {
-                                                repository.saveFile(project.name, filePath, updatedContent)
-                                                "Successfully deleted the specified code block from '$filePath'"
-                                            } catch (e: Exception) {
-                                                "Error writing file: ${e.localizedMessage}"
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    "Error: File '$filePath' not found."
+                                val result = com.example.agent.AgentCodeBlockOperations.handleDeleteCode(
+                                    args = args,
+                                    project = project,
+                                    repository = repository,
+                                    normalizePath = { normalizePath(it) }
+                                )
+                                if (result.startsWith("Successfully")) {
+                                    _projectFiles.value = repository.getFilesForProject(project.name)
                                 }
 
                                 _aiActionLogs.value = _aiActionLogs.value.map { log ->
@@ -4497,9 +4507,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                             "move_code" -> {
                                 val sourcePath = normalizePath(args?.path ?: "")
                                 val destPath = normalizePath(args?.destinationPath ?: "")
-                                val searchStr = args?.search ?: ""
-                                val destSearchStr = args?.destinationSearch ?: ""
-                                
                                 val moveCodeLog = AiActionLog(
                                     title = "Moved code block",
                                     status = "thinking",
@@ -4507,57 +4514,14 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 )
                                 _aiActionLogs.value = _aiActionLogs.value + moveCodeLog
 
-                                val files = repository.getFilesForProject(project.name)
-                                val sourceFile = files.find { it.path == sourcePath }
-                                val destFile = files.find { it.path == destPath }
-                                
-                                val result = if (sourceFile == null) {
-                                    "Error: Source file '$sourcePath' not found."
-                                } else if (destFile == null) {
-                                    "Error: Destination file '$destPath' not found."
-                                } else if (searchStr.isEmpty()) {
-                                    "Error: 'search' code block to move cannot be empty."
-                                } else if (!sourceFile.content.contains(searchStr)) {
-                                    "Error: Could not find code block in source file '$sourcePath'."
-                                } else {
-                                    val sourceOccurrences = sourceFile.content.split(searchStr).size - 1
-                                    if (sourceOccurrences > 1) {
-                                        "Error: The code block to move is not unique in source file ($sourceOccurrences matches)."
-                                    } else {
-                                        // Try destination insertion
-                                        val destContent = destFile.content
-                                        val newDestContent = if (destSearchStr.isNotEmpty()) {
-                                            if (!destContent.contains(destSearchStr)) {
-                                                destContent + "\n" + searchStr
-                                            } else {
-                                                val destOccurrences = destContent.split(destSearchStr).size - 1
-                                                if (destOccurrences > 1) {
-                                                    "Error: destinationSearch block is not unique in '$destPath'."
-                                                } else {
-                                                    // Insert searchStr after destSearchStr
-                                                    destContent.replace(destSearchStr, destSearchStr + "\n" + searchStr)
-                                                }
-                                            }
-                                        } else {
-                                            destContent + "\n" + searchStr
-                                        }
-
-                                        if (newDestContent.startsWith("Error:")) {
-                                            newDestContent
-                                        } else {
-                                            try {
-                                                // 1. Remove from source
-                                                val newSourceContent = sourceFile.content.replace(searchStr, "")
-                                                repository.saveFile(project.name, sourcePath, newSourceContent)
-                                                
-                                                // 2. Add to destination
-                                                repository.saveFile(project.name, destPath, newDestContent)
-                                                "Successfully moved code block from '$sourcePath' to '$destPath'"
-                                            } catch (e: Exception) {
-                                                "Error executing move_code: ${e.localizedMessage}"
-                                            }
-                                        }
-                                    }
+                                val result = com.example.agent.AgentCodeBlockOperations.handleMoveCode(
+                                    args = args,
+                                    project = project,
+                                    repository = repository,
+                                    normalizePath = { normalizePath(it) }
+                                )
+                                if (result.startsWith("Successfully")) {
+                                    _projectFiles.value = repository.getFilesForProject(project.name)
                                 }
 
                                 _aiActionLogs.value = _aiActionLogs.value.map { log ->
@@ -4572,9 +4536,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                             "copy_code" -> {
                                 val sourcePath = normalizePath(args?.path ?: "")
                                 val destPath = normalizePath(args?.destinationPath ?: "")
-                                val searchStr = args?.search ?: ""
-                                val destSearchStr = args?.destinationSearch ?: ""
-                                
                                 val copyCodeLog = AiActionLog(
                                     title = "Copied code block",
                                     status = "thinking",
@@ -4582,53 +4543,14 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 )
                                 _aiActionLogs.value = _aiActionLogs.value + copyCodeLog
 
-                                val files = repository.getFilesForProject(project.name)
-                                val sourceFile = files.find { it.path == sourcePath }
-                                val destFile = files.find { it.path == destPath }
-                                
-                                val result = if (sourceFile == null) {
-                                    "Error: Source file '$sourcePath' not found."
-                                } else if (destFile == null) {
-                                    "Error: Destination file '$destPath' not found."
-                                } else if (searchStr.isEmpty()) {
-                                    "Error: 'search' code block to copy cannot be empty."
-                                } else if (!sourceFile.content.contains(searchStr)) {
-                                    "Error: Could not find code block in source file '$sourcePath'."
-                                } else {
-                                    val sourceOccurrences = sourceFile.content.split(searchStr).size - 1
-                                    if (sourceOccurrences > 1) {
-                                        "Error: The code block to copy is not unique in source file ($sourceOccurrences matches)."
-                                    } else {
-                                        // Try destination insertion
-                                        val destContent = destFile.content
-                                        val newDestContent = if (destSearchStr.isNotEmpty()) {
-                                            if (!destContent.contains(destSearchStr)) {
-                                                destContent + "\n" + searchStr
-                                            } else {
-                                                val destOccurrences = destContent.split(destSearchStr).size - 1
-                                                if (destOccurrences > 1) {
-                                                    "Error: destinationSearch block is not unique in '$destPath'."
-                                                } else {
-                                                    // Insert searchStr after destSearchStr
-                                                    destContent.replace(destSearchStr, destSearchStr + "\n" + searchStr)
-                                                }
-                                            }
-                                        } else {
-                                            destContent + "\n" + searchStr
-                                        }
-
-                                        if (newDestContent.startsWith("Error:")) {
-                                            newDestContent
-                                        } else {
-                                            try {
-                                                // 1. Just write to destination (source remains untouched)
-                                                repository.saveFile(project.name, destPath, newDestContent)
-                                                "Successfully copied code block from '$sourcePath' to '$destPath'"
-                                            } catch (e: Exception) {
-                                                "Error executing copy_code: ${e.localizedMessage}"
-                                            }
-                                        }
-                                    }
+                                val result = com.example.agent.AgentCodeBlockOperations.handleCopyCode(
+                                    args = args,
+                                    project = project,
+                                    repository = repository,
+                                    normalizePath = { normalizePath(it) }
+                                )
+                                if (result.startsWith("Successfully")) {
+                                    _projectFiles.value = repository.getFilesForProject(project.name)
                                 }
 
                                 _aiActionLogs.value = _aiActionLogs.value.map { log ->
