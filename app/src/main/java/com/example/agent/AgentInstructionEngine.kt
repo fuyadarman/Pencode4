@@ -109,7 +109,8 @@ object AgentInstructionEngine {
         mcpToolsPrompt: String,
         activeTemplateInfo: String,
         maxActionSteps: Int,
-        allowBuildPush: Boolean
+        allowBuildPush: Boolean,
+        reasoningEffort: ReasoningEffort = ReasoningEffort.NORMAL
     ): String {
         val intents = classifyPromptIntent(
             userPrompt = userPrompt,
@@ -152,6 +153,12 @@ object AgentInstructionEngine {
             sb.append(com.example.agent.harness.SemanticMemoryStore.formatMemoriesForPrompt(relevantMemories))
         }
 
+        // 2b. Autonomous Self-Learned Rules & Fix Memory
+        val learnedRules = HybridSelfLearningEngine.formatLearnedRulesForPrompt(userPrompt)
+        if (learnedRules.isNotBlank()) {
+            sb.append(learnedRules)
+        }
+
         // 3. Workspace Context (File Tree & Framework)
         sb.append(fileTreeSummary).append("\n\n")
         sb.append("FRAMEWORK: ").append(activeTemplateInfo).append("\n\n")
@@ -164,6 +171,7 @@ object AgentInstructionEngine {
         sb.append("4. NEW FILES: Use 'create_file' ONLY for new files. Existing files must be edited.\n")
         sb.append("5. DIAGNOSTICS: Use 'read_preview_errors' for preview bugs and 'read_build_errors' for build failures.\n")
         sb.append("6. TOOL CATALOG: If any tool command is omitted or you need full documentation, invoke 'list_all_tools' to see all available tools and usage.\n")
+        sb.append("7. ${reasoningEffort.directive}\n")
 
         // 4. Skills Module (Only if skills are active)
         if (activeSkills.isNotEmpty()) {

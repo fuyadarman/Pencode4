@@ -53,7 +53,22 @@ data class BackupVersion(
 
 object RestoreManager {
     private const val TAG = "RestoreManager"
-    private const val MAX_BACKUPS = 3
+    const val DEFAULT_BACKUP_LIMIT = 10
+    const val MAX_BACKUP_LIMIT = 20
+    const val MIN_BACKUP_LIMIT = 3
+    private const val PREFS_NAME = "vibe_coder_prefs"
+    private const val KEY_BACKUP_LIMIT = "project_backup_limit"
+
+    fun getBackupLimit(context: Context): Int {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getInt(KEY_BACKUP_LIMIT, DEFAULT_BACKUP_LIMIT).coerceIn(MIN_BACKUP_LIMIT, MAX_BACKUP_LIMIT)
+    }
+
+    fun setBackupLimit(context: Context, limit: Int) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putInt(KEY_BACKUP_LIMIT, limit.coerceIn(MIN_BACKUP_LIMIT, MAX_BACKUP_LIMIT)).apply()
+    }
+
     private val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
     private val backupAdapter = moshi.adapter(BackupVersion::class.java)
 
@@ -93,8 +108,8 @@ object RestoreManager {
             val json = backupAdapter.toJson(backup)
             file.writeText(json)
 
-            // Keep strictly the latest MAX_BACKUPS (3)
-            cleanOldBackups(backupDir)
+            // Keep snapshots according to user configured limit (default 10, max 20)
+            cleanOldBackups(backupDir, getBackupLimit(context))
 
             Log.d(TAG, "Successfully created project backup version: $backupId for $projectName")
             backup
@@ -106,6 +121,7 @@ object RestoreManager {
 
     suspend fun getBackups(context: Context, projectName: String): List<BackupVersion> = withContext(Dispatchers.IO) {
         try {
+            val limit = getBackupLimit(context)
             val backupDir = getBackupDir(context, projectName)
             val jsonFiles = backupDir.listFiles { _, name -> name.endsWith(".json") } ?: emptyArray()
 
@@ -116,14 +132,14 @@ object RestoreManager {
                 } catch (e: Exception) {
                     null
                 }
-            }.sortedByDescending { it.timestamp }.take(MAX_BACKUPS)
+            }.sortedByDescending { it.timestamp }.take(limit)
         } catch (e: Exception) {
             Log.e(TAG, "Error reading backups for project $projectName", e)
             emptyList()
         }
     }
 
-    private fun cleanOldBackups(backupDir: File) {
+    private fun cleanOldBackups(backupDir: File, limit: Int) {
         try {
             val jsonFiles = backupDir.listFiles { _, name -> name.endsWith(".json") } ?: return
             val sorted = jsonFiles.mapNotNull { file ->
@@ -131,8 +147,8 @@ object RestoreManager {
                 file to ts
             }.sortedByDescending { it.second }
 
-            if (sorted.size > MAX_BACKUPS) {
-                sorted.drop(MAX_BACKUPS).forEach { (file, _) ->
+            if (sorted.size > limit) {
+                sorted.drop(limit).forEach { (file, _) ->
                     file.delete()
                 }
             }
@@ -178,6 +194,7 @@ fun RestoreDialog(
     onDismiss: () -> Unit,
     onRestoreConfirmed: (BackupVersion) -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var selectedBackupForConfirm by remember { mutableStateOf<BackupVersion?>(null) }
 
     Dialog(onDismissRequest = onDismiss) {
@@ -222,8 +239,9 @@ fun RestoreDialog(
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
+                            val activeLimit = remember { RestoreManager.getBackupLimit(context) }
                             Text(
-                                text = "Last 3 prompt snapshots",
+                                text = "Last $activeLimit prompt snapshots (configurable up to 20)",
                                 color = Color(0xFF8D96A0),
                                 fontSize = 11.sp
                             )

@@ -32,9 +32,15 @@ data class Content(
 )
 
 @JsonClass(generateAdapter = true)
+data class ThinkingConfig(
+    val thinkingBudget: Int? = null
+)
+
+@JsonClass(generateAdapter = true)
 data class GenerationConfig(
     val responseMimeType: String? = null,
-    val temperature: Float? = null
+    val temperature: Float? = null,
+    val thinkingConfig: ThinkingConfig? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -89,6 +95,8 @@ data class ReadRangeItem(
 data class ToolArguments(
     val path: String? = null,
     val targetFile: String? = null,
+    val name: String? = null,
+    val description: String? = null,
     val content: String? = null,
     val oldPath: String? = null,
     val newPath: String? = null,
@@ -145,7 +153,12 @@ data class ToolArguments(
     val action: String? = null,
     val deleteAllOccurrences: Boolean? = null,
     val filter: String? = null,
-    val maxLines: Int? = null
+    val maxLines: Int? = null,
+    val category: String? = null,
+    val issue: String? = null,
+    val solution: String? = null,
+    val instructions: String? = null,
+    val tags: List<String>? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -452,7 +465,8 @@ object GeminiClient {
         provider: String = "gemini",
         modelId: String = "gemini-2.0-flash",
         customBaseUrl: String? = null,
-        useCustom: Boolean = false
+        useCustom: Boolean = false,
+        reasoningEffort: com.example.agent.ReasoningEffort = com.example.agent.ReasoningEffort.NORMAL
     ): ToolCallResponse? = withContext(Dispatchers.IO) {
         val activeApiKey = apiKey.trim()
         if (activeApiKey.isEmpty()) {
@@ -643,7 +657,8 @@ object GeminiClient {
                 val bodyMap = mutableMapOf<String, Any>(
                     "model" to modelId,
                     "messages" to messages,
-                    "temperature" to 0.4f
+                    "temperature" to if (reasoningEffort == com.example.agent.ReasoningEffort.MAX) 0.3f else 0.4f,
+                    "reasoning_effort" to reasoningEffort.reasoningEffortParam
                 )
                 
                 // Use response_format for OpenAI, Mistral and Groq to enforce JSON mode
@@ -846,12 +861,18 @@ object GeminiClient {
                     messages.add(mapOf("role" to role, "content" to textPart))
                 }
 
-                val bodyMap = mapOf(
+                val maxTokens = when (reasoningEffort) {
+                    com.example.agent.ReasoningEffort.SMALL -> 3000
+                    com.example.agent.ReasoningEffort.NORMAL -> 4096
+                    com.example.agent.ReasoningEffort.MEDIUM -> 8192
+                    com.example.agent.ReasoningEffort.MAX -> 16384
+                }
+                val bodyMap = mutableMapOf<String, Any>(
                     "model" to modelId,
                     "system" to systemInstruction,
                     "messages" to messages,
-                    "max_tokens" to 4000,
-                    "temperature" to 0.5f
+                    "max_tokens" to maxTokens,
+                    "temperature" to if (reasoningEffort == com.example.agent.ReasoningEffort.MAX) 0.3f else 0.5f
                 )
 
                 val bodyJson = moshi.adapter(Map::class.java).toJson(bodyMap)
@@ -1009,7 +1030,8 @@ object GeminiClient {
                     systemInstruction = Content(parts = listOf(Part(text = systemInstruction))),
                     generationConfig = GenerationConfig(
                         responseMimeType = "application/json",
-                        temperature = 0.5f
+                        temperature = if (reasoningEffort == com.example.agent.ReasoningEffort.MAX) 0.3f else 0.5f,
+                        thinkingConfig = ThinkingConfig(thinkingBudget = reasoningEffort.thinkingBudget)
                     )
                 )
 

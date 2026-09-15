@@ -57,6 +57,8 @@ import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import com.example.ui.agent.AgentActivityFeed
 import com.example.ui.agent.ModernAgentChatBar
+import com.example.ui.settings.SelfLearningSettingsCard
+import com.example.ui.settings.RestoreLimitSettingsCard
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
@@ -210,7 +212,9 @@ fun WorkspaceScreen(
     selectedMcpServerIds: Set<String> = emptySet(),
     onToggleSelectMcpServer: (String) -> Unit = {},
     onSelectAllConnectedMcpServers: () -> Unit = {},
-    onClearSelectedMcpServers: () -> Unit = {}
+    onClearSelectedMcpServers: () -> Unit = {},
+    reasoningEffort: com.example.agent.ReasoningEffort = com.example.agent.ReasoningEffort.NORMAL,
+    onSelectReasoningEffort: (com.example.agent.ReasoningEffort) -> Unit = {}
 ) {
     var showExplorer by remember { mutableStateOf(false) }
     var showCreateFileDialog by remember { mutableStateOf(false) }
@@ -222,11 +226,12 @@ fun WorkspaceScreen(
     var showSearchDialog by remember { mutableStateOf(false) }
     var showRestoreDialog by remember { mutableStateOf(false) }
     var showDocumentStudioDialog by remember { mutableStateOf(false) }
+    var showSelfLearningDialog by remember { mutableStateOf(false) }
 
     androidx.activity.compose.BackHandler {
         if (showExplorer) {
             showExplorer = false
-        } else if (showSettingsDialog || showAgentSkillsDialog || showMcpDialog || showSelectMcpDialog || showPushDialog || showSearchDialog || showRestoreDialog || showCreateFileDialog || showDocumentStudioDialog) {
+        } else if (showSettingsDialog || showAgentSkillsDialog || showMcpDialog || showSelectMcpDialog || showPushDialog || showSearchDialog || showRestoreDialog || showCreateFileDialog || showDocumentStudioDialog || showSelfLearningDialog) {
             showSettingsDialog = false
             showAgentSkillsDialog = false
             showMcpDialog = false
@@ -236,6 +241,7 @@ fun WorkspaceScreen(
             showRestoreDialog = false
             showCreateFileDialog = false
             showDocumentStudioDialog = false
+            showSelfLearningDialog = false
         } else {
             onBack()
         }
@@ -497,7 +503,9 @@ fun WorkspaceScreen(
                                 onOpenSelectMcpDialog = { showSelectMcpDialog = true },
                                 customModels = customModels,
                                 selectedModelId = selectedModelId,
-                                onSelectCustomModel = onSelectCustomModel
+                                onSelectCustomModel = onSelectCustomModel,
+                                reasoningEffort = reasoningEffort,
+                                onSelectReasoningEffort = onSelectReasoningEffort
                             )
                         }
                         WorkspaceTab.CODE -> {
@@ -762,11 +770,21 @@ fun WorkspaceScreen(
                 showSettingsDialog = false
                 showAgentSkillsDialog = true
             },
+            onOpenSelfLearning = {
+                showSettingsDialog = false
+                showSelfLearningDialog = true
+            },
             onDismiss = { showSettingsDialog = false },
             onSave = { p, k, b, m, uc ->
                 onSaveSettings(p, k, b, m, uc)
                 showSettingsDialog = false
             }
+        )
+    }
+
+    if (showSelfLearningDialog) {
+        com.example.ui.agent.SelfLearningStatusDialog(
+            onDismiss = { showSelfLearningDialog = false }
         )
     }
 
@@ -1049,12 +1067,15 @@ fun ChatTabContent(
     onOpenSelectMcpDialog: () -> Unit = {},
     customModels: List<CustomModelConfig> = emptyList(),
     selectedModelId: String = "",
-    onSelectCustomModel: (String) -> Unit = {}
+    onSelectCustomModel: (String) -> Unit = {},
+    reasoningEffort: com.example.agent.ReasoningEffort = com.example.agent.ReasoningEffort.NORMAL,
+    onSelectReasoningEffort: (com.example.agent.ReasoningEffort) -> Unit = {}
 ) {
     var taggedFiles by remember { mutableStateOf<List<ProjectFileEntity>>(emptyList()) }
     var taggedSkills by remember { mutableStateOf<List<com.example.ui.AgentSkill>>(emptyList()) }
     var showFileSuggestions by remember { mutableStateOf(false) }
     var showSkillSuggestions by remember { mutableStateOf(false) }
+    var showSelfLearningDialog by remember { mutableStateOf(false) }
     
     val listState = rememberLazyListState()
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -2131,7 +2152,9 @@ fun ChatTabContent(
                         taggedFiles = taggedFiles,
                         onRemoveTaggedFile = { taggedFiles = taggedFiles - it },
                         taggedSkills = taggedSkills,
-                        onRemoveTaggedSkill = { taggedSkills = taggedSkills - it }
+                        onRemoveTaggedSkill = { taggedSkills = taggedSkills - it },
+                        currentReasoningEffort = reasoningEffort,
+                        onSelectReasoningEffort = onSelectReasoningEffort
                     )
                 }
             }
@@ -5556,9 +5579,13 @@ fun CustomSettingsDialog(
     onDeleteCustomModel: (String) -> Unit = {},
     onSelectCustomModel: (String) -> Unit = {},
     onOpenAgentSkills: () -> Unit = {},
+    onOpenSelfLearning: () -> Unit = {},
+    onSaveBackupLimit: (Int) -> Unit = {},
     onDismiss: () -> Unit,
     onSave: (String, String, String, String, Boolean) -> Unit
 ) {
+    val dialogContext = androidx.compose.ui.platform.LocalContext.current
+    var activeBackupLimit by remember { mutableStateOf(com.example.ui.RestoreManager.getBackupLimit(dialogContext)) }
     var pInput by remember { mutableStateOf(provider) }
     var keyInput by remember { mutableStateOf(apiKey) }
     var baseInput by remember { mutableStateOf(baseUrl) }
@@ -5660,6 +5687,21 @@ fun CustomSettingsDialog(
                         )
                     }
                 }
+
+                // Hybrid Self-Learning Cognitive Memory Card
+                SelfLearningSettingsCard(
+                    onOpenSelfLearningDialog = onOpenSelfLearning
+                )
+
+                // Project Version Restore Retention Card (Default 10, configurable up to 20)
+                RestoreLimitSettingsCard(
+                    currentLimit = activeBackupLimit,
+                    onLimitChanged = { newLimit ->
+                        activeBackupLimit = newLimit
+                        com.example.ui.RestoreManager.setBackupLimit(dialogContext, newLimit)
+                        onSaveBackupLimit(newLimit)
+                    }
+                )
 
                 // Max Action Steps Configuration
                 Column(

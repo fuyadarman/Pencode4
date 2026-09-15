@@ -230,6 +230,14 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         _selectedMcpServerIds.value = emptySet()
     }
 
+    private val _reasoningEffort = MutableStateFlow(com.example.agent.ReasoningEffort.getSavedEffort(application))
+    val reasoningEffort: StateFlow<com.example.agent.ReasoningEffort> = _reasoningEffort.asStateFlow()
+
+    fun setReasoningEffort(effort: com.example.agent.ReasoningEffort) {
+        _reasoningEffort.value = effort
+        com.example.agent.ReasoningEffort.saveEffort(getApplication(), effort)
+    }
+
     private val repository: VibeRepository
     private val moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
     private val backgroundBrowser = BackgroundBrowser(application)
@@ -2593,6 +2601,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         val database = VibeDatabase.getDatabase(application)
         repository = VibeRepository(database.vibeDao(), application)
         com.example.agent.harness.SemanticMemoryStore.init(application)
+        com.example.agent.HybridSelfLearningEngine.init(application)
         loadProjects()
         loadCustomModels()
         loadAgentSkills()
@@ -3580,7 +3589,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 mcpToolsPrompt = mcpToolsPrompt,
                 activeTemplateInfo = activeTemplateInfo,
                 maxActionSteps = _maxActionSteps.value,
-                allowBuildPush = _allowBuildPush.value
+                allowBuildPush = _allowBuildPush.value,
+                reasoningEffort = _reasoningEffort.value
             )
 
             val useCustom = _useCustomModel.value
@@ -3656,8 +3666,17 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             val recentThoughtsHistory = mutableListOf<String>()
             val readFilesThisSession = mutableSetOf<String>()
             val loopProtectionEngine = com.example.agent.AgentLoopProtectionEngine()
+            var lastDiagnosedError: String? = null
 
             val handleComplete: suspend (String) -> Unit = { finishMsg: String ->
+                if (lastDiagnosedError != null && filesModifiedThisPrompt) {
+                    com.example.agent.HybridSelfLearningEngine.autoLearnFromFix(
+                        context = getApplication(),
+                        issueSummary = lastDiagnosedError!!,
+                        fixSummary = finishMsg,
+                        targetComponent = project.name
+                    )
+                }
                 com.example.agent.AgentTaskFinalizer.finalizeTask(
                     projectName = project.name,
                     finishMsg = finishMsg,
@@ -3721,7 +3740,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                         provider = provider,
                         modelId = modelId,
                         customBaseUrl = baseUrl,
-                        useCustom = useCustom
+                        useCustom = useCustom,
+                        reasoningEffort = _reasoningEffort.value
                     )
                     
                     val thought = stepResponse?.thought ?: ""
@@ -4004,370 +4024,49 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': ${readRes.output}"))))
                                 loopProtectionEngine.recordActionOutcome(tool, args, isSuccess = readRes.isSuccess, turn = turn)
                             }
-                            "create_file" -> {
-                                val filePath = normalizePath(args?.path ?: "")
-                                val fileContent = args?.content ?: ""
-                                val createLog = createAiLog(
-                                    title = "Created new file",
-                                    status = "thinking",
-                                    details = "$filePath",
-                                    lineRange = args?.lineRange ?: "all"
-                                )
-                                _aiActionLogs.value = _aiActionLogs.value + createLog
-
-                                val existingFiles = repository.getFilesForProject(project.name)
-                                _projectFiles.value = existingFiles
-                                val cleanNormalizedPath = normalizePath(filePath)
-                                val projectDir = repository.getProjectDir(project.name)
-                                val fileAlreadyExists = existingFiles.any {
-                                    val exNorm = normalizePath(it.path)
-                                    exNorm == cleanNormalizedPath || it.path == filePath || it.path == cleanNormalizedPath || exNorm.trimStart('/') == cleanNormalizedPath.trimStart('/')
-                                } || java.io.File(projectDir, cleanNormalizedPath.trimStart('/')).exists()
-
-                                val result = if (fileAlreadyExists) {
-                                    "Error: SYSTEM REJECTION - File '$filePath' ALREADY EXISTS! You are strictly prohibited from calling 'create_file' on an existing file. If you call 'create_file' on an existing file, it will ALWAYS be rejected. You MUST call 'read_file' or 'read_file_range' on '$filePath' first, and then use 'edit_file' or 'multi_edit_file' to modify it."
-                                } else {
-                                    try {
-                                        repository.saveFile(project.name, filePath, fileContent)
-                                        filesModifiedThisPrompt = true
-                                        _projectFiles.value = repository.getFilesForProject(project.name)
-                                        _editHistory.value = _editHistory.value + EditRecord(
-                                            tool = "create_file",
-                                            path = filePath,
-                                            lines = "all"
-                                        )
-                                        "Successfully created new file '$filePath'. Content is saved. DO NOT re-read this file to verify. If all requested changes are done, call 'complete'."
-                                    } catch (e: Exception) {
-                                        "Error creating file: ${e.localizedMessage}"
-                                    }
-                                }
-
-                                updateAiLog(createLog.id, if (result.startsWith("Error")) "failed" else "success", filePath)
-
-                                history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
-                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'create_file': $result"))))
-                                loopProtectionEngine.recordActionOutcome("create_file", args, isSuccess = !result.startsWith("Error"), turn = turn)
-                            }
-                            "write_file", "write" -> {
-                                val filePath = normalizePath(args?.path ?: "")
-                                val fileContent = args?.content ?: ""
-                                val writeLog = createAiLog(
-                                    title = "Writing file",
-                                    status = "thinking",
-                                    details = "$filePath",
-                                    lineRange = args?.lineRange ?: "all"
-                                )
-                                _aiActionLogs.value = _aiActionLogs.value + writeLog
-
-                                val existingFiles = _projectFiles.value
-                                val targetFile = existingFiles.find { it.path == filePath || normalizePath(it.path) == filePath || it.path.endsWith(filePath) || filePath.endsWith(it.path) }
-                                val linesCount = targetFile?.content?.lines()?.size ?: 0
-
-                                val fileHasBeenRead = if (targetFile != null) {
-                                    readFilesThisSession.contains(filePath) ||
-                                    readFilesThisSession.contains(normalizePath(filePath)) ||
-                                    readFilesThisSession.contains(targetFile.path) ||
-                                    readFilesThisSession.contains(normalizePath(targetFile.path)) ||
-                                    history.any { content ->
-                                        content.parts.any { part ->
-                                            val t = part.text ?: ""
-                                            (t.contains("System/Tool Output for 'read_file'") || t.contains("System/Tool Output for 'read_file_range'")) &&
-                                            (t.contains(filePath) || t.contains(normalizePath(filePath)) || t.contains(targetFile.path) || t.contains(normalizePath(targetFile.path)))
-                                        }
-                                    }
-                                } else true
-
-                                var allowed = true
-                                if (false) {
-                                    _writeFileConfirmInfo.value = WriteFileConfirmInfo(filePath, fileContent, linesCount)
-                                    val deferred = kotlinx.coroutines.CompletableDeferred<Boolean>()
-                                    writeFileConfirmationDeferred = deferred
-                                    
-                                    _agentStatus.value = "Waiting for user permission to overwrite $filePath..."
-                                    allowed = deferred.await()
-                                }
-
-                                val result = if (targetFile != null && linesCount > 30) {
-                                    "Error: SYSTEM REJECTION - File '$filePath' has $linesCount lines (more than 30 lines). Overwriting or recreating existing files larger than 30 lines with 'write_file' is STRICTLY FORBIDDEN to prevent code destruction. You MUST use 'edit_file' or 'patch_file' to make precise surgical edits."
-                                } else if (targetFile != null && !fileHasBeenRead) {
-                                    "Error: SYSTEM REJECTION - Overwriting/recreating existing file '$filePath' without reading it first is STRICTLY FORBIDDEN! You MUST call 'read_file' or 'read_file_range' on '$filePath' before attempting to modify or overwrite it. Furthermore, 'write_file' is a RESTRICTED tool—prefer using 'edit_file' or 'patch_file' for surgical code edits instead of overwriting full files."
-                                } else if (!allowed) {
-                                    "Error: Overwriting '$filePath' (which has $linesCount lines) was denied by the user. You must use 'edit_file' or 'patch_file' instead."
-                                } else {
-                                    try {
-                                        repository.saveFile(project.name, filePath, fileContent)
-                                        filesModifiedThisPrompt = true
-                                        _projectFiles.value = repository.getFilesForProject(project.name)
-                                        _editHistory.value = _editHistory.value + EditRecord(
-                                            tool = "write_file",
-                                            path = filePath,
-                                            lines = "all"
-                                        )
-                                        if (targetFile != null) {
-                                            "Successfully overwrote existing file '$filePath'. Content is saved. DO NOT re-read this file to verify. If all requested changes are done, call 'complete'."
-                                        } else {
-                                            "Successfully created new file '$filePath'. Content is saved. DO NOT re-read this file to verify. If all requested changes are done, call 'complete'."
-                                        }
-                                    } catch (e: Exception) {
-                                        "Error writing file: ${e.localizedMessage}"
-                                    }
-                                }
-
-                                updateAiLog(writeLog.id, if (result.startsWith("Error")) "failed" else "success", filePath)
-
-                                history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
-                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'write_file': $result"))))
-                                loopProtectionEngine.recordActionOutcome("write_file", args, isSuccess = !result.startsWith("Error"), turn = turn)
-                            }
-                            "append" -> {
-                                val filePath = normalizePath(args?.path ?: "")
-                                val fileContent = args?.content ?: ""
-                                val appendLog = createAiLog(
-                                    title = "Append to file",
-                                    status = "thinking",
-                                    details = "$filePath",
-                                    lineRange = args?.lineRange
-                                )
-                                _aiActionLogs.value = _aiActionLogs.value + appendLog
-
-                                val files = repository.getFilesForProject(project.name)
-                                val targetFile = files.find { it.path == filePath || normalizePath(it.path) == filePath || it.path.endsWith(filePath) || filePath.endsWith(it.path) }
-                                val fileHasBeenRead = if (targetFile != null) {
-                                    readFilesThisSession.contains(filePath) ||
-                                    readFilesThisSession.contains(normalizePath(filePath)) ||
-                                    readFilesThisSession.contains(targetFile.path) ||
-                                    readFilesThisSession.contains(normalizePath(targetFile.path)) ||
-                                    history.any { content ->
-                                        content.parts.any { part ->
-                                            val t = part.text ?: ""
-                                            (t.contains("System/Tool Output for 'read_file'") || t.contains("System/Tool Output for 'read_file_range'") || t.contains("System/Tool Output for 'view_file'")) &&
-                                            (t.contains(filePath) || t.contains(normalizePath(filePath)) || t.contains(targetFile.path) || t.contains(normalizePath(targetFile.path)))
-                                        }
-                                    }
-                                } else true
-
-                                val result = if (repository.isBinaryExtension(filePath)) {
-                                    "Error: Reading, editing, patching, or appending to binary image or 3D files directly as text is NOT allowed. You can only view their existence via 'list_directory' or perform operations like rename, delete, move, resize, or format change."
-                                } else if (targetFile != null && !fileHasBeenRead) {
-                                    "Error: SYSTEM REJECTION - You cannot append to existing file '$filePath' without reading it first! You MUST call 'read_file' or 'read_file_range' on '$filePath' to inspect its current content before appending. Please read the file first."
-                                } else if (targetFile != null) {
-                                    try {
-                                        val newContent = targetFile.content + "\n" + fileContent
-                                        repository.saveFile(project.name, filePath, newContent)
-                                        filesModifiedThisPrompt = true
-                                        _projectFiles.value = repository.getFilesForProject(project.name)
-                                        val startLine = targetFile.content.lines().size + 1
-                                        val addedLines = fileContent.lines().size
-                                        val endLine = startLine + addedLines - 1
-                                        val range = if (startLine >= endLine) "line $startLine" else "lines $startLine-$endLine"
-                                        _editHistory.value = _editHistory.value + EditRecord(
-                                            tool = "append",
-                                            path = filePath,
-                                            lines = range
-                                        )
-                                        "Successfully appended to '$filePath'. Content is saved. DO NOT re-read this file to verify. If all requested changes are done, call 'complete'."
-                                    } catch (e: Exception) {
-                                        "Error appending to file: ${e.localizedMessage}"
-                                    }
-                                } else {
-                                    "Error: File '$filePath' not found. Cannot append."
-                                }
-
-                                val isSuccess = !result.startsWith("Error")
-                                val range = _editHistory.value.lastOrNull { it.tool == "append" && it.path == filePath }?.lines ?: args?.lineRange ?: ""
-                                updateAiLog(
-                                    appendLog.id, 
-                                    if (isSuccess) "success" else "failed", 
-                                    if (isSuccess) filePath else result
-                                )
-                                // Note: lineRange update in updateAiLog helper doesn't support changing other fields besides status and details easily.
-                                // I'll skip updating lineRange specifically for now as it's minor, or I could update it manually.
-                                
-                                history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
-                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'append': $result"))))
-                                loopProtectionEngine.recordActionOutcome("append", args, isSuccess = isSuccess, turn = turn)
-                            }
-                            "edit", "patch", "patch_file", "edit_file" -> {
-                                val filePath = normalizePath(args?.path ?: "")
-                                val searchStr = args?.search ?: ""
-                                val replaceStr = args?.replace ?: ""
-                                var foundRange = ""
-                                val patchLog = createAiLog(
-                                    title = "Modified file",
-                                    status = "thinking",
-                                    details = "$filePath",
-                                    lineRange = args?.lineRange
-                                )
-                                _aiActionLogs.value = _aiActionLogs.value + patchLog
-
-                                val files = repository.getFilesForProject(project.name)
-                                val targetFile = files.find { it.path == filePath || normalizePath(it.path) == filePath || it.path.endsWith(filePath) || filePath.endsWith(it.path) }
-                                val fileHasBeenRead = if (targetFile != null) {
-                                    readFilesThisSession.contains(filePath) ||
-                                    readFilesThisSession.contains(normalizePath(filePath)) ||
-                                    readFilesThisSession.contains(targetFile.path) ||
-                                    readFilesThisSession.contains(normalizePath(targetFile.path)) ||
-                                    history.any { content ->
-                                        content.parts.any { part ->
-                                            val t = part.text ?: ""
-                                            (t.contains("System/Tool Output for 'read_file'") || t.contains("System/Tool Output for 'read_file_range'") || t.contains("System/Tool Output for 'view_file'")) &&
-                                            (t.contains(filePath) || t.contains(normalizePath(filePath)) || t.contains(targetFile.path) || t.contains(normalizePath(targetFile.path)))
-                                        }
-                                    }
-                                } else true
-
-                                val execResult = com.example.agent.AgentEditToolExecutor.executeEdit(
-                                    tool = tool,
-                                    filePath = filePath,
-                                    searchStr = searchStr,
-                                    replaceStr = replaceStr,
-                                    targetFile = targetFile,
-                                    fileHasBeenRead = fileHasBeenRead,
-                                    projectName = project.name,
-                                    repository = repository
-                                )
-
-                                val (result, isSuccess, range) = when (execResult) {
-                                    is com.example.agent.AgentEditToolExecutor.EditExecutionResult.Success -> {
-                                        filesModifiedThisPrompt = true
-                                        consecutiveFailedEdits = 0
-                                        lastEditError = null
-                                        _editHistory.value = _editHistory.value + execResult.editRecord
-                                        _projectFiles.value = repository.getFilesForProject(project.name)
-                                        Triple(execResult.message, true, execResult.rangeDesc)
-                                    }
-                                    is com.example.agent.AgentEditToolExecutor.EditExecutionResult.Failure -> {
-                                        if (execResult.markFileAsRead && execResult.filePath != null) {
-                                            readFilesThisSession.add(execResult.filePath)
-                                        }
-                                        consecutiveFailedEdits++
-                                        lastEditError = execResult.errorMessage
-                                        Triple(execResult.errorMessage, false, args?.lineRange ?: "")
-                                    }
-                                }
-                                updateAiLog(
-                                    patchLog.id, 
-                                    if (isSuccess) "success" else "failed", 
-                                    if (isSuccess) filePath else result,
-                                    lineRange = range
-                                )
-
-                                history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
-                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': $result"))))
-                                loopProtectionEngine.recordActionOutcome(tool, args, isSuccess = isSuccess, turn = turn)
-                            }
+                            "create_file", "write_file", "write", "append",
+                            "edit", "patch", "patch_file", "edit_file",
                             "multi_edit_file", "multi_edit", "multi_patch" -> {
-                                val filePath = normalizePath(args?.path ?: args?.targetFile ?: args?.destinationPath ?: "")
-                                val chunks = com.example.agent.MultiEditChunkParser.resolveChunks(args, args?.content)
-
-                                val multiLog = createAiLog(
-                                    title = "Multi-edited file",
+                                val mutationLog = createAiLog(
+                                    title = "File operation: $tool",
                                     status = "thinking",
-                                    details = "$filePath",
-                                    lineRange = args?.lineRange
+                                    details = args?.path ?: args?.targetFile ?: ""
                                 )
-                                _aiActionLogs.value = _aiActionLogs.value + multiLog
+                                _aiActionLogs.value = _aiActionLogs.value + mutationLog
 
-                                var foundRange = ""
-                                val files = repository.getFilesForProject(project.name)
-                                val targetFile = files.find { it.path == filePath || normalizePath(it.path) == filePath || it.path.endsWith(filePath) || filePath.endsWith(it.path) }
-                                val fileHasBeenRead = if (targetFile != null) {
-                                    readFilesThisSession.contains(filePath) ||
-                                    readFilesThisSession.contains(normalizePath(filePath)) ||
-                                    readFilesThisSession.contains(targetFile.path) ||
-                                    readFilesThisSession.contains(normalizePath(targetFile.path)) ||
-                                    history.any { content ->
-                                        content.parts.any { part ->
-                                            val t = part.text ?: ""
-                                            (t.contains("System/Tool Output for 'read_file'") || t.contains("System/Tool Output for 'read_file_range'") || t.contains("System/Tool Output for 'view_file'")) &&
-                                            (t.contains(filePath) || t.contains(normalizePath(filePath)) || t.contains(targetFile.path) || t.contains(normalizePath(targetFile.path)))
-                                        }
-                                    }
-                                } else true
+                                val mutationRes = com.example.agent.AgentFileMutationHandler.handleMutation(
+                                    tool = tool,
+                                    args = args,
+                                    project = project,
+                                    repository = repository,
+                                    projectFiles = _projectFiles.value,
+                                    readFilesThisSession = readFilesThisSession,
+                                    history = history,
+                                    normalizePath = { normalizePath(it) }
+                                )
 
-                                val result = if (repository.isBinaryExtension(filePath)) {
-                                    "Error: Reading or editing binary files directly as text is NOT allowed."
-                                } else if (targetFile != null && !fileHasBeenRead) {
-                                    "Error: SYSTEM REJECTION - You cannot multi-edit file '$filePath' without reading it first! You MUST call 'read_file' or 'read_file_range' on '$filePath' to inspect its exact and current contents before making any changes. Please read the file first."
-                                } else if (targetFile != null) {
-                                    var currentContent = targetFile.content
-                                    if (chunks.isEmpty()) {
-                                        "Error: No edit chunks provided for multi_edit_file. Provide 'chunks' or 'replacementChunks' list with search and replace blocks."
-                                    } else {
-                                        var chunkError: String? = null
-                                        val lineRanges = mutableListOf<String>()
-
-                                        for ((index, chunk) in chunks.withIndex()) {
-                                            var searchStr = com.example.agent.MultiEditChunkParser.getEffectiveSearch(chunk)
-                                            val replaceStr = com.example.agent.MultiEditChunkParser.getEffectiveReplace(chunk)
-
-                                            if (searchStr.isEmpty()) {
-                                                chunkError = "Error in chunk #${index + 1}: 'search' block cannot be empty."
-                                                break
-                                            }
-                                            if (!currentContent.contains(searchStr)) {
-                                                // Check with CRLF normalization
-                                                val normContent = currentContent.replace("\r\n", "\n")
-                                                val normSearch = searchStr.replace("\r\n", "\n")
-                                                if (normContent.contains(normSearch)) {
-                                                    currentContent = normContent
-                                                    searchStr = normSearch
-                                                } else {
-                                                    chunkError = "Error in chunk #${index + 1}: Could not find exact search block in $filePath. Please double-check characters, indentation, and spaces."
-                                                    break
-                                                }
-                                            }
-                                            val occurrences = currentContent.split(searchStr).size - 1
-                                            if (occurrences > 1) {
-                                                chunkError = "Error in chunk #${index + 1}: The search block is not unique. It occurs $occurrences times in the file."
-                                                break
-                                            }
-
-                                            val startIndex = currentContent.indexOf(searchStr)
-                                            val linesBefore = currentContent.substring(0, startIndex).count { it == '\n' } + 1
-                                            val linesInSearch = searchStr.count { it == '\n' }
-                                            val endLine = linesBefore + linesInSearch
-                                            val chunkRangeStr = if (linesBefore == endLine) "$linesBefore" else "$linesBefore-$endLine"
-                                            lineRanges.add(chunkRangeStr)
-
-                                            currentContent = currentContent.replace(searchStr, replaceStr)
-                                        }
-
-                                        if (chunkError != null) {
-                                            chunkError
-                                        } else {
-                                            foundRange = if (lineRanges.isNotEmpty()) lineRanges.joinToString(", ") else ""
-                                            try {
-                                                repository.saveFile(project.name, filePath, currentContent)
-                                                filesModifiedThisPrompt = true
-                                                _projectFiles.value = repository.getFilesForProject(project.name)
-                                                _editHistory.value = _editHistory.value + EditRecord(
-                                                    tool = "multi_edit",
-                                                    path = filePath,
-                                                    lines = foundRange
-                                                )
-                                                "Successfully multi-edited file '$filePath' ($foundRange). Changes are saved. DO NOT re-read this file. If all requested changes are done, call 'complete'."
-                                            } catch (e: Exception) {
-                                                "Error writing modified file: ${e.localizedMessage}"
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    "Error: File '$filePath' not found."
+                                if (mutationRes.isSuccess && mutationRes.recordTool != null) {
+                                    filesModifiedThisPrompt = true
+                                    consecutiveFailedEdits = 0
+                                    lastEditError = null
+                                    _projectFiles.value = repository.getFilesForProject(project.name)
+                                    _editHistory.value = _editHistory.value + EditRecord(
+                                        tool = mutationRes.recordTool,
+                                        path = mutationRes.filePath,
+                                        lines = mutationRes.lineRange
+                                    )
                                 }
 
-                                val isSuccess = result.startsWith("Successfully")
-                                val range = if (foundRange.isNotEmpty()) foundRange else args?.lineRange ?: ""
                                 updateAiLog(
-                                    multiLog.id,
-                                    if (isSuccess) "success" else "failed",
-                                    if (isSuccess) filePath else result,
-                                    lineRange = range
+                                    mutationLog.id,
+                                    if (mutationRes.isSuccess) "success" else "failed",
+                                    if (mutationRes.isSuccess) mutationRes.filePath else mutationRes.resultText,
+                                    lineRange = mutationRes.lineRange
                                 )
 
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
-                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': $result"))))
-                                loopProtectionEngine.recordActionOutcome(tool, args, isSuccess = isSuccess, turn = turn)
+                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': ${mutationRes.resultText}"))))
+                                loopProtectionEngine.recordActionOutcome(tool, args, isSuccess = mutationRes.isSuccess, turn = turn)
                             }
                             "mcp_call_tool", "mcp_call", "mcp_execute", "call_mcp_tool", "use_mcp_tool", "mcp_tool", "mcp_list_tools", "mcp_list", "mcp_read_resource" -> {
                                 val result = McpToolHandler.handleMcpToolCall(
@@ -4395,6 +4094,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     logs = _webConsoleLogs.value,
                                     args = args
                                 )
+                                if (result.isNotBlank() && !result.contains("No errors")) {
+                                    lastDiagnosedError = result.take(300)
+                                }
 
                                 updateAiLog(logEntry.id, "success", result.take(300))
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
@@ -4413,10 +4115,30 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     buildStatus = _buildStatus.value,
                                     args = args
                                 )
+                                if (result.isNotBlank() && !result.contains("No build errors")) {
+                                    lastDiagnosedError = result.take(300)
+                                }
 
                                 updateAiLog(logEntry.id, "success", result.take(300))
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool':\n$result"))))
+                            }
+                            "learn_pattern", "memorize_pattern", "save_pattern",
+                            "synthesize_skill", "create_agent_skill",
+                            "recall_learned_patterns", "query_learned_patterns" -> {
+                                com.example.agent.AgentSelfLearningToolHandler.handleTool(
+                                    tool = tool,
+                                    args = args,
+                                    stepResponse = stepResponse,
+                                    project = project,
+                                    context = getApplication(),
+                                    history = history,
+                                    moshi = moshi,
+                                    createAiLog = { t, s, d -> createAiLog(t, s, d) },
+                                    addAiLog = { l -> _aiActionLogs.value = _aiActionLogs.value + l },
+                                    updateAiLog = { id, s, d -> updateAiLog(id, s, d) },
+                                    onAddSkill = { skill -> addCustomAgentSkill(skill) }
+                                )
                             }
                             "list_all_tools", "get_all_tools", "all_tools", "tools_help", "help_tools" -> {
                                 val logEntry = createAiLog(
@@ -4607,8 +4329,13 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                             }
                             "run_command" -> {
                                 val shellCmd = args?.command ?: ""
+                                val intent = com.example.agent.HybridActionIntentTracker.resolveIntent(
+                                    tool = "run_command",
+                                    args = mapOf("command" to shellCmd),
+                                    thought = stepResponse?.thought ?: ""
+                                )
                                 val shellLog = createAiLog(
-                                    title = if (shellCmd.isNotEmpty()) "Run: $shellCmd" else "Executed shell command",
+                                    title = intent.title,
                                     status = "thinking",
                                     details = if (shellCmd.isNotEmpty()) "> $shellCmd" else null
                                 )
@@ -4629,8 +4356,13 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                             }
                             "global_search" -> {
                                 val query = args?.query ?: ""
+                                val intent = com.example.agent.HybridActionIntentTracker.resolveIntent(
+                                    tool = "global_search",
+                                    args = mapOf("query" to query),
+                                    thought = stepResponse?.thought ?: ""
+                                )
                                 val searchLog = AiActionLog(
-                                    title = "Search: $query",
+                                    title = intent.title,
                                     status = "thinking",
                                     details = "> grep -r '$query' ."
                                 )

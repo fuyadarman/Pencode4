@@ -52,6 +52,9 @@ fun ModernAgentChatBar(
     onRemoveTaggedFile: (ProjectFileEntity) -> Unit = {},
     taggedSkills: List<AgentSkill> = emptyList(),
     onRemoveTaggedSkill: (AgentSkill) -> Unit = {},
+    currentReasoningEffort: com.example.agent.ReasoningEffort = com.example.agent.ReasoningEffort.NORMAL,
+    onSelectReasoningEffort: (com.example.agent.ReasoningEffort) -> Unit = {},
+    onOpenSelfLearningDialog: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val canSend = chatInputText.isNotBlank() || attachedFiles.isNotEmpty() || taggedFiles.isNotEmpty() || taggedSkills.isNotEmpty()
@@ -190,6 +193,12 @@ fun ModernAgentChatBar(
                             )
                         }
                     }
+
+                    // AI Reasoning Effort Selector
+                    ReasoningEffortSelector(
+                        currentEffort = currentReasoningEffort,
+                        onSelectEffort = onSelectReasoningEffort
+                    )
                 }
 
                 // Right action: Stop or Send Button

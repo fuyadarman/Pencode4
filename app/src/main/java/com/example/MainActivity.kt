@@ -150,6 +150,7 @@ class MainActivity : ComponentActivity() {
                         val liveToolTokens by viewModel.liveToolTokens.collectAsState()
                         val liveTotalInputTokens by viewModel.liveTotalInputTokens.collectAsState()
                         val liveTotalOutputTokens by viewModel.liveTotalOutputTokens.collectAsState()
+                        val reasoningEffort by viewModel.reasoningEffort.collectAsState()
 
                         if (currentProject == null) {
                             HomeScreen(
@@ -382,7 +383,9 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onClearWebConsoleLogs = {
                                     viewModel.clearWebConsoleLogs()
-                                }
+                                },
+                                reasoningEffort = reasoningEffort,
+                                onSelectReasoningEffort = { viewModel.setReasoningEffort(it) }
                             )
                         }
 

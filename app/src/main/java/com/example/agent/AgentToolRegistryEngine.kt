@@ -44,6 +44,9 @@ object AgentToolRegistryEngine {
 
         [CORE AGENT & SYSTEM CONTROL]
         • list_all_tools() -> Displays this complete list of all supported PenCode AI tools and commands.
+        • learn_pattern(title: string, category: string, issue: string, solution: string, tags?: [string]) -> Memorizes a newly discovered fix pattern, architectural rule, or convention into persistent self-learning memory.
+        • synthesize_skill(name: string, description: string, instructions: string, category?: string) -> Autonomous skill synthesis: registers a new specialized Agent Skill in PenCode.
+        • recall_learned_patterns(query: string) -> Queries the self-learning memory for past bug fixes, rules, and architecture solutions.
         • ai_think(message: string) -> Formulates logic or plans steps before making changes.
         • complete(message: string) -> Completes task execution and returns final Markdown summary.
         • ask_user(question: string, options?: [string]) -> Prompts user for clarification or confirmation.
