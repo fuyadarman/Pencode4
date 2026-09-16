@@ -172,6 +172,7 @@ object AgentInstructionEngine {
         sb.append("5. DIAGNOSTICS: Use 'read_preview_errors' for preview bugs and 'read_build_errors' for build failures.\n")
         sb.append("6. TOOL CATALOG: If any tool command is omitted or you need full documentation, invoke 'list_all_tools' to see all available tools and usage.\n")
         sb.append("7. ${reasoningEffort.directive}\n")
+        sb.append("8. BUILD & PUSH: You can press the Build tab Build button to push code to GitHub and trigger compilation by invoking 'trigger_build'.\n")
 
         // 4. Skills Module (Only if skills are active)
         if (activeSkills.isNotEmpty()) {
@@ -204,6 +205,7 @@ object AgentInstructionEngine {
         tools.add("'read_build_errors'(query?: string, maxLines?: number) [Read ONLY Build tab compilation & GitHub Action errors]")
         tools.add("'read_console_logs'(filter?, query?, maxLines?)")
         tools.add("'read_build_logs'(filter?, query?, maxLines?)")
+        tools.add("'trigger_build'(message?) [Press Build button & push code to GitHub]")
 
         // Code / File tools
         if (intents.contains(PromptIntent.CODE_MODIFICATION_OR_FEATURE) || intents.contains(PromptIntent.DEBUG_AND_ERROR_FIXING) || intents.contains(PromptIntent.GENERAL_AGENT_TASK) || intents.contains(PromptIntent.SEARCH_AND_EXPLORATION)) {
@@ -258,6 +260,7 @@ object AgentInstructionEngine {
 Return ONLY raw JSON object.
 Batch format (Standard): {"thought":"...","tools":[{"tool":"read_file","arguments":{"path":"..."}},{"tool":"edit_file","arguments":{...}}]}
 Single format (Exploratory only): {"thought":"...","tool":"global_search","arguments":{"query":"..."}}
+CRITICAL: Never return only a {"thought":"..."} block without tools when coding. Always bundle your tool calls in 'tools' within the same JSON response.
 Call 'complete' with Markdown summary when finished.
         """.trimIndent())
 

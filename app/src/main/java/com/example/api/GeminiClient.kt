@@ -415,8 +415,18 @@ object GeminiClient {
             stripToolCallXml(rawText)
         }
 
+        // If thought was extracted, treat as thinking/planning step so agent continues rather than halts
+        if (!thought.isNullOrBlank()) {
+            return ToolCallResponse(
+                thought = thought,
+                tool = "ai_think",
+                arguments = ToolArguments(message = thought),
+                finishReason = finishReason
+            )
+        }
+
         return ToolCallResponse(
-            thought = "Fallback: Plain-text response.",
+            thought = "Direct response",
             tool = "complete",
             arguments = ToolArguments(message = cleanedText),
             finishReason = finishReason
@@ -429,33 +439,29 @@ object GeminiClient {
             return argKeyParsed
         }
 
-        return try {
-            val toolCallAdapter = moshi.adapter(ToolCallResponse::class.java).lenient()
-            val parsed = toolCallAdapter.fromJson(cleaned)
-            if (parsed != null && (parsed.tool != null || parsed.tools != null)) {
-                val enhancedTools = parsed.tools?.map { item ->
-                    if (item.tool in listOf("multi_edit_file", "multi_edit", "multi_patch")) {
-                        val c = com.example.agent.MultiEditChunkParser.resolveChunks(item.arguments, rawText)
-                        item.copy(arguments = item.arguments?.copy(chunks = c, replacementChunks = c))
-                    } else item
-                }
-                val enhancedArgs = if (parsed.tool in listOf("multi_edit_file", "multi_edit", "multi_patch")) {
-                    val c = com.example.agent.MultiEditChunkParser.resolveChunks(parsed.arguments, rawText)
-                    parsed.arguments?.copy(chunks = c, replacementChunks = c)
-                } else parsed.arguments
+        val parsed = com.example.agent.AgentThoughtAndToolParser.parseResponse(
+            cleaned = cleaned,
+            rawText = rawText,
+            finishReason = finishReason,
+            fallbackParser = { rText, fReason -> parseFallbackToolCall(rText, fReason) }
+        )
 
-                parsed.copy(
-                    arguments = enhancedArgs,
-                    tools = enhancedTools,
-                    finishReason = finishReason ?: parsed.finishReason
-                )
-            } else {
-                parseFallbackToolCall(rawText, finishReason)
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to parse JSON ToolCallResponse. Falling back to regex parser.", e)
-            parseFallbackToolCall(rawText, finishReason)
+        val enhancedTools = parsed.tools?.map { item ->
+            if (item.tool in listOf("multi_edit_file", "multi_edit", "multi_patch")) {
+                val c = com.example.agent.MultiEditChunkParser.resolveChunks(item.arguments, rawText)
+                item.copy(arguments = item.arguments?.copy(chunks = c, replacementChunks = c))
+            } else item
         }
+        val enhancedArgs = if (parsed.tool in listOf("multi_edit_file", "multi_edit", "multi_patch")) {
+            val c = com.example.agent.MultiEditChunkParser.resolveChunks(parsed.arguments, rawText)
+            parsed.arguments?.copy(chunks = c, replacementChunks = c)
+        } else parsed.arguments
+
+        return parsed.copy(
+            arguments = enhancedArgs,
+            tools = enhancedTools,
+            finishReason = finishReason ?: parsed.finishReason
+        )
     }
 
     suspend fun generateAgentStep(

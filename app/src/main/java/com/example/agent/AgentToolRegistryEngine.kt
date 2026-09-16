@@ -43,6 +43,7 @@ object AgentToolRegistryEngine {
         • read_build_logs(filter?: 'all'|'error', query?: string, maxLines?: int) -> Reads raw Build tab GitHub Actions compilation output.
 
         [CORE AGENT & SYSTEM CONTROL]
+        • trigger_build(message?: string) -> Presses the Build button in the Build tab, pushes code to GitHub, and triggers GitHub Actions build pipeline.
         • list_all_tools() -> Displays this complete list of all supported PenCode AI tools and commands.
         • learn_pattern(title: string, category: string, issue: string, solution: string, tags?: [string]) -> Memorizes a newly discovered fix pattern, architectural rule, or convention into persistent self-learning memory.
         • synthesize_skill(name: string, description: string, instructions: string, category?: string) -> Autonomous skill synthesis: registers a new specialized Agent Skill in PenCode.
@@ -98,6 +99,7 @@ object AgentToolRegistryEngine {
             "'read_build_errors'(query?, maxLines?) [ONLY build/GitHub Action errors]",
             "'read_console_logs'(filter?, query?, maxLines?)",
             "'read_build_logs'(filter?, query?, maxLines?)",
+            "'trigger_build'(message?) [Press Build button & push to GitHub]",
             "'list_all_tools'() [View all tools & commands with full docs]",
             "'browser_search'(query)",
             "'browser_read'()",

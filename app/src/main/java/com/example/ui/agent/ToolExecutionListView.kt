@@ -521,7 +521,7 @@ object ToolExecutionItemMapper {
                     details = log.details
                 )
             }
-            lowerTitle.contains("thinking") || lowerTitle.contains("formulating logic") || lowerTitle.contains("thought process") -> {
+            lowerTitle.contains("thinking") || lowerTitle.contains("formulating logic") || lowerTitle.contains("thought process") || lowerTitle.contains("thought") || lowerTitle.contains("reasoning") || lowerTitle.contains("planning") -> {
                 val thought = details.ifBlank { title }
                 ToolStyleSpec(
                     actionTitle = "Formulating logic",
@@ -633,40 +633,12 @@ fun ToolExecutionIndicatorRow(
     val context = LocalContext.current
 
     if (spec.isThought) {
-        // Subtle thought rendering
-        Surface(
-            shape = RoundedCornerShape(6.dp),
-            color = Color(0xFF0D1117),
-            border = BorderStroke(1.dp, Color(0xFF21262D)),
-            modifier = modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.padding(bottom = 2.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Psychology,
-                        contentDescription = null,
-                        tint = Color(0xFF58A6FF),
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Text(
-                        text = "Thought",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF8B949E)
-                    )
-                }
-                Text(
-                    text = spec.targetLabel,
-                    fontSize = 12.5.sp,
-                    lineHeight = 17.sp,
-                    color = Color(0xFFC9D1D9)
-                )
-            }
-        }
+        AgentThoughtCollapsibleView(
+            log = log,
+            spec = spec,
+            isGlobalThinking = isGlobalThinking,
+            modifier = modifier
+        )
     } else {
         Column(
             modifier = modifier

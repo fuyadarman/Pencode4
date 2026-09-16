@@ -443,6 +443,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     fun clearAndroidBuildErrors() {
         _detectedAndroidBuildErrors.value = emptyList()
         attemptedAndroidErrorKeys.clear()
+        com.example.agent.AgentBuildControllerEngine.dismissRun()
     }
 
     fun parseAndroidBuildErrors(logs: String, stepName: String, workflowPath: String = ".github/workflows/android.yml"): List<AndroidBuildError> {
@@ -577,6 +578,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             
             val errorReport = errorReportBuilder.toString()
             
+            com.example.agent.AgentBuildControllerEngine.markRunHandled()
             _detectedAndroidBuildErrors.value = emptyList()
             
             // Switch tab to Chat to show the ongoing fixing conversation
@@ -1451,7 +1453,12 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                                                 _buildLogs.value = cleanLogs
                                                 
                                                 if (failedStep != null || conclusion == "failure") {
-                                                    if (lastAutoFixedRunId != runId) {
+                                                    val template = _currentProject.value?.templateKey
+                                                    val suppressInChat = com.example.agent.AgentBuildControllerEngine.shouldSuppressBuildErrorsInChat(template)
+                                                    val isResolved = com.example.agent.AgentBuildControllerEngine.isRunResolved(runId)
+
+                                                    if (!suppressInChat && !isResolved && lastAutoFixedRunId != runId) {
+                                                        com.example.agent.AgentBuildControllerEngine.setActiveFailedRunId(runId)
                                                         val stepTitle = failedStep?.name ?: "Workflow execution"
                                                         val parsedErrors = parseAndroidBuildErrors(cleanLogs, stepTitle, wfPath)
                                                         _detectedAndroidBuildErrors.value = parsedErrors
@@ -4000,7 +4007,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 val toolName = stepResponse.tool ?: "ai_think"
-                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$toolName': $title logged successfully. Proceed with your plan."))))
+                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$toolName': $title logged. You have formulated your plan. Now in your NEXT response, you MUST execute the required tool calls (e.g. 'create_file', 'edit_file', 'multi_edit_file') in JSON format to implement it. Do not return an orphan thought without tools."))))
                             }
                             "list_directory", "scan_dir", "read_file", "read_file_range", "multi_read_file", "multi_read" -> {
                                 val readRes = com.example.agent.AgentReadToolHandler.handleReadTool(
@@ -4139,6 +4146,30 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     updateAiLog = { id, s, d -> updateAiLog(id, s, d) },
                                     onAddSkill = { skill -> addCustomAgentSkill(skill) }
                                 )
+                            }
+                            "trigger_build", "build_and_push", "push_and_build", "run_build_pipeline" -> {
+                                val logEntry = createAiLog(
+                                    title = "Triggered Build & Push",
+                                    status = "thinking",
+                                    details = "Build tab workflow"
+                                )
+                                _aiActionLogs.value = _aiActionLogs.value + logEntry
+
+                                val msg = args?.message ?: args?.description ?: args?.prompt
+                                val result = com.example.agent.AgentBuildControllerEngine.executeAiTriggerBuild(
+                                    projectName = project.name,
+                                    githubRepo = _githubRepo.value,
+                                    githubToken = _githubToken.value,
+                                    githubBranch = _githubBranch.value,
+                                    commitMessage = msg,
+                                    onPush = { projName, repo, token, branch, force, cb ->
+                                        pushGitRepo(projName, repo, token, branch, force, cb)
+                                    }
+                                )
+
+                                updateAiLog(logEntry.id, if (result.startsWith("Error")) "error" else "success", result)
+                                history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
+                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool':\n$result"))))
                             }
                             "list_all_tools", "get_all_tools", "all_tools", "tools_help", "help_tools" -> {
                                 val logEntry = createAiLog(
