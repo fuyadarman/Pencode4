@@ -18,8 +18,8 @@ object AgentCodeBlockOperations {
         repository: VibeRepository,
         normalizePath: (String) -> String
     ): String = withContext(Dispatchers.IO) {
-        val filePath = normalizePath(args?.path ?: "")
-        val searchStr = args?.search ?: ""
+        val filePath = normalizePath(AgentArgumentNormalizer.resolvePath(args))
+        val searchStr = AgentArgumentNormalizer.resolveSearch(args)
 
         val files = repository.getFilesForProject(project.name)
         val targetFile = files.find { it.path == filePath }

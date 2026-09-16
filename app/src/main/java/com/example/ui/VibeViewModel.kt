@@ -3708,10 +3708,13 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             }
 
             // Initial automatic thinking log triggered ONCE when processing user prompt starts
+            val initialThoughtStartTime = System.currentTimeMillis()
             val initialThoughtLog = createAiLog(
                 title = "AI formulating logic",
-                status = "success",
+                status = "thinking",
                 details = "Analyzing user prompt and formulating initial step-by-step task execution plan..."
+            ).copy(
+                startTime = initialThoughtStartTime
             )
             _aiActionLogs.value = _aiActionLogs.value + initialThoughtLog
 
@@ -3740,6 +3743,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                         [Step ${actionsCount + 1}/$maxActionSteps | Remaining: $remainingSteps actions. Call 'complete' when done.]
                     """.trimIndent()
 
+                    val stepStartTime = System.currentTimeMillis()
                     val stepResponse = GeminiClient.generateAgentStep(
                         apiKey = activeApiKey,
                         systemInstruction = dynamicSystemInstruction,
@@ -3750,6 +3754,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                         useCustom = useCustom,
                         reasoningEffort = _reasoningEffort.value
                     )
+                    val stepElapsedMs = System.currentTimeMillis() - stepStartTime
                     
                     val thought = stepResponse?.thought ?: ""
                     val stepMsg = stepResponse?.arguments?.message ?: stepResponse?.arguments?.content
@@ -3774,7 +3779,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                             currentLogs[placeholderIdx] = currentLogs[placeholderIdx].copy(
                                 title = stepTitle,
                                 status = "success",
-                                details = thoughtText
+                                details = thoughtText,
+                                durationMillis = stepElapsedMs,
+                                timestamp = System.currentTimeMillis()
                             )
                             _aiActionLogs.value = currentLogs
                         } else {
@@ -3784,6 +3791,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     title = stepTitle,
                                     status = "success",
                                     details = thoughtText
+                                ).copy(
+                                    startTime = stepStartTime,
+                                    durationMillis = stepElapsedMs,
+                                    timestamp = System.currentTimeMillis()
                                 )
                                 _aiActionLogs.value = currentLogs + newThoughtLog
                             }
@@ -3799,6 +3810,30 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                             loopCompleted = true
                         }
 
+                        // Check if AI called an ask_user/question tool or asked for user clarification
+                        val questionCall = toolCalls.find { com.example.agent.AgentQuestionDetector.isQuestionTool(it.tool) }
+                        if (questionCall != null) {
+                            val qArgs = questionCall.arguments
+                            val rawQuestion = qArgs?.question ?: qArgs?.message ?: qArgs?.prompt ?: qArgs?.query ?: stepMsg ?: "Could you please clarify your request?"
+                            val formatted = com.example.agent.InteractiveUserClarificationEngine.formatClarificationQuestion(
+                                question = rawQuestion,
+                                options = qArgs?.options
+                            )
+                            val askLog = createAiLog(
+                                title = "Ask User Clarification",
+                                status = "success",
+                                details = formatted
+                            ).copy(
+                                startTime = stepStartTime,
+                                durationMillis = stepElapsedMs
+                            )
+                            _aiActionLogs.value = _aiActionLogs.value + askLog
+                            _agentStatus.value = "Waiting for your reply..."
+                            handleComplete(formatted)
+                            loopCompleted = true
+                            break
+                        }
+
                         // Auto-completion detection: if no action tools or only complete/think called
                         val realActionTools = toolCalls.filter { it.tool != "ai_think" && it.tool != "ai_response" && it.tool != "complete" }
                         if (realActionTools.isEmpty()) {
@@ -3808,12 +3843,14 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                         }
 
                         if (toolCalls.isEmpty() || (toolCalls.size == 1 && toolCalls[0].tool == "complete") || consecutiveThinkOnlyCount >= 2) {
+                            val candidateMsg = toolCalls.firstOrNull { it.tool == "complete" }?.arguments?.message ?: stepMsg
                             val completionCheck = com.example.agent.AgentModelExecutionSafeguard.validateTaskCompletion(
                                 userPrompt = userPrompt,
                                 filesModifiedThisPrompt = filesModifiedThisPrompt,
                                 anyFilesModifiedSession = loopProtectionEngine.hasModifiedAnyFiles(),
                                 failedActionsInTurn = consecutiveFailedEdits,
-                                lastErrorSummary = lastEditError
+                                lastErrorSummary = lastEditError,
+                                completionMessage = candidateMsg
                             )
                             if (completionCheck is com.example.agent.AgentModelExecutionSafeguard.CompletionCheckResult.Denied) {
                                 history.add(Content(role = "user", parts = listOf(Part(text = completionCheck.reason))))
@@ -4220,10 +4257,31 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool':\n$result"))))
                             }
+                            "ask_user", "ask_question", "clarify_with_user", "ask", "prompt_user", "user_question" -> {
+                                val question = args?.question ?: args?.message ?: args?.prompt ?: args?.query ?: "Could you please clarify your request?"
+                                val formattedQuestion = com.example.agent.InteractiveUserClarificationEngine.formatClarificationQuestion(
+                                    question = question,
+                                    options = args?.options
+                                )
+                                val askLog = createAiLog(
+                                    title = "Ask User Clarification",
+                                    status = "success",
+                                    details = formattedQuestion,
+                                    lineRange = "user-input"
+                                )
+                                _aiActionLogs.value = _aiActionLogs.value + askLog
+                                _agentStatus.value = "Waiting for your reply..."
+
+                                history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
+                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': [Question presented to user in chat. Waiting for user response.]"))))
+
+                                handleComplete(formattedQuestion)
+                                loopCompleted = true
+                                break
+                            }
                             "generate_image", "pollinations_image", "create_image", "generate_logo", "create_logo",
                             "copy_file", "duplicate_code", "duplicate_file", "clone_web_ui", "scrape_web_ui", "deep_clone_web_ui",
                             "fetch_url", "read_url", "scrape_url", "skill_check", "list_skills", "inspect_skill",
-                            "ask_user", "ask_question", "clarify_with_user",
                             "resize_image", "scale_image", "image_resize", "compress_image", "browser_search", "browser_click", "browser_read", "create_todo_list", "complete_todo_task",
                             "delete_file", "rename_file", "rename", "move_file", "move",
                             "transfer_code_chunk", "copy_code_chunk", "move_code_chunk", "copy_code_block", "move_code_block",

@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.AiActionLog
+import kotlinx.coroutines.isActive
 
 /**
  * Collapsible UI component for AI Thoughts, Reasoning, and Planning.
@@ -56,22 +57,36 @@ fun AgentThoughtCollapsibleView(
 
     val isCurrentlyExecuting = spec.isExecuting && isGlobalThinking
 
-    // Calculate elapsed or completed seconds
-    val durationSeconds = remember(log, isCurrentlyExecuting) {
-        if (log.durationMillis != null && log.durationMillis > 0) {
-            maxOf(1L, log.durationMillis / 1000L)
-        } else if (log.timestamp > log.startTime && log.startTime > 0) {
-            maxOf(1L, (log.timestamp - log.startTime) / 1000L)
-        } else {
-            2L // Default aesthetic fallback
+    var liveElapsedSeconds by remember(log.id, isCurrentlyExecuting) {
+        mutableStateOf(
+            if (log.startTime > 0) maxOf(1L, (System.currentTimeMillis() - log.startTime) / 1000L) else 1L
+        )
+    }
+
+    LaunchedEffect(isCurrentlyExecuting, log.id) {
+        if (isCurrentlyExecuting) {
+            while (isActive) {
+                kotlinx.coroutines.delay(500)
+                val start = if (log.startTime > 0) log.startTime else log.timestamp
+                liveElapsedSeconds = maxOf(1L, (System.currentTimeMillis() - start) / 1000L)
+            }
         }
     }
 
-    val headerLabel = if (isCurrentlyExecuting) {
-        "Thinking..."
-    } else {
-        "Thought for $durationSeconds ${if (durationSeconds == 1L) "second" else "seconds"}"
+    // Calculate real completed seconds using AgentExecutionTimer
+    val durationSeconds = remember(log.durationMillis, log.timestamp, log.startTime) {
+        com.example.agent.AgentExecutionTimer.calculateDurationSeconds(
+            durationMillis = log.durationMillis,
+            startTime = log.startTime,
+            endTime = log.timestamp
+        )
     }
+
+    val headerLabel = com.example.agent.AgentExecutionTimer.formatThoughtHeader(
+        isExecuting = isCurrentlyExecuting,
+        durationSeconds = durationSeconds,
+        liveElapsedSeconds = liveElapsedSeconds
+    )
 
     val rotationAngle by animateFloatAsState(
         targetValue = if (isExpanded) 180f else 0f,

@@ -33,8 +33,14 @@ object AgentModelExecutionSafeguard {
         filesModifiedThisPrompt: Boolean,
         anyFilesModifiedSession: Boolean,
         failedActionsInTurn: Int,
-        lastErrorSummary: String?
+        lastErrorSummary: String?,
+        completionMessage: String? = null
     ): CompletionCheckResult {
+        // If the AI is asking the user a question or asking for clarification, always allow it
+        if (com.example.agent.AgentQuestionDetector.isClarificationOrQuestion(completionMessage)) {
+            return CompletionCheckResult.Allowed
+        }
+
         val lowerPrompt = userPrompt.lowercase()
         val isCodeModificationRequest = lowerPrompt.contains("create") ||
                 lowerPrompt.contains("add") ||

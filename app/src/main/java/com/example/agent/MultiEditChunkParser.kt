@@ -182,11 +182,23 @@ object MultiEditChunkParser {
     }
 
     fun getEffectiveSearch(chunk: EditChunk): String {
-        return chunk.search ?: chunk.targetContent ?: ""
+        return chunk.search
+            ?: chunk.targetContentPascal
+            ?: chunk.targetContent
+            ?: chunk.old_string
+            ?: chunk.old_str
+            ?: chunk.old
+            ?: ""
     }
 
     fun getEffectiveReplace(chunk: EditChunk): String {
-        return chunk.replace ?: chunk.replacementContent ?: ""
+        return chunk.replace
+            ?: chunk.replacementContentPascal
+            ?: chunk.replacementContent
+            ?: chunk.new_string
+            ?: chunk.new_str
+            ?: chunk.new
+            ?: ""
     }
 
     /**

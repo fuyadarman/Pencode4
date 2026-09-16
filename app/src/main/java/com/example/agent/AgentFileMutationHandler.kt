@@ -94,19 +94,41 @@ object AgentFileMutationHandler {
         projectFiles: List<ProjectFileEntity>,
         normalizePath: (String) -> String
     ): MutationResult {
-        val filePath = normalizePath(args?.path ?: "")
-        val fileContent = args?.content ?: ""
+        val filePath = normalizePath(AgentArgumentNormalizer.resolvePath(args))
+        val fileContent = AgentArgumentNormalizer.resolveContent(args)
         val cleanNormalizedPath = normalizePath(filePath)
         val projectDir = repository.getProjectDir(project.name)
 
-        val fileAlreadyExists = projectFiles.any {
+        val existingFileEntity = projectFiles.find {
             val exNorm = normalizePath(it.path)
             exNorm == cleanNormalizedPath || it.path == filePath || it.path == cleanNormalizedPath || exNorm.trimStart('/') == cleanNormalizedPath.trimStart('/')
-        } || File(projectDir, cleanNormalizedPath.trimStart('/')).exists()
+        }
+        val fileOnDisk = File(projectDir, cleanNormalizedPath.trimStart('/'))
+        val fileAlreadyExists = existingFileEntity != null || fileOnDisk.exists()
 
         var saved = false
+        var rangeDesc = args?.lineRange ?: "all"
         val result = if (fileAlreadyExists) {
-            "Error: SYSTEM REJECTION - File '$filePath' ALREADY EXISTS! You are strictly prohibited from calling 'create_file' on an existing file. If you call 'create_file' on an existing file, it will ALWAYS be rejected. You MUST call 'read_file' or 'read_file_range' on '$filePath' first, and then use 'edit_file' or 'multi_edit_file' to modify it."
+            when (val decision = AgentFileCreationResolver.resolveExistingFileCreation(
+                filePath = filePath,
+                newContent = fileContent,
+                targetFile = existingFileEntity,
+                fileOnDisk = fileOnDisk,
+                project = project,
+                repository = repository
+            )) {
+                is AgentFileCreationResolver.FileCreationDecision.Saved -> {
+                    saved = true
+                    rangeDesc = decision.rangeDesc
+                    decision.message
+                }
+                is AgentFileCreationResolver.FileCreationDecision.RejectionWithContent -> {
+                    decision.message
+                }
+                is AgentFileCreationResolver.FileCreationDecision.Error -> {
+                    decision.message
+                }
+            }
         } else {
             try {
                 repository.saveFile(project.name, filePath, fileContent)
@@ -122,8 +144,8 @@ object AgentFileMutationHandler {
             resultText = result,
             isSuccess = isSuccess,
             filePath = filePath,
-            lineRange = args?.lineRange ?: "all",
-            logTitle = "Created new file",
+            lineRange = rangeDesc,
+            logTitle = if (fileAlreadyExists) "Updated existing file" else "Created new file",
             recordTool = if (isSuccess) "create_file" else null
         )
     }
@@ -257,9 +279,9 @@ object AgentFileMutationHandler {
         history: List<Content>,
         normalizePath: (String) -> String
     ): MutationResult {
-        val filePath = normalizePath(args?.path ?: "")
-        val searchStr = args?.search ?: ""
-        val replaceStr = args?.replace ?: ""
+        val filePath = normalizePath(AgentArgumentNormalizer.resolvePath(args))
+        val searchStr = AgentArgumentNormalizer.resolveSearch(args)
+        val replaceStr = AgentArgumentNormalizer.resolveReplace(args)
         val targetFile = projectFiles.find { it.path == filePath || normalizePath(it.path) == filePath || it.path.endsWith(filePath) || filePath.endsWith(it.path) }
 
         val fileHasBeenRead = if (targetFile != null) {
