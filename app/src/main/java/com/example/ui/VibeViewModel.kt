@@ -3736,11 +3736,16 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                         break
                     }
 
+                    val pacingNotice = com.example.agent.AgentStepPacingAdvisory.buildStepPacingNotice(
+                        currentStep = actionsCount + 1,
+                        maxSteps = maxActionSteps,
+                        remainingSteps = remainingSteps
+                    )
+
                     val dynamicSystemInstruction = """
                         $systemInstruction
                         
-                        ${com.example.agent.ReadLoopSafetyManager.SYSTEM_READ_WARNING}
-                        [Step ${actionsCount + 1}/$maxActionSteps | Remaining: $remainingSteps actions. Call 'complete' when done.]
+                        $pacingNotice
                     """.trimIndent()
 
                     val stepStartTime = System.currentTimeMillis()
@@ -3904,113 +3909,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 }
                             }
 
-                            // 1. Evaluate candidate action via AgentLoopProtectionEngine (Antigravity/OpenCode protection)
-                            val protectionDecision = loopProtectionEngine.evaluatePreExecution(
-                                currentCall = call,
-                                currentThought = thoughtText,
-                                turn = turn,
-                                maxTurns = maxActionSteps
-                            )
-                            when (protectionDecision) {
-                                is com.example.agent.AgentLoopProtectionEngine.LoopDecision.AutoComplete -> {
-                                    handleComplete(protectionDecision.summary)
-                                    loopCompleted = true
-                                    break
-                                }
-                                is com.example.agent.AgentLoopProtectionEngine.LoopDecision.InterceptWithResult -> {
-                                    val interceptLog = createAiLog(
-                                        title = protectionDecision.logTitle,
-                                        status = protectionDecision.logStatus,
-                                        details = protectionDecision.logDetails
-                                    )
-                                    _aiActionLogs.value = _aiActionLogs.value + interceptLog
-                                    history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
-                                    history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': ${protectionDecision.toolOutput}"))))
-                                    loopProtectionEngine.recordActionOutcome(tool, args, isSuccess = false, turn = turn)
-                                    continue
-                                }
-                                is com.example.agent.AgentLoopProtectionEngine.LoopDecision.AbortLoop -> {
-                                    _isInterrupted.value = true
-                                    _interruptionReason.value = protectionDecision.reason
-                                    loopCompleted = true
-                                    break
-                                }
-                                is com.example.agent.AgentLoopProtectionEngine.LoopDecision.Proceed -> {
-                                    // Proceed to execution
-                                }
-                            }
-                            
                             if (tool != "ai_think" && tool != "ai_response") {
-                                // AgentLoopInterceptor: Check for read loops and "already fixed" thought traps
-                                val loopDecision = com.example.agent.AgentLoopInterceptor.evaluate(
-                                    recentToolCalls = recentToolCallsHistory,
-                                    currentCall = call,
-                                    currentThought = thoughtText,
-                                    recentThoughts = recentThoughtsHistory,
-                                    turn = turn,
-                                    hasPlannedEdits = hasPlannedEdits
-                                )
-                                when (loopDecision) {
-                                    is com.example.agent.AgentLoopDecision.AutoFinish -> {
-                                        handleComplete(loopDecision.summary)
-                                        loopCompleted = true
-                                        break
-                                    }
-                                    is com.example.agent.AgentLoopDecision.InjectWarning -> {
-                                        history.add(Content(
-                                            role = "user",
-                                            parts = listOf(Part(text = loopDecision.warning))
-                                        ))
-                                        val warningLog = createAiLog(
-                                            title = loopDecision.logTitle,
-                                            status = "thinking",
-                                            details = "Injected directive: stopped repetitive re-reading on file."
-                                        )
-                                        _aiActionLogs.value = _aiActionLogs.value + warningLog
-                                    }
-                                    is com.example.agent.AgentLoopDecision.Continue -> {
-                                        // Proceed to standard sequence loop detection
-                                    }
-                                }
-
-                                val seqResult = com.example.agent.AgentSequenceLoopChecker.checkSequenceLoop(
-                                    recentToolCallsHistory = recentToolCallsHistory,
-                                    call = call,
-                                    tool = tool,
-                                    argsString = args?.toString(),
-                                    recentLogs = _aiActionLogs.value,
-                                    isSameWork = ::isSameWork
-                                )
-                                when (seqResult) {
-                                    is com.example.agent.SequenceLoopResult.Abort -> {
-                                        _isInterrupted.value = true
-                                        _interruptionReason.value = seqResult.reason
-                                        val loopAbortedLog = createAiLog(
-                                            title = seqResult.logTitle,
-                                            status = "failed",
-                                            details = seqResult.reason
-                                        )
-                                        _aiActionLogs.value = _aiActionLogs.value + loopAbortedLog
-                                        loopCompleted = true
-                                        break
-                                    }
-                                    is com.example.agent.SequenceLoopResult.WarningInjected -> {
-                                        history.add(Content(
-                                            role = "user",
-                                            parts = listOf(Part(text = seqResult.warningText))
-                                        ))
-                                        val warningLog = createAiLog(
-                                            title = seqResult.logTitle,
-                                            status = "thinking",
-                                            details = seqResult.logDetails
-                                        )
-                                        _aiActionLogs.value = _aiActionLogs.value + warningLog
-                                    }
-                                    is com.example.agent.SequenceLoopResult.Proceed -> {}
-                                }
-
-
-
                                 if (actionsCount >= maxActionSteps) {
                                     _isInterrupted.value = true
                                     val limitLog = createAiLog(

@@ -6,12 +6,7 @@ import com.example.api.Part
 
 object ReadLoopSafetyManager {
 
-    val SYSTEM_READ_WARNING = """
-        === SAFETY & ANTI-LOOP DIRECTIVES ===
-        1. Read existing files AT MOST ONCE before editing. NEVER re-read right after editing/creating.
-        2. Execute EXACTLY what user requested. Call 'complete' immediately when done.
-        3. Keep files modular (<1000 lines). Create new files for new features/systems.
-    """.trimIndent()
+    val SYSTEM_READ_WARNING = ""
 
     fun isReadTool(toolName: String): Boolean {
         val t = toolName.trim().lowercase()
