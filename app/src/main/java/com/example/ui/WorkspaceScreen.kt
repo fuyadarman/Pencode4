@@ -525,10 +525,7 @@ fun WorkspaceScreen(
                                 consoleLogs = webConsoleLogs,
                                 onConsoleLog = onAddWebConsoleLog,
                                 onClearLogs = onClearWebConsoleLogs,
-                                onWebError = { msg, src, line ->
-                                    onAddWebConsoleLog(msg, "error", src, line)
-                                    onWebError(msg, src, line)
-                                },
+                                onWebError = onWebError,
                                 onClearErrors = onClearErrors,
                                 onInspectorElementSelected = { identifier, outerHTML ->
                                     val fileName = "index.html"
@@ -3571,10 +3568,14 @@ fun PreviewTabContent(
                         Text("No HTML file found. Create index.html to preview.", color = Color.Gray)
                     }
                 } else {
-                    var lastLoadedHtml by remember { mutableStateOf(htmlFile?.content ?: "") }
+                    val initialProcessedHtml = remember(htmlFile?.content) {
+                        htmlFile?.content?.let { com.example.ui.preview.WebPreviewPerformanceGuard.preprocessHtmlSafely(it) } ?: ""
+                    }
+                    var lastLoadedHtml by remember { mutableStateOf(initialProcessedHtml) }
                     AndroidView(
                         factory = { context ->
                             WebView(context).apply {
+                                setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
                                 settings.apply {
                                     javaScriptEnabled = true
                                     domStorageEnabled = true
@@ -3586,6 +3587,10 @@ fun PreviewTabContent(
                                     setSupportZoom(true)
                                     builtInZoomControls = true
                                     displayZoomControls = false
+                                    mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                                    cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+                                    allowFileAccessFromFileURLs = true
+                                    allowUniversalAccessFromFileURLs = true
                                 }
                                 isFocusable = true
                                 isFocusableInTouchMode = true
@@ -3599,18 +3604,14 @@ fun PreviewTabContent(
                                                 ConsoleMessage.MessageLevel.WARNING -> "warning"
                                                 else -> "log"
                                             }
-                                            onConsoleLog(
-                                                consoleMessage.message() ?: "",
-                                                level,
-                                                consoleMessage.sourceId() ?: "",
-                                                consoleMessage.lineNumber()
-                                            )
-                                            if (level == "error") {
-                                                onWebError(
-                                                    consoleMessage.message() ?: "",
-                                                    consoleMessage.sourceId() ?: "",
-                                                    consoleMessage.lineNumber()
-                                                )
+                                            val msg = consoleMessage.message() ?: ""
+                                            val src = consoleMessage.sourceId() ?: ""
+                                            val line = consoleMessage.lineNumber()
+                                            if (com.example.ui.preview.WebPreviewPerformanceGuard.shouldEmitLog()) {
+                                                onConsoleLog(msg, level, src, line)
+                                            }
+                                            if (level == "error" && com.example.ui.preview.WebPreviewPerformanceGuard.shouldEmitWebError(msg, src, line)) {
+                                                onWebError(msg, src, line)
                                             }
                                         }
                                         return true
@@ -3764,27 +3765,16 @@ fun PreviewTabContent(
                                             if (matchingFile != null) {
                                                 val (mimeType, encoding) = getMimeTypeAndEncoding(matchingFile.path)
                                                 val isBinary = !encoding.equals("UTF-8") || matchingFile.content.startsWith("data:")
-                                                val stream = if (isBinary) {
-                                                    val rawContent = matchingFile.content
-                                                    val bytes = if (rawContent.startsWith("data:") && rawContent.contains(";base64,")) {
-                                                        try {
-                                                            android.util.Base64.decode(rawContent.substringAfter(";base64,"), android.util.Base64.DEFAULT)
-                                                        } catch (e: Exception) {
-                                                            rawContent.toByteArray()
-                                                        }
-                                                    } else {
-                                                        try {
-                                                            android.util.Base64.decode(rawContent, android.util.Base64.DEFAULT)
-                                                        } catch (e: Exception) {
-                                                            rawContent.toByteArray()
-                                                        }
-                                                    }
-                                                    java.io.ByteArrayInputStream(bytes)
-                                                 } else {
-                                                    java.io.ByteArrayInputStream((if (matchingFile.path.equals("index.html", ignoreCase = true) || matchingFile.path.endsWith("/index.html", ignoreCase = true)) preprocessHtmlForBabel(matchingFile.content) else matchingFile.content).toByteArray())
-                                                 }
-                                                 return createWebResponse(mimeType, encoding, stream)
+                                                val isIndex = matchingFile.path.equals("index.html", ignoreCase = true) || matchingFile.path.endsWith("/index.html", ignoreCase = true)
+                                                val stream = com.example.ui.preview.WebPreviewPerformanceGuard.createSafeContentStream(
+                                                    matchingFile.path,
+                                                    matchingFile.content,
+                                                    isBinary,
+                                                    isIndex
+                                                )
+                                                return createWebResponse(mimeType, encoding, stream)
                                             }
+                                            return com.example.ui.preview.WebPreviewPerformanceGuard.createFast404Response(cleanPath)
                                         }
                                         return super.shouldInterceptRequest(view, request)
                                     }
@@ -3794,12 +3784,11 @@ fun PreviewTabContent(
                                 }, "AndroidInspector")
                                 
                                 if (hasWebDist) {
-                                    clearCache(true)
                                     loadUrl("https://virtual-app/")
                                 } else if (htmlFile != null) {
                                     loadDataWithBaseURL(
                                         "https://virtual-app/",
-                                        preprocessHtmlForBabel(htmlFile.content),
+                                        initialProcessedHtml,
                                         "text/html",
                                         "UTF-8",
                                         null
@@ -3810,7 +3799,7 @@ fun PreviewTabContent(
                         update = { webView ->
                             webViewRef = webView
                             if (!hasWebDist && htmlFile != null) {
-                                val currentContent = preprocessHtmlForBabel(htmlFile.content)
+                                val currentContent = com.example.ui.preview.WebPreviewPerformanceGuard.preprocessHtmlSafely(htmlFile.content)
                                 if (lastLoadedHtml != currentContent) {
                                     lastLoadedHtml = currentContent
                                     webView.loadDataWithBaseURL(
@@ -3822,6 +3811,10 @@ fun PreviewTabContent(
                                     )
                                 }
                             }
+                        },
+                        onRelease = { webView ->
+                            com.example.ui.preview.WebPreviewPerformanceGuard.safelyReleaseWebView(webView)
+                            webViewRef = null
                         },
                         modifier = Modifier.fillMaxSize()
                     )

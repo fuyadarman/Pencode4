@@ -271,8 +271,13 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     val webArtifactInfo: StateFlow<WebArtifactInfo?> = _webArtifactInfo.asStateFlow()
 
     fun addWebError(message: String, sourceId: String, lineNumber: Int) {
+        if (!com.example.ui.preview.WebPreviewPerformanceGuard.shouldEmitWebError(message, sourceId, lineNumber)) {
+            return
+        }
         viewModelScope.launch(Dispatchers.Default) {
-            val files = repository.getFilesForProject(_currentProject.value?.name ?: "")
+            val files = _projectFiles.value.ifEmpty { 
+                repository.getFilesForProject(_currentProject.value?.name ?: "")
+            }
             val resolved = WebErrorResolver.resolveError(message, sourceId, lineNumber, files)
             val cleanSource = resolved.cleanFilePath
             val errorKey = "$cleanSource:${resolved.lineNumber}:$message"
@@ -287,7 +292,13 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                     cleanFilePath = resolved.cleanFilePath,
                     codeSnippet = resolved.codeSnippet
                 )
-                _detectedWebErrors.value = _detectedWebErrors.value + newError
+                val currentErrors = _detectedWebErrors.value
+                val updated = if (currentErrors.size >= 30) {
+                    currentErrors.drop(currentErrors.size - 29) + newError
+                } else {
+                    currentErrors + newError
+                }
+                _detectedWebErrors.value = updated
                 
                 val hasAttempted = attemptedWebErrorKeys.contains(errorKey)
                 if (_allowAutoFix.value && !_isThinking.value && !isAutoFixingWebErrors && !hasAttempted) {
@@ -2601,11 +2612,22 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     )
 
     fun addWebConsoleLog(message: String, level: String, sourceId: String, lineNumber: Int) {
+        if (!com.example.ui.preview.WebPreviewPerformanceGuard.shouldEmitLog()) {
+            return
+        }
         viewModelScope.launch(Dispatchers.Default) {
-            val files = repository.getFilesForProject(_currentProject.value?.name ?: "")
+            val files = _projectFiles.value.ifEmpty { 
+                repository.getFilesForProject(_currentProject.value?.name ?: "")
+            }
             val cleanSource = WebErrorResolver.cleanSourceId(sourceId, files)
             val log = WebConsoleLog(message, level, cleanSource, lineNumber)
-            _webConsoleLogs.value = _webConsoleLogs.value + log
+            val currentList = _webConsoleLogs.value
+            val updated = if (currentList.size >= 150) {
+                currentList.drop(currentList.size - 149) + log
+            } else {
+                currentList + log
+            }
+            _webConsoleLogs.value = updated
         }
     }
 
