@@ -372,6 +372,23 @@ object AgentFileMutationHandler {
             var currentContent = targetFile.content
             if (chunks.isEmpty()) {
                 "Error: No edit chunks provided for multi_edit_file. Provide 'chunks' or 'replacementChunks' list with search and replace blocks."
+            } else if (chunks.size == 1 && MultiEditChunkParser.getEffectiveSearch(chunks[0]).isEmpty()) {
+                val singleReplace = MultiEditChunkParser.getEffectiveReplace(chunks[0])
+                val autoHeal = AgentSearchBlockAutoHealer.attemptAutoHeal(
+                    projectName = project.name,
+                    filePath = filePath,
+                    originalContent = currentContent,
+                    replaceStr = singleReplace,
+                    tool = "multi_edit_file",
+                    repository = repository
+                )
+                if (autoHeal is AgentEditToolExecutor.EditExecutionResult.Success) {
+                    saved = true
+                    foundRange = autoHeal.rangeDesc
+                    autoHeal.message
+                } else {
+                    AgentSearchBlockAutoHealer.buildActionableEmptySearchMessage(filePath, currentContent.lines().size, currentContent.take(2000))
+                }
             } else {
                 var chunkError: String? = null
                 val lineRanges = mutableListOf<String>()

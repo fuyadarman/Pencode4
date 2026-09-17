@@ -90,27 +90,21 @@ object AgentEditToolExecutor {
         val lineCount = if (originalContent.isBlank()) 0 else originalContent.lines().size
 
         if (actualSearchStr.isEmpty()) {
-            if (lineCount <= 30 && replaceStr.isNotBlank()) {
-                // Auto-healing: file has 30 or fewer lines, replacing is permitted under Rule 1
-                return try {
-                    repository.saveFile(projectName, filePath, replaceStr)
-                    val newLines = replaceStr.lines().size
-                    val range = if (newLines <= 1) "all" else "lines 1-$newLines"
-                    EditExecutionResult.Success(
-                        message = "Successfully updated '$filePath' ($lineCount lines). Content is saved. DO NOT re-read this file. If all requested changes are done, call 'complete'.",
-                        filePath = filePath,
-                        rangeDesc = range,
-                        editRecord = EditRecord(tool = "edit", path = filePath, lines = range)
-                    )
-                } catch (e: Exception) {
-                    EditExecutionResult.Failure("Error writing updated file: ${e.localizedMessage}")
-                }
+            val autoHealResult = AgentSearchBlockAutoHealer.attemptAutoHeal(
+                projectName = projectName,
+                filePath = filePath,
+                originalContent = originalContent,
+                replaceStr = replaceStr,
+                tool = tool,
+                repository = repository
+            )
+            if (autoHealResult != null) {
+                return autoHealResult
             }
+
             val snippet = originalContent.take(2000)
             return EditExecutionResult.Failure(
-                "Error: 'search' block cannot be empty. You must specify the exact, unique block of code to search and replace.\n" +
-                "File '$filePath' has $lineCount lines. Current content snippet:\n```\n$snippet\n```\n" +
-                "Please provide the unique code block to replace in 'search', and new code in 'replace'."
+                AgentSearchBlockAutoHealer.buildActionableEmptySearchMessage(filePath, lineCount, snippet)
             )
         }
 

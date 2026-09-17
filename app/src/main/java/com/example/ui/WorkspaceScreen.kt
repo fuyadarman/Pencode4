@@ -3535,7 +3535,8 @@ fun PreviewTabContent(
                 .fillMaxWidth()
                 .background(Color.White)
         ) {
-            key(refreshTrigger) {
+            val activeProjectName = remember(files) { files.firstOrNull()?.projectName ?: "default" }
+            key(activeProjectName, refreshTrigger, hasWebDist) {
                 if (!hasWebDist && isReactViteFramework) {
                     // Show a beautiful, native-looking compilation required card
                     AndroidView(
@@ -3795,6 +3796,7 @@ fun PreviewTabContent(
                                 }, "AndroidInspector")
                                 
                                 if (hasWebDist) {
+                                    clearCache(true)
                                     loadUrl("https://virtual-app/")
                                 } else if (htmlFile != null) {
                                     loadDataWithBaseURL(

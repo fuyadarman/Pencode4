@@ -1202,13 +1202,27 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun saveGithubRepo(repo: String) {
         _githubRepo.value = repo
-        sharedPrefs.edit().putString("github_repo", repo).apply()
+        val curProj = _currentProject.value?.name
+        if (!curProj.isNullOrBlank()) {
+            com.example.agent.ProjectWebDistManager.saveProjectGithubRepo(sharedPrefs, curProj, repo)
+        } else {
+            sharedPrefs.edit().putString("github_repo", repo).apply()
+        }
+        pollJob?.cancel()
+        pollJob = null
         startPollingBuild()
     }
 
     fun saveGithubBranch(branch: String) {
         _githubBranch.value = branch
-        sharedPrefs.edit().putString("github_branch", branch).apply()
+        val curProj = _currentProject.value?.name
+        if (!curProj.isNullOrBlank()) {
+            com.example.agent.ProjectWebDistManager.saveProjectGithubBranch(sharedPrefs, curProj, branch)
+        } else {
+            sharedPrefs.edit().putString("github_branch", branch).apply()
+        }
+        pollJob?.cancel()
+        pollJob = null
         startPollingBuild()
     }
 
@@ -1640,9 +1654,18 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun downloadAndUnzipApk(owner: String, repoName: String, runId: Long, tokenVal: String, force: Boolean = false) {
-        if (!force && lastDownloadedRunId == runId) return
+    fun downloadAndUnzipApk(
+        owner: String, 
+        repoName: String, 
+        runId: Long, 
+        tokenVal: String, 
+        force: Boolean = false,
+        targetProjectName: String = _currentProject.value?.name ?: "default"
+    ) {
+        val lastRun = com.example.agent.ProjectWebDistManager.getLastDownloadedRunId(targetProjectName)
+        if (!force && (lastDownloadedRunId == runId || lastRun == runId)) return
         lastDownloadedRunId = runId
+        com.example.agent.ProjectWebDistManager.setLastDownloadedRunId(targetProjectName, runId)
         
         applicationScope.launch(Dispatchers.IO) {
             _apkDownloadProgress.value = "Fetching build artifacts..."
@@ -1845,8 +1868,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                     outputApkFile.delete()
                 }
                 
-                val safeProjectName = (_currentProject.value?.name ?: "default").replace(Regex("[\\\\/:*?\"<>|]"), "_")
-                val webDistDir = java.io.File(cacheDir, "web_dist_$safeProjectName")
+                val webDistDir = com.example.agent.ProjectWebDistManager.getProjectWebDistDir(getApplication(), targetProjectName)
                 if (webDistDir.exists()) {
                     webDistDir.deleteRecursively()
                 }
@@ -1981,14 +2003,13 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                     _localApkPath.value = outputApkFile.absolutePath
                     _apkDownloadProgress.value = "Success: App compiled & ready to install!"
                     showDownloadNotification(100, "Pencode AI Build", "Success: App compiled & ready to install!", true)
-                    _currentTab.value = WorkspaceTab.ANDROID_BUILD
-                } else if (webFilesExtracted > 0 || foundIndexHtmlFile != null) {
-                    var effectiveWebDir = webDistDir
-                    if (foundIndexHtmlFile != null) {
-                        effectiveWebDir = foundIndexHtmlFile!!.parentFile ?: webDistDir
+                    if (_currentProject.value?.name == targetProjectName) {
+                        _currentTab.value = WorkspaceTab.ANDROID_BUILD
                     }
+                } else if (webFilesExtracted > 0 || foundIndexHtmlFile != null) {
+                    val effectiveWebDir = com.example.agent.ProjectWebDistManager.findEffectiveWebDir(webDistDir) ?: (foundIndexHtmlFile?.parentFile ?: webDistDir)
                     val htmlContentToUse = indexHtmlContent ?: java.io.File(effectiveWebDir, "index.html").let { if (it.exists()) it.readText() else null }
-                    _webArtifactInfo.value = WebArtifactInfo(
+                    val artInfo = WebArtifactInfo(
                         name = "web-dist.zip",
                         fileCount = webFilesExtracted,
                         zipSizeBytes = zipSizeBytes,
@@ -1996,23 +2017,31 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                         indexHtmlContent = htmlContentToUse
                     )
                     
-                    com.example.api.LocalHttpServer.setWebDistDir(effectiveWebDir.absolutePath)
-                    com.example.api.LocalHttpServer.updateFiles(_projectFiles.value)
+                    if (_currentProject.value?.name == targetProjectName) {
+                        _webArtifactInfo.value = artInfo
+                        com.example.api.LocalHttpServer.setWebDistDir(effectiveWebDir.absolutePath)
+                        com.example.api.LocalHttpServer.updateFiles(_projectFiles.value)
 
-                    _apkDownloadProgress.value = "Success: Web Artifacts (web-dist.zip) downloaded, unzipped & running on Live Web Preview!"
-                    showDownloadNotification(100, "Pencode AI Build", "Success: Web Artifacts downloaded & unzipped!", true)
-                    _webPreviewRefreshTrigger.value += 1
-                    _currentTab.value = WorkspaceTab.PREVIEW
+                        _apkDownloadProgress.value = "Success: Web Artifacts (web-dist.zip) downloaded, unzipped & running on Live Web Preview!"
+                        showDownloadNotification(100, "Pencode AI Build", "Success: Web Artifacts downloaded & unzipped!", true)
+                        _webPreviewRefreshTrigger.value += 1
+                        _currentTab.value = WorkspaceTab.PREVIEW
+                    } else {
+                        Log.d("VibeViewModel", "Web artifacts for '$targetProjectName' extracted. Currently active project is '${_currentProject.value?.name}'. Preview not switched.")
+                        _apkDownloadProgress.value = "Build artifacts for '$targetProjectName' extracted and saved."
+                    }
                 } else {
                     _apkDownloadProgress.value = "Unzip completed but no valid build artifacts found."
                     showDownloadNotification(0, "Pencode AI Build", "Unzip completed but no valid artifacts found.", true)
                     lastDownloadedRunId = 0L
+                    com.example.agent.ProjectWebDistManager.clearLastDownloadedRunId(targetProjectName)
                 }
             } catch (e: Exception) {
                 _apkDownloadProgress.value = "Extraction failed: ${e.localizedMessage}"
                 _apkDownloadPercentage.value = null
                 showDownloadNotification(0, "Pencode AI Build", "Extraction failed: ${e.localizedMessage}", true)
                 lastDownloadedRunId = 0L
+                com.example.agent.ProjectWebDistManager.clearLastDownloadedRunId(targetProjectName)
             }
         }
     }
@@ -2053,8 +2082,9 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                         rMap?.get("status") == "completed" && rMap?.get("conclusion") == "success"
                     } as? Map<*, *>
                     val runId = (completedRun?.get("id") as? Number)?.toLong()
+                    val targetProj = _currentProject.value?.name ?: "default"
                     if (runId != null) {
-                        downloadAndUnzipApk(owner, repoName, runId, tokenVal, force = true)
+                        downloadAndUnzipApk(owner, repoName, runId, tokenVal, force = true, targetProjectName = targetProj)
                     } else {
                         _apkDownloadProgress.value = "No successful workflow run found to fetch artifacts."
                     }
@@ -2769,6 +2799,12 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             _currentProject.value = project
             _currentTab.value = WorkspaceTab.CHAT
             
+            // Restore project-specific GitHub repo and branch
+            _githubRepo.value = com.example.agent.ProjectWebDistManager.getProjectGithubRepo(sharedPrefs, project.name)
+            _githubBranch.value = com.example.agent.ProjectWebDistManager.getProjectGithubBranch(sharedPrefs, project.name)
+            pollJob?.cancel()
+            pollJob = null
+            
             // Restore action logs, todo list, and status from memory or persistent chat message
             val cachedLogs = projectActionLogsMap[project.name]
             if (!cachedLogs.isNullOrEmpty()) {
@@ -2836,6 +2872,10 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         _aiActionLogs.value = emptyList()
         _todoList.value = emptyList()
         _agentStatus.value = ""
+        _webArtifactInfo.value = null
+        com.example.api.LocalHttpServer.setWebDistDir(null)
+        pollJob?.cancel()
+        pollJob = null
     }
 
     fun dismissGithubPushPrompt() {
@@ -2985,15 +3025,18 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         val visibleFiles = files.filter { it.path != "browser_memory.md" && it.path != "memory.md" }
         _projectFiles.value = visibleFiles
         
-        // Dynamic configuration of local web preview path based on selected project
+        // Isolated web preview configuration for the selected project
         val context = getApplication<Application>()
-        val safeProjName = projectName.replace(Regex("[\\\\/:*?\"<>|]"), "_")
-        val webDistDir = java.io.File(context.cacheDir, "web_dist_$safeProjName")
-        if (webDistDir.exists() && webDistDir.isDirectory) {
-            com.example.api.LocalHttpServer.setWebDistDir(webDistDir.absolutePath)
+        val projectWebDistDir = com.example.agent.ProjectWebDistManager.getProjectWebDistDir(context, projectName)
+        val effectiveWebDir = com.example.agent.ProjectWebDistManager.findEffectiveWebDir(projectWebDistDir)
+        if (effectiveWebDir != null) {
+            com.example.api.LocalHttpServer.setWebDistDir(effectiveWebDir.absolutePath)
+            _webArtifactInfo.value = com.example.agent.ProjectWebDistManager.getWebArtifactInfo(context, projectName)
         } else {
             com.example.api.LocalHttpServer.setWebDistDir(null)
+            _webArtifactInfo.value = null
         }
+        _webPreviewRefreshTrigger.value += 1
 
         // Auto-select index.html or first file to view in editor
         val defaultFile = visibleFiles.find { it.path == "index.html" } ?: visibleFiles.firstOrNull()
@@ -3673,6 +3716,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             val recentThoughtsHistory = mutableListOf<String>()
             val readFilesThisSession = mutableSetOf<String>()
             val loopProtectionEngine = com.example.agent.AgentLoopProtectionEngine()
+            com.example.agent.AgentSearchBlockAutoHealer.resetSession()
             var lastDiagnosedError: String? = null
 
             val handleComplete: suspend (String) -> Unit = { finishMsg: String ->
