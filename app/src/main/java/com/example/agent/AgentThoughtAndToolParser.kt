@@ -78,6 +78,20 @@ object AgentThoughtAndToolParser {
             )
         }
 
+        // 5.5. If the model outputs plain text that is internal reasoning/monologue deliberation
+        // (e.g. "The user hasn't given...", "Let me build...", "Decision: Create car.js...")
+        // Treat it as 'ai_think' under Reasoning so it renders in a collapsible block and doesn't get stuck!
+        if (AgentReasoningDetector.isReasoningText(trimmedRaw)) {
+            val extractedReasoning = AgentReasoningDetector.extractReasoning(trimmedRaw)
+            Log.d(TAG, "Parsed internal monologue/reasoning text as ai_think action: ${extractedReasoning.take(60)}...")
+            return ToolCallResponse(
+                thought = extractedReasoning,
+                tool = "ai_think",
+                arguments = ToolArguments(message = extractedReasoning),
+                finishReason = finishReason
+            )
+        }
+
         // 6. If it's truly plain-text (e.g. conversational answer without JSON)
         val plainTextCleaned = stripToolCallXml(trimmedRaw)
         return ToolCallResponse(

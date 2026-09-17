@@ -3533,9 +3533,13 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             projectAgentStatusMap[project.name] = "AI is thinking..."
             val editsAtPromptStart = _editHistory.value.size
 
-            // Re-enable conversation history with highly optimized, token-saving action summaries
+            // Re-enable conversation history with highly optimized, token-bounded session memory ledger
             val historyEntities = repository.getChatsForProject(project.name)
-            val history = com.example.agent.AgentHistoryBuilder.buildHistory(historyEntities, moshi)
+            val history = com.example.agent.AgentHistoryBuilder.buildHistory(
+                historyEntities = historyEntities,
+                moshi = moshi,
+                editRecords = _editHistory.value
+            )
             val currentPromptEntity = historyEntities.lastOrNull { it.role == "user" }
 
             val activeTemplateInfo = when (project.templateKey) {
@@ -3717,6 +3721,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             val readFilesThisSession = mutableSetOf<String>()
             val loopProtectionEngine = com.example.agent.AgentLoopProtectionEngine()
             com.example.agent.AgentSearchBlockAutoHealer.resetSession()
+            com.example.agent.AgentReadLoopPolicy.resetSession()
             var lastDiagnosedError: String? = null
 
             val handleComplete: suspend (String) -> Unit = { finishMsg: String ->
@@ -3820,9 +3825,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                     if (thoughtText.isNotBlank()) {
                         lastThought = thoughtText
                         val currentLogs = _aiActionLogs.value.toMutableList()
-                        val stepTitle = com.example.agent.AgentBatchExecutionManager.formatFormulatingLogicTitle(turn, plannedActionCount)
+                        val isReasoningThought = com.example.agent.AgentReasoningDetector.isReasoningText(thoughtText)
+                        val stepTitle = com.example.agent.AgentBatchExecutionManager.formatFormulatingLogicTitle(turn, plannedActionCount, isReasoning = isReasoningThought)
                         val placeholderIdx = currentLogs.indexOfFirst {
-                            it.title.startsWith("AI formulating logic") && it.details?.contains("Analyzing user prompt") == true
+                            (it.title.startsWith("AI formulating logic") || it.title.startsWith("AI reasoning")) && it.details?.contains("Analyzing user prompt") == true
                         }
                         if (placeholderIdx != -1) {
                             currentLogs[placeholderIdx] = currentLogs[placeholderIdx].copy(
@@ -3977,17 +3983,27 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                             "ai_think", "ai_response" -> {
                                 val message = args?.message ?: args?.query ?: args?.content ?: args?.prompt ?: "Analyzing and thinking through task requirements."
                                 val isThink = stepResponse.tool == "ai_think"
-                                val title = if (isThink) "AI Thinking & Analysis" else "AI formulating logic"
+                                val isReasoning = com.example.agent.AgentReasoningDetector.isReasoningText(message) || message.contains("reasoning", ignoreCase = true)
+                                val title = if (isReasoning) "AI Reasoning Process" else if (isThink) "AI Thinking & Analysis" else "AI formulating logic"
                                 val responseLog = createAiLog(
                                     title = title,
                                     status = "success",
                                     details = message
+                                ).copy(
+                                    startTime = stepStartTime,
+                                    durationMillis = stepElapsedMs,
+                                    timestamp = System.currentTimeMillis()
                                 )
                                 _aiActionLogs.value = _aiActionLogs.value + responseLog
 
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 val toolName = stepResponse.tool ?: "ai_think"
-                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$toolName': $title logged. You have formulated your plan. Now in your NEXT response, you MUST execute the required tool calls (e.g. 'create_file', 'edit_file', 'multi_edit_file') in JSON format to implement it. Do not return an orphan thought without tools."))))
+                                val nextGuidance = if (isReasoning) {
+                                    com.example.agent.AgentReasoningDetector.buildNextStepGuidance()
+                                } else {
+                                    "System/Tool Output for '$toolName': $title logged. You have formulated your plan. Now in your NEXT response, you MUST execute the required tool calls (e.g. 'create_file', 'edit_file', 'multi_edit_file') in JSON format to implement it. Do not return an orphan thought without tools."
+                                }
+                                history.add(Content(role = "user", parts = listOf(Part(text = nextGuidance))))
                             }
                             "list_directory", "scan_dir", "read_file", "read_file_range", "multi_read_file", "multi_read" -> {
                                 val readRes = com.example.agent.AgentReadToolHandler.handleReadTool(
@@ -4036,6 +4052,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     filesModifiedThisPrompt = true
                                     consecutiveFailedEdits = 0
                                     lastEditError = null
+                                    com.example.agent.AgentReadLoopPolicy.onFileModified(mutationRes.filePath)
                                     _projectFiles.value = repository.getFilesForProject(project.name)
                                     _editHistory.value = _editHistory.value + EditRecord(
                                         tool = mutationRes.recordTool,
@@ -4386,10 +4403,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'run_command': $result"))))
                             }
-                            "global_search" -> {
-                                val query = args?.query ?: ""
+                            "global_search", "grep", "find_in_files", "find" -> {
+                                val query = args?.query ?: args?.search ?: args?.pattern ?: args?.message ?: ""
+                                val toolName = stepResponse.tool ?: "global_search"
                                 val intent = com.example.agent.HybridActionIntentTracker.resolveIntent(
-                                    tool = "global_search",
+                                    tool = toolName,
                                     args = mapOf("query" to query),
                                     thought = stepResponse?.thought ?: ""
                                 )
@@ -4426,7 +4444,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 }
 
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
-                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'global_search': $result"))))
+                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$toolName': $result"))))
                             }
                             "load_skill" -> {
                                 val skillQuery = args?.path ?: args?.query ?: args?.message ?: args?.content ?: ""

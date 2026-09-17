@@ -26,18 +26,22 @@ object AgentExecutionTimer {
 
     /**
      * Formats thought header label with accurate seconds count.
+     * Supports both "Thought for X seconds" and "Reasoning for X seconds".
      */
     fun formatThoughtHeader(
         isExecuting: Boolean,
         durationSeconds: Long,
-        liveElapsedSeconds: Long? = null
+        liveElapsedSeconds: Long? = null,
+        isReasoning: Boolean = false
     ): String {
+        val label = if (isReasoning) "Reasoning" else "Thought"
+        val active = if (isReasoning) "Reasoning" else "Thinking"
         return if (isExecuting) {
             val sec = liveElapsedSeconds ?: durationSeconds
-            "Thinking (${sec}s)..."
+            "$active (${sec}s)..."
         } else {
             val unit = if (durationSeconds == 1L) "second" else "seconds"
-            "Thought for $durationSeconds $unit"
+            "$label for $durationSeconds $unit"
         }
     }
 }

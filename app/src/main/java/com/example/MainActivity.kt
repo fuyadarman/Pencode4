@@ -18,7 +18,6 @@ import com.example.ui.VibeViewModel
 import com.example.ui.WorkspaceScreen
 import com.example.ui.WebConsoleError
 import com.example.ui.theme.MyApplicationTheme
-import androidx.compose.foundation.text.selection.SelectionContainer
 import com.example.api.LocalHttpServer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -75,8 +74,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = Color(0xFF08080C)
                 ) {
-                    SelectionContainer {
-                        val viewModel: VibeViewModel = viewModel()
+                    val viewModel: VibeViewModel = viewModel()
                         mainViewModel = viewModel
                         
                         LaunchedEffect(Unit) {
@@ -420,7 +418,6 @@ class MainActivity : ComponentActivity() {
                                 }
                             )
                         }
-                    }
                 }
             }
         }

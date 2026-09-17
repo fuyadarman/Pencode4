@@ -455,6 +455,16 @@ object GeminiClient {
             )
         }
 
+        if (com.example.agent.AgentReasoningDetector.isReasoningText(rawText)) {
+            val extracted = com.example.agent.AgentReasoningDetector.extractReasoning(rawText)
+            return ToolCallResponse(
+                thought = extracted,
+                tool = "ai_think",
+                arguments = ToolArguments(message = extracted),
+                finishReason = finishReason
+            )
+        }
+
         return ToolCallResponse(
             thought = "Direct response",
             tool = "complete",

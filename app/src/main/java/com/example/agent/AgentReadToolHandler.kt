@@ -59,6 +59,19 @@ object AgentReadToolHandler {
             }
             "read_file" -> {
                 val filePath = normalizePath(args?.path ?: "")
+                val loopCheck = AgentReadLoopPolicy.evaluateRead(tool, filePath, "all")
+                if (loopCheck is AgentReadLoopPolicy.LoopCheckResult.Intercept) {
+                    return ReadResult(
+                        output = loopCheck.responseMessage,
+                        isSuccess = true,
+                        logTitle = "Read loop suppressed ($filePath)",
+                        logDetails = loopCheck.logDetails,
+                        lineRange = "all",
+                        pathsRead = listOf(filePath)
+                    )
+                }
+                val warningSuffix = (loopCheck as? AgentReadLoopPolicy.LoopCheckResult.Warn)?.directive ?: ""
+
                 if (repository.isBinaryExtension(filePath)) {
                     val err = "Error: Reading, editing, patching, or appending to binary image or 3D files directly as text is NOT allowed. You can only view their existence via 'list_directory' or perform operations like rename, delete, move, resize, or format change."
                     ReadResult(
@@ -74,7 +87,7 @@ object AgentReadToolHandler {
                     if (targetFile != null) {
                         val paths = listOf(filePath, normalizePath(filePath), targetFile.path, normalizePath(targetFile.path))
                         ReadResult(
-                            output = "--- File: $filePath ---\n${targetFile.content}",
+                            output = "--- File: $filePath ---\n${targetFile.content}$warningSuffix",
                             isSuccess = true,
                             logTitle = "Read file",
                             logDetails = "Read ${targetFile.content.lines().size} lines from $filePath",
@@ -86,7 +99,7 @@ object AgentReadToolHandler {
                         if (diskResolved != null) {
                             val paths = listOf(filePath, diskResolved.path)
                             ReadResult(
-                                output = "--- File: ${diskResolved.path} ---\n${diskResolved.content}",
+                                output = "--- File: ${diskResolved.path} ---\n${diskResolved.content}$warningSuffix",
                                 isSuccess = true,
                                 logTitle = "Read file",
                                 logDetails = "Read ${diskResolved.linesCount} lines from ${diskResolved.path}",
@@ -131,6 +144,20 @@ object AgentReadToolHandler {
                     endLineInput = startLine + 99
                 }
                 val endLine = endLineInput
+                val lineRangeDesc = "Line $startLine-$endLine"
+
+                val loopCheck = AgentReadLoopPolicy.evaluateRead(tool, filePath, lineRangeDesc)
+                if (loopCheck is AgentReadLoopPolicy.LoopCheckResult.Intercept) {
+                    return ReadResult(
+                        output = loopCheck.responseMessage,
+                        isSuccess = true,
+                        logTitle = "Read loop suppressed ($filePath)",
+                        logDetails = loopCheck.logDetails,
+                        lineRange = lineRangeDesc,
+                        pathsRead = listOf(filePath)
+                    )
+                }
+                val warningSuffix = (loopCheck as? AgentReadLoopPolicy.LoopCheckResult.Warn)?.directive ?: ""
 
                 if (repository.isBinaryExtension(filePath)) {
                     val err = "Error: Reading, editing, patching, or appending to binary image or 3D files directly as text is NOT allowed."
@@ -139,7 +166,7 @@ object AgentReadToolHandler {
                         isSuccess = false,
                         logTitle = "read :$filePath",
                         logDetails = "Error: Cannot read binary files as text",
-                        lineRange = "Line $startLine-$endLine"
+                        lineRange = lineRangeDesc
                     )
                 } else {
                     val files = repository.getFilesForProject(projectName)
@@ -151,11 +178,11 @@ object AgentReadToolHandler {
                         val endIdx = endLine.coerceAtLeast(startIdx).coerceAtMost(lines.size)
                         val selectedLines = lines.subList(startIdx, endIdx).joinToString("\n")
                         ReadResult(
-                            output = "--- File: $filePath (Lines ${startIdx + 1}-$endIdx) ---\n$selectedLines",
+                            output = "--- File: $filePath (Lines ${startIdx + 1}-$endIdx) ---\n$selectedLines$warningSuffix",
                             isSuccess = true,
                             logTitle = "read :$filePath",
                             logDetails = "Read lines $startLine-$endLine from $filePath",
-                            lineRange = "Line $startLine-$endLine",
+                            lineRange = lineRangeDesc,
                             pathsRead = paths
                         )
                     } else {
@@ -167,11 +194,11 @@ object AgentReadToolHandler {
                             val endIdx = endLine.coerceAtLeast(startIdx).coerceAtMost(lines.size)
                             val selectedLines = lines.subList(startIdx, endIdx).joinToString("\n")
                             ReadResult(
-                                output = "--- File: ${diskResolved.path} (Lines ${startIdx + 1}-$endIdx) ---\n$selectedLines",
+                                output = "--- File: ${diskResolved.path} (Lines ${startIdx + 1}-$endIdx) ---\n$selectedLines$warningSuffix",
                                 isSuccess = true,
                                 logTitle = "read :${diskResolved.path}",
                                 logDetails = "Read lines $startLine-$endLine from ${diskResolved.path}",
-                                lineRange = "Line $startLine-$endLine",
+                                lineRange = lineRangeDesc,
                                 pathsRead = paths
                             )
                         } else {
@@ -181,7 +208,7 @@ object AgentReadToolHandler {
                                 isSuccess = false,
                                 logTitle = "read :$filePath",
                                 logDetails = err,
-                                lineRange = "Line $startLine-$endLine"
+                                lineRange = lineRangeDesc
                             )
                         }
                     }

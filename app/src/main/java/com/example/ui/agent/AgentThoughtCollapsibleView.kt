@@ -82,10 +82,17 @@ fun AgentThoughtCollapsibleView(
         )
     }
 
+    val isReasoning = remember(log.title, spec.actionTitle, log.details) {
+        log.title.contains("reasoning", ignoreCase = true) ||
+        spec.actionTitle.contains("reasoning", ignoreCase = true) ||
+        com.example.agent.AgentReasoningDetector.isReasoningText(log.details)
+    }
+
     val headerLabel = com.example.agent.AgentExecutionTimer.formatThoughtHeader(
         isExecuting = isCurrentlyExecuting,
         durationSeconds = durationSeconds,
-        liveElapsedSeconds = liveElapsedSeconds
+        liveElapsedSeconds = liveElapsedSeconds,
+        isReasoning = isReasoning
     )
 
     val rotationAngle by animateFloatAsState(

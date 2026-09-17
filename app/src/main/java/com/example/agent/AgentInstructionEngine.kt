@@ -167,12 +167,14 @@ object AgentInstructionEngine {
         sb.append("=== CORE DIRECTIVES ===\n")
         sb.append("1. LATEST PROMPT: Execute current user prompt faithfully without unsolicited bloat. Call 'complete' when finished.\n")
         sb.append("2. BUDGET: Max steps: $maxActionSteps. Language: match user (Bangla/English).\n")
-        sb.append("3. SURGICAL EDITS: Never overwrite files >30 lines. Read once before editing with 'edit_file'/'multi_edit_file'.\n")
-        sb.append("4. NEW FILES: Use 'create_file' ONLY for new files. Existing files must be edited.\n")
-        sb.append("5. DIAGNOSTICS: Use 'read_preview_errors' for preview bugs and 'read_build_errors' for build failures.\n")
-        sb.append("6. TOOL CATALOG: If any tool command is omitted or you need full documentation, invoke 'list_all_tools' to see all available tools and usage.\n")
-        sb.append("7. ${reasoningEffort.directive}\n")
-        sb.append("8. BUILD & PUSH: You can press the Build tab Build button to push code to GitHub and trigger compilation by invoking 'trigger_build'.\n")
+        sb.append("3. SEARCH FIRST (NO BLIND READ): STRICTLY FORBIDDEN from casually dumping files with 'read_file_range' or 'read_file'. If looking for code, functions, or text, you MUST use 'global_search' or 'grep' FIRST to locate the exact file and lines before reading!\n")
+        sb.append("4. NO VERIFICATION READS: STRICTLY FORBIDDEN from calling 'read_file' or 'read_file_range' to 'verify', 'check', or 'confirm' code edits. Once 'edit_file', 'multi_edit_file', or 'create_file' executes, your changes are already applied. Move directly to the next task or call 'complete'!\n")
+        sb.append("5. SURGICAL EDITS: Never overwrite files >30 lines. Read once before editing with 'edit_file'/'multi_edit_file'.\n")
+        sb.append("6. NEW FILES: Use 'create_file' ONLY for new files. Existing files must be edited.\n")
+        sb.append("7. DIAGNOSTICS: Use 'read_preview_errors' for preview bugs and 'read_build_errors' for build failures.\n")
+        sb.append("8. TOOL CATALOG: If any tool command is omitted or you need full documentation, invoke 'list_all_tools' to see all available tools and usage.\n")
+        sb.append("9. ${reasoningEffort.directive}\n")
+        sb.append("10. BUILD & PUSH: You can press the Build tab Build button to push code to GitHub and trigger compilation by invoking 'trigger_build'.\n")
 
         // 4. Skills Module (Only if skills are active)
         if (activeSkills.isNotEmpty()) {
@@ -209,15 +211,15 @@ object AgentInstructionEngine {
 
         // Code / File tools
         if (intents.contains(PromptIntent.CODE_MODIFICATION_OR_FEATURE) || intents.contains(PromptIntent.DEBUG_AND_ERROR_FIXING) || intents.contains(PromptIntent.GENERAL_AGENT_TASK) || intents.contains(PromptIntent.SEARCH_AND_EXPLORATION)) {
+            tools.add("'global_search'(query) [or 'grep'(query) - Fast grep across all files. ALWAYS USE FIRST TO FIND CODE]")
             tools.add("'read_file'(path)")
-            tools.add("'read_file_range'(path, startLine, endLine)")
+            tools.add("'read_file_range'(path, startLine, endLine) [Use only when line numbers are already pinpointed]")
             tools.add("'multi_read_file'(path, ranges:[{startLine,endLine}])")
             tools.add("'create_file'(path, content) [Brand new files only]")
             tools.add("'edit_file'(path, search, replace)")
             tools.add("'multi_edit_file'(path, chunks:[{search,replace}])")
             tools.add("'delete_file'(path)")
             tools.add("'scan_dir'(path)")
-            tools.add("'global_search'(query)")
             tools.add("'delete_code_chunk'(path, codeChunk)")
             tools.add("'copy_code_chunk'(sourcePath, targetPath, codeChunk, targetAnchor?)")
             tools.add("'move_code_chunk'(sourcePath, targetPath, codeChunk, targetAnchor?)")

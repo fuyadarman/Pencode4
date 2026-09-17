@@ -521,10 +521,11 @@ object ToolExecutionItemMapper {
                     details = log.details
                 )
             }
-            lowerTitle.contains("thinking") || lowerTitle.contains("formulating logic") || lowerTitle.contains("thought process") || lowerTitle.contains("thought") || lowerTitle.contains("reasoning") || lowerTitle.contains("planning") -> {
+            lowerTitle.contains("thinking") || lowerTitle.contains("formulating logic") || lowerTitle.contains("thought process") || lowerTitle.contains("thought") || lowerTitle.contains("reasoning") || lowerTitle.contains("planning") || lowerTitle.contains("ai_think") || com.example.agent.AgentReasoningDetector.isReasoningText(details) -> {
                 val thought = details.ifBlank { title }
+                val isReasoningTitle = lowerTitle.contains("reasoning") || com.example.agent.AgentReasoningDetector.isReasoningText(details)
                 ToolStyleSpec(
-                    actionTitle = "Formulating logic",
+                    actionTitle = if (isReasoningTitle) "Reasoning process" else "Formulating logic",
                     targetLabel = thought,
                     icon = Icons.Default.Psychology,
                     iconColor = Color(0xFF58A6FF),

@@ -13,7 +13,8 @@ object AgentHistoryBuilder {
 
     fun buildHistory(
         historyEntities: List<ChatMessageEntity>,
-        moshi: Moshi
+        moshi: Moshi,
+        editRecords: List<com.example.ui.EditRecord> = emptyList()
     ): MutableList<Content> {
         val history = mutableListOf<Content>()
 
@@ -28,9 +29,16 @@ object AgentHistoryBuilder {
                 val rawPrevPrompt = lastUserEntity?.content ?: "[Previous Request]"
                 val previousUserPrompt = rawPrevPrompt.replace("""\[IMAGE_BASE64: data:.*?;base64,.*?\]""".toRegex(), "[Attached Image]")
 
+                // Generate token-bounded session memory ledger (capped at ~300 tokens)
+                val sessionLedger = AgentSessionMemoryEngine.buildSessionMemoryLedger(
+                    historyEntities = historyEntities,
+                    editRecords = editRecords,
+                    moshi = moshi
+                )
+
                 history.add(Content(
                     role = "user",
-                    parts = listOf(Part(text = "[PREVIOUS COMPLETED REQUEST]\n$previousUserPrompt"))
+                    parts = listOf(Part(text = "$sessionLedger\n\n[IMMEDIATE PREVIOUS REQUEST]\n$previousUserPrompt"))
                 ))
 
                 val fileOperations = mutableListOf<String>()

@@ -2452,11 +2452,10 @@ fun ChatBubble(
         }
     }
 
-    androidx.compose.foundation.text.selection.SelectionContainer {
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = align
-        ) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = align
+    ) {
             if (!isUser && logs.isNotEmpty()) {
                 val filteredLogs = logs.filter { log ->
                     !log.title.contains("finished task execution", ignoreCase = true)
@@ -2626,7 +2625,6 @@ fun ChatBubble(
                 }
             }
         }
-    }
 }
 
 @Composable

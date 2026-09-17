@@ -63,7 +63,7 @@ object AgentModelExecutionSafeguard {
             if (failedActionsInTurn > 0 || !lastErrorSummary.isNullOrBlank()) {
                 val detail = lastErrorSummary ?: "Previous file operations failed or were rejected."
                 return CompletionCheckResult.Denied(
-                    "SYSTEM REJECTION (PREMATURE COMPLETION): You attempted to complete the task, but NO files have been created or modified yet, and previous operations failed ($detail). You MUST inspect the files with 'read_file' and apply your code edits before calling 'complete'."
+                    "SYSTEM REJECTION (PREMATURE COMPLETION): You attempted to complete the task, but NO files have been created or modified yet, and previous operations failed ($detail). You MUST implement and apply your code changes using 'create_file' or 'edit_file' before calling 'complete'. If you already read the files, do NOT re-read them; proceed directly with applying your edits."
                 )
             }
         }

@@ -20,13 +20,14 @@ object AgentBatchExecutionManager {
     """.trimIndent()
 
     /**
-     * Formats the log title for formulating logic based on turn and planned tool count.
+     * Formats the log title for formulating logic or reasoning process based on turn and planned tool count.
      */
-    fun formatFormulatingLogicTitle(turn: Int, plannedToolsCount: Int): String {
+    fun formatFormulatingLogicTitle(turn: Int, plannedToolsCount: Int, isReasoning: Boolean = false): String {
+        val base = if (isReasoning) "AI reasoning process" else "AI formulating logic"
         return when {
-            plannedToolsCount > 1 -> "AI formulating logic ($plannedToolsCount operations planned)"
-            turn > 1 -> "AI formulating logic (Step $turn)"
-            else -> "AI formulating logic"
+            plannedToolsCount > 1 -> "$base ($plannedToolsCount operations planned)"
+            turn > 1 -> "$base (Step $turn)"
+            else -> base
         }
     }
 
