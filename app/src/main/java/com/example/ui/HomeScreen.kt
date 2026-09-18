@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -33,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.data.ProjectEntity
+import com.example.ui.theme.stitchPressFeedback
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -153,37 +155,23 @@ fun HomeScreen(
                             lineHeight = 17.sp
                         )
                         FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.padding(top = 4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.padding(top = 6.dp)
                         ) {
-                            Button(
+                            com.example.ui.theme.StitchPrimaryButton(
+                                text = "New Project",
                                 onClick = { showCreateDialog = true },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF238636),
-                                    contentColor = Color.White
-                                ),
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
-                            ) {
-                                Icon(Icons.Default.Add, contentDescription = "Add", modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("New Project", fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp)
-                            }
+                                icon = Icons.Default.Add,
+                                modifier = Modifier.height(42.dp)
+                            )
 
-                            OutlinedButton(
+                            com.example.ui.theme.StitchSecondaryButton(
+                                text = "Clone Repository",
                                 onClick = { showCloneDialog = true },
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    contentColor = Color(0xFFE6EDF3)
-                                ),
-                                border = BorderStroke(1.dp, Color(0xFF30363D)),
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
-                            ) {
-                                Icon(Icons.Default.Share, contentDescription = "Clone", modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Clone Repository", fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp)
-                            }
+                                icon = Icons.Default.Share,
+                                modifier = Modifier.height(42.dp)
+                            )
                         }
                     }
                 }
@@ -329,13 +317,29 @@ fun ProjectCard(
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF0E111A)),
-        border = BorderStroke(1.dp, Color(0xFF1F2437)),
+    val templateColor = when {
+        project.templateKey?.contains("react", ignoreCase = true) == true -> com.example.ui.theme.StitchTheme.ElectricCyan
+        project.templateKey?.contains("three", ignoreCase = true) == true -> com.example.ui.theme.StitchTheme.PrimaryViolet
+        project.templateKey?.contains("android", ignoreCase = true) == true -> com.example.ui.theme.StitchTheme.EmeraldSuccess
+        else -> com.example.ui.theme.StitchTheme.SunsetAmber
+    }
+
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = com.example.ui.theme.StitchTheme.SurfaceCard,
+        border = BorderStroke(
+            1.dp,
+            Brush.horizontalGradient(
+                listOf(
+                    com.example.ui.theme.StitchTheme.BorderSubtle,
+                    templateColor.copy(alpha = 0.35f),
+                    com.example.ui.theme.StitchTheme.BorderSubtle
+                )
+            )
+        ),
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            .stitchPressFeedback(scaleDown = 0.98f, onClick = onClick)
     ) {
         Row(
             modifier = Modifier
@@ -346,16 +350,19 @@ fun ProjectCard(
         ) {
             Row(
                 modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
                     modifier = Modifier
-                        .size(44.dp)
-                        .clip(RoundedCornerShape(10.dp))
+                        .size(46.dp)
+                        .clip(RoundedCornerShape(12.dp))
                         .background(
                             Brush.linearGradient(
-                                colors = listOf(Color(0xFF6366F1), Color(0xFF00FFCC))
+                                colors = listOf(
+                                    templateColor.copy(alpha = 0.85f),
+                                    com.example.ui.theme.StitchTheme.PrimaryViolet
+                                )
                             )
                         ),
                     contentAlignment = Alignment.Center
@@ -364,19 +371,37 @@ fun ProjectCard(
                         imageVector = Icons.Default.Terminal,
                         contentDescription = "Project Code",
                         tint = Color.White,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(22.dp)
                     )
                 }
 
                 Column(
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text(
-                        text = project.name,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFFF1F5F9)
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = project.name,
+                            fontSize = 15.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFFF1F5F9)
+                        )
+                        Surface(
+                            shape = CircleShape,
+                            color = templateColor.copy(alpha = 0.15f),
+                            border = BorderStroke(1.dp, templateColor.copy(alpha = 0.35f))
+                        ) {
+                            Text(
+                                text = if (!project.templateKey.isNullOrBlank()) project.templateKey.uppercase() else "APP",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = templateColor,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
                     if (project.description.isNotBlank()) {
                         Text(
                             text = project.description,

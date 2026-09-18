@@ -58,6 +58,7 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import com.example.ui.agent.AgentActivityFeed
 import com.example.ui.agent.ModernAgentChatBar
 import com.example.ui.settings.SelfLearningSettingsCard
+import com.example.ui.theme.stitchPressFeedback
 import com.example.ui.settings.RestoreLimitSettingsCard
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
@@ -927,89 +928,25 @@ fun WorkspaceBottomNavigation(
     currentTab: WorkspaceTab,
     onTabSelected: (WorkspaceTab) -> Unit
 ) {
-    Surface(
-        color = Color(0xFF0D1117),
-        border = BorderStroke(1.dp, Color(0xFF21262D)),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        NavigationBar(
-            containerColor = Color(0xFF0D1117),
-            tonalElevation = 0.dp,
-            windowInsets = NavigationBarDefaults.windowInsets,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            NavigationBarItem(
-                selected = currentTab == WorkspaceTab.CHAT,
-                onClick = { onTabSelected(WorkspaceTab.CHAT) },
-                icon = { Icon(Icons.Default.ChatBubble, contentDescription = "Agent Chat", modifier = Modifier.size(20.dp)) },
-                label = { Text("Agent", fontWeight = FontWeight.Medium, fontSize = 11.sp, maxLines = 1) },
-                alwaysShowLabel = true,
-                colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = Color(0xFF58A6FF),
-                    selectedTextColor = Color(0xFF58A6FF),
-                    unselectedIconColor = Color(0xFF8B949E),
-                    unselectedTextColor = Color(0xFF8B949E),
-                    indicatorColor = Color(0xFF161B22)
-                )
-            )
-            NavigationBarItem(
-                selected = currentTab == WorkspaceTab.CODE,
-                onClick = { onTabSelected(WorkspaceTab.CODE) },
-                icon = { Icon(Icons.Default.Code, contentDescription = "Editor", modifier = Modifier.size(20.dp)) },
-                label = { Text("Editor", fontWeight = FontWeight.Medium, fontSize = 11.sp, maxLines = 1) },
-                alwaysShowLabel = true,
-                colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = Color(0xFF58A6FF),
-                    selectedTextColor = Color(0xFF58A6FF),
-                    unselectedIconColor = Color(0xFF8B949E),
-                    unselectedTextColor = Color(0xFF8B949E),
-                    indicatorColor = Color(0xFF161B22)
-                )
-            )
-            NavigationBarItem(
-                selected = currentTab == WorkspaceTab.PREVIEW,
-                onClick = { onTabSelected(WorkspaceTab.PREVIEW) },
-                icon = { Icon(Icons.Default.Language, contentDescription = "Preview", modifier = Modifier.size(20.dp)) },
-                label = { Text("Preview", fontWeight = FontWeight.Medium, fontSize = 11.sp, maxLines = 1) },
-                alwaysShowLabel = true,
-                colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = Color(0xFF3FB950),
-                    selectedTextColor = Color(0xFF3FB950),
-                    unselectedIconColor = Color(0xFF8B949E),
-                    unselectedTextColor = Color(0xFF8B949E),
-                    indicatorColor = Color(0xFF161B22)
-                )
-            )
-            NavigationBarItem(
-                selected = currentTab == WorkspaceTab.TERMINAL,
-                onClick = { onTabSelected(WorkspaceTab.TERMINAL) },
-                icon = { Icon(Icons.Default.Terminal, contentDescription = "Terminal", modifier = Modifier.size(20.dp)) },
-                label = { Text("Terminal", fontWeight = FontWeight.Medium, fontSize = 11.sp, maxLines = 1) },
-                alwaysShowLabel = true,
-                colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = Color(0xFFD29922),
-                    selectedTextColor = Color(0xFFD29922),
-                    unselectedIconColor = Color(0xFF8B949E),
-                    unselectedTextColor = Color(0xFF8B949E),
-                    indicatorColor = Color(0xFF161B22)
-                )
-            )
-            NavigationBarItem(
-                selected = currentTab == WorkspaceTab.ANDROID_BUILD,
-                onClick = { onTabSelected(WorkspaceTab.ANDROID_BUILD) },
-                icon = { Icon(Icons.Default.Build, contentDescription = "Android Build", modifier = Modifier.size(20.dp)) },
-                label = { Text("Build", fontWeight = FontWeight.Medium, fontSize = 11.sp, maxLines = 1) },
-                alwaysShowLabel = true,
-                colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = Color(0xFFA371F7),
-                    selectedTextColor = Color(0xFFA371F7),
-                    unselectedIconColor = Color(0xFF8B949E),
-                    unselectedTextColor = Color(0xFF8B949E),
-                    indicatorColor = Color(0xFF161B22)
-                )
-            )
-        }
-    }
+    val tabList = listOf(
+        WorkspaceTab.CHAT to ("Agent" to Icons.Default.ChatBubble),
+        WorkspaceTab.CODE to ("Editor" to Icons.Default.Code),
+        WorkspaceTab.PREVIEW to ("Preview" to Icons.Default.Language),
+        WorkspaceTab.TERMINAL to ("Terminal" to Icons.Default.Terminal),
+        WorkspaceTab.ANDROID_BUILD to ("Build" to Icons.Default.Build)
+    )
+
+    val selectedIdx = tabList.indexOfFirst { it.first == currentTab }.coerceAtLeast(0)
+
+    com.example.ui.components.StitchBottomNavBar(
+        selectedIndex = selectedIdx,
+        onTabSelected = { index ->
+            if (index in tabList.indices) {
+                onTabSelected(tabList[index].first)
+            }
+        },
+        tabs = tabList.map { it.second }
+    )
 }
 
 @Composable
@@ -1277,7 +1214,9 @@ fun ChatTabContent(
                     item {
                         AgentActivityFeed(
                             displayLogs = aiActionLogs.filter { log ->
-                                !log.title.contains("finished task execution", ignoreCase = true)
+                                !log.title.contains("finished task execution", ignoreCase = true) &&
+                                !com.example.agent.AgentLogPrivacySanitizer.isPureInternalNotice(log.title) &&
+                                !com.example.agent.AgentLogPrivacySanitizer.isPureInternalNotice(log.details)
                             },
                             isThinking = isThinking
                         )
@@ -1301,17 +1240,27 @@ fun ChatTabContent(
                     "🌙 Add modern ambient starry backdrop"
                 )
                 suggestions.forEach { suggestion ->
-                    Card(
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF0E111A)),
-                        border = BorderStroke(1.dp, Color(0xFF1F2437)),
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = com.example.ui.theme.StitchTheme.SurfaceCard,
+                        border = BorderStroke(
+                            1.dp,
+                            Brush.horizontalGradient(
+                                listOf(
+                                    com.example.ui.theme.StitchTheme.BorderGlass,
+                                    com.example.ui.theme.StitchTheme.PrimaryViolet.copy(alpha = 0.3f)
+                                )
+                            )
+                        ),
                         modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable { onUpdateChatInputText(suggestion) }
+                            .stitchPressFeedback(scaleDown = 0.95f) {
+                                onUpdateChatInputText(suggestion)
+                            }
                     ) {
                         Text(
                             text = suggestion,
                             fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
                             color = Color(0xFFECEFF4),
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
                         )
@@ -2455,7 +2404,9 @@ fun ChatBubble(
     ) {
             if (!isUser && logs.isNotEmpty()) {
                 val filteredLogs = logs.filter { log ->
-                    !log.title.contains("finished task execution", ignoreCase = true)
+                    !log.title.contains("finished task execution", ignoreCase = true) &&
+                    !com.example.agent.AgentLogPrivacySanitizer.isPureInternalNotice(log.title) &&
+                    !com.example.agent.AgentLogPrivacySanitizer.isPureInternalNotice(log.details)
                 }
                 if (filteredLogs.isNotEmpty()) {
                     AgentActivityFeed(

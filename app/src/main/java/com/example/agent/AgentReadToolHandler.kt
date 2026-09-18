@@ -64,8 +64,8 @@ object AgentReadToolHandler {
                     return ReadResult(
                         output = loopCheck.responseMessage,
                         isSuccess = true,
-                        logTitle = "Read loop suppressed ($filePath)",
-                        logDetails = loopCheck.logDetails,
+                        logTitle = AgentLogPrivacySanitizer.sanitizeTitle("Inspected $filePath", "Inspected file"),
+                        logDetails = AgentLogPrivacySanitizer.sanitizeDetails(loopCheck.logDetails, "Explored $filePath context"),
                         lineRange = "all",
                         pathsRead = listOf(filePath)
                     )
@@ -151,8 +151,8 @@ object AgentReadToolHandler {
                     return ReadResult(
                         output = loopCheck.responseMessage,
                         isSuccess = true,
-                        logTitle = "Read loop suppressed ($filePath)",
-                        logDetails = loopCheck.logDetails,
+                        logTitle = AgentLogPrivacySanitizer.sanitizeTitle("Inspected $filePath ($lineRangeDesc)", "Inspected code range"),
+                        logDetails = AgentLogPrivacySanitizer.sanitizeDetails(loopCheck.logDetails, "Explored $filePath $lineRangeDesc"),
                         lineRange = lineRangeDesc,
                         pathsRead = listOf(filePath)
                     )

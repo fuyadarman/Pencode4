@@ -48,9 +48,10 @@ data class ToolStyleSpec(
 object ToolExecutionItemMapper {
 
     fun mapLog(log: AiActionLog, isGlobalThinking: Boolean): ToolStyleSpec {
-        val title = log.title
+        val title = com.example.agent.AgentLogPrivacySanitizer.sanitizeTitle(log.title)
         val lowerTitle = title.lowercase(Locale.ROOT)
-        val details = log.details?.trim() ?: ""
+        val rawDetails = com.example.agent.AgentLogPrivacySanitizer.sanitizeDetails(log.details)
+        val details = rawDetails.trim()
         val lineRange = formatLineRange(log.lineRange)
         val isExecuting = (log.status.equals("thinking", ignoreCase = true) ||
                 log.status.equals("executing", ignoreCase = true)) && isGlobalThinking

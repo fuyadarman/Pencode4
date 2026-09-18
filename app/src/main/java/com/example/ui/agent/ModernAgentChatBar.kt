@@ -29,6 +29,8 @@ import com.example.data.ProjectFileEntity
 import com.example.ui.AgentSkill
 import com.example.ui.AttachedFile
 import com.example.ui.CustomModelConfig
+import com.example.ui.theme.StitchTheme
+import com.example.ui.theme.stitchPressFeedback
 
 /**
  * Modern Agent ChatBar matching the requested UI design:
@@ -62,10 +64,14 @@ fun ModernAgentChatBar(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(12.dp),
-        color = Color(0xFF161B22),
-        border = BorderStroke(1.dp, Color(0xFF30363D))
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = com.example.ui.theme.StitchTheme.SurfaceGlass,
+        border = BorderStroke(
+            1.dp,
+            if (canSend) com.example.ui.theme.StitchTheme.PrimaryViolet.copy(alpha = 0.5f) else com.example.ui.theme.StitchTheme.BorderSubtle
+        ),
+        tonalElevation = 6.dp
     ) {
         Column(
             modifier = Modifier
@@ -205,37 +211,45 @@ fun ModernAgentChatBar(
                 if (isThinking) {
                     Button(
                         onClick = onStopAI,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                        colors = ButtonDefaults.buttonColors(containerColor = StitchTheme.RadiantRose),
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(12.dp),
                                 color = Color.White,
                                 strokeWidth = 2.dp
                             )
-                            Text("Stop", fontSize = 12.sp, color = Color.White)
+                            Text("Stop", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                         }
                     }
                 } else {
-                    IconButton(
-                        onClick = onSend,
-                        enabled = canSend,
+                    Box(
                         modifier = Modifier
-                            .size(34.dp)
-                            .background(
-                                if (canSend) Color(0xFF238636) else Color(0xFF21262D),
-                                RoundedCornerShape(8.dp)
+                            .size(36.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .then(
+                                if (canSend) {
+                                    Modifier.background(StitchTheme.AuroraGradient)
+                                } else {
+                                    Modifier.background(StitchTheme.SurfaceCard)
+                                }
                             )
+                            .then(
+                                if (canSend) {
+                                    Modifier.stitchPressFeedback(scaleDown = 0.90f, onClick = onSend)
+                                } else Modifier
+                            ),
+                        contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Send,
                             contentDescription = "Send",
-                            tint = if (canSend) Color.White else Color(0xFF6E7681),
+                            tint = if (canSend) Color.White else StitchTheme.TextSub,
                             modifier = Modifier.size(16.dp)
                         )
                     }

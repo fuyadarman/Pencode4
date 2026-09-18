@@ -28,6 +28,7 @@ object AgentReadLoopPolicy {
         fileReadCounts.clear()
         consecutiveReads.set(0)
         lastModifiedFile = null
+        SmartReadBudgetPolicy.reset()
     }
 
     /**
@@ -36,12 +37,12 @@ object AgentReadLoopPolicy {
     fun onFileModified(path: String? = null) {
         consecutiveReads.set(0)
         lastModifiedFile = path?.let { AgentLoopProtectionEngine.normalizePath(it) }
+        SmartReadBudgetPolicy.onActionExecuted()
     }
 
     /**
      * Evaluates candidate read operations.
-     * Prevents infinite reading loops across read_file, read_file_range, and multi_read,
-     * and strictly blocks re-reading files to verify code changes immediately after editing.
+     * Integrates SmartReadBudgetPolicy for slice-level tracking and progressive nudges.
      */
     fun evaluateRead(
         tool: String,
@@ -50,44 +51,48 @@ object AgentReadLoopPolicy {
     ): LoopCheckResult {
         val normPath = AgentLoopProtectionEngine.normalizePath(path)
 
-        // 0. Strict Anti-Verification Rule: Block re-reading the exact file just modified
-        if (lastModifiedFile != null && normPath == lastModifiedFile) {
-            return LoopCheckResult.Intercept(
-                responseMessage = "--- File: $path (Changes Already Applied & Saved) ---\n" +
-                        "[SYSTEM DIRECTIVE (ANTI-VERIFICATION RULE): You just modified '$path'. Re-reading files with '$tool' to verify code changes is strictly prohibited. Your changes are successfully applied and stored in the project. Do NOT re-read to verify. Proceed immediately to your next action or invoke 'complete'.]",
-                logDetails = "Blocked post-edit verification read for $path"
-            )
-        }
         val currentConsecutive = consecutiveReads.incrementAndGet()
         val readCount = fileReadCounts.computeIfAbsent(normPath) { AtomicInteger(0) }.incrementAndGet()
 
-        // 1. Pathological single-file read loop: Reading the same file 3 or more times
-        if (readCount >= 3) {
+        // Smart budget evaluation (handles identical slice checks and progressive nudges)
+        val budgetResult = SmartReadBudgetPolicy.checkRead(path, null, null)
+        when (budgetResult) {
+            is SmartReadBudgetPolicy.BudgetEvaluation.InterceptDuplicate -> {
+                return LoopCheckResult.Intercept(
+                    responseMessage = budgetResult.message,
+                    logDetails = "Intercepted repeated slice read for $path"
+                )
+            }
+            is SmartReadBudgetPolicy.BudgetEvaluation.ForceAction -> {
+                return LoopCheckResult.Intercept(
+                    responseMessage = budgetResult.message,
+                    logDetails = "Forced action after excessive multi-file reads ($currentConsecutive)"
+                )
+            }
+            is SmartReadBudgetPolicy.BudgetEvaluation.SoftNudge -> {
+                return LoopCheckResult.Warn(directive = budgetResult.nudge)
+            }
+            SmartReadBudgetPolicy.BudgetEvaluation.Proceed -> {}
+        }
+
+        // Only intercept truly pathological infinite loops (10+ reads of exact same file or 20+ reads total without edit)
+        if (readCount >= 10) {
             val rangeNotice = if (!lineRangeDesc.isNullOrBlank()) " ($lineRangeDesc)" else ""
             return LoopCheckResult.Intercept(
                 responseMessage = "--- File: $path$rangeNotice (Already in Context) ---\n" +
-                        "[SYSTEM NOTICE (ANTI-READ-LOOP): File '$path' has already been provided to you $readCount times in this session. " +
-                        "Further repetitive reading is suppressed to break the read loop. You have sufficient context. " +
-                        "You MUST now proceed to apply your changes using 'edit_file' or 'create_file', or call 'complete' if the task is finished.]",
-                logDetails = "Intercepted repeated read for $path (Read $readCount times)"
+                        "[SYSTEM NOTICE: File '$path' has already been read $readCount times. " +
+                        "Please proceed to apply code changes using 'edit_file' or 'create_file'.]",
+                logDetails = "Intercepted excessive read loop for $path ($readCount reads)"
             )
         }
 
-        // 2. Pathological global read loop: Calling read tools 4 or more times in a row without any edits
-        if (currentConsecutive >= 4) {
+        if (currentConsecutive >= 20) {
             val rangeNotice = if (!lineRangeDesc.isNullOrBlank()) " ($lineRangeDesc)" else ""
             return LoopCheckResult.Intercept(
                 responseMessage = "--- File: $path$rangeNotice (Already in Context) ---\n" +
-                        "[SYSTEM NOTICE (ANTI-READ-LOOP): You have performed $currentConsecutive consecutive file reading operations without making any code edits. " +
-                        "Reading is now halted to break the read loop. You MUST now proceed to implement your planned code changes using 'create_file' or 'edit_file', or call 'complete'.]",
-                logDetails = "Halted consecutive read loop ($currentConsecutive reads without edits)"
-            )
-        }
-
-        // 3. Gentle directive when reading the same file a 2nd time or after 2 consecutive reads
-        if (readCount == 2 || currentConsecutive == 3) {
-            return LoopCheckResult.Warn(
-                directive = "\n\n[SYSTEM DIRECTIVE: You have gathered sufficient context for '$path'. Do NOT call read_file or read_file_range again. In your NEXT step, execute your changes using 'edit_file' or 'create_file'.]"
+                        "[SYSTEM NOTICE: $currentConsecutive consecutive file reading operations performed without making any code edits. " +
+                        "Please apply your planned changes using 'edit_file' or 'create_file'.]",
+                logDetails = "Halted extreme consecutive read loop ($currentConsecutive reads without edits)"
             )
         }
 
