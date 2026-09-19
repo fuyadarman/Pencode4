@@ -57,6 +57,7 @@ import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import com.example.ui.agent.AgentActivityFeed
 import com.example.ui.agent.ModernAgentChatBar
+import com.example.ui.chat.ProfessionalChatBar
 import com.example.ui.settings.SelfLearningSettingsCard
 import com.example.ui.theme.stitchPressFeedback
 import com.example.ui.settings.RestoreLimitSettingsCard
@@ -1221,6 +1222,9 @@ fun ChatTabContent(
                             isThinking = isThinking
                         )
                     }
+                    item {
+                        com.example.ui.agent.LiveStreamingResponseCard()
+                    }
                 }
             }
         }
@@ -1762,8 +1766,8 @@ fun ChatTabContent(
                     }
                 }
                 Column(
-                    modifier = Modifier.fillMaxWidth().padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     if (todoList.isNotEmpty()) {
                         Card(
@@ -1971,95 +1975,7 @@ fun ChatTabContent(
                         Spacer(modifier = Modifier.height(8.dp))
                     }
 
-                    if (attachedFiles.isNotEmpty() || taggedFiles.isNotEmpty() || taggedSkills.isNotEmpty() || selectedMcpServerIds.isNotEmpty()) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            val activeSelectedMcpServers = mcpServers.filter { selectedMcpServerIds.contains(it.id) }
-                            activeSelectedMcpServers.forEach { server ->
-                                AssistChip(
-                                    onClick = { onOpenSelectMcpDialog() },
-                                    label = {
-                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            Icon(Icons.Default.Hub, contentDescription = null, tint = Color(0xFF818CF8), modifier = Modifier.size(14.dp))
-                                            Text("MCP: ${server.name}", color = Color(0xFF818CF8))
-                                        }
-                                    },
-                                    trailingIcon = {
-                                        IconButton(
-                                            onClick = { onToggleSelectMcpServer(server.id) },
-                                            modifier = Modifier.size(16.dp)
-                                        ) {
-                                            Icon(Icons.Default.Close, contentDescription = "Remove", tint = Color.White)
-                                        }
-                                    },
-                                    colors = AssistChipDefaults.assistChipColors(containerColor = Color(0xFF1E2130)),
-                                    border = BorderStroke(1.dp, Color(0xFF6366F1).copy(alpha = 0.5f))
-                                )
-                            }
-                            attachedFiles.forEach { file ->
-                                AssistChip(
-                                    onClick = { },
-                                    label = { Text(file.name, color = Color.White) },
-                                    trailingIcon = {
-                                        IconButton(
-                                            onClick = { onRemoveAttachedFile(file) },
-                                            modifier = Modifier.size(16.dp)
-                                        ) {
-                                            Icon(Icons.Default.Close, contentDescription = "Remove", tint = Color.White)
-                                        }
-                                    },
-                                    colors = AssistChipDefaults.assistChipColors(containerColor = Color(0xFF1E2130)),
-                                    border = BorderStroke(1.dp, Color(0xFF222533))
-                                )
-                            }
-                            taggedFiles.forEach { file ->
-                                AssistChip(
-                                    onClick = { },
-                                    label = {
-                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            Icon(Icons.Default.Tag, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(14.dp))
-                                            Text(file.path, color = Color.White)
-                                        }
-                                    },
-                                    trailingIcon = {
-                                        IconButton(
-                                            onClick = { taggedFiles = taggedFiles.filter { it != file } },
-                                            modifier = Modifier.size(16.dp)
-                                        ) {
-                                            Icon(Icons.Default.Close, contentDescription = "Remove", tint = Color.White)
-                                        }
-                                    },
-                                    colors = AssistChipDefaults.assistChipColors(containerColor = Color(0xFF1E2130)),
-                                    border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.4f))
-                                )
-                            }
-                            taggedSkills.forEach { skill ->
-                                AssistChip(
-                                    onClick = { },
-                                    label = {
-                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            Icon(Icons.Default.Psychology, contentDescription = null, tint = Color(0xFFA855F7), modifier = Modifier.size(14.dp))
-                                            Text("/${skill.name}", color = Color(0xFFA855F7))
-                                        }
-                                    },
-                                    trailingIcon = {
-                                        IconButton(
-                                            onClick = { taggedSkills = taggedSkills.filter { it.id != skill.id } },
-                                            modifier = Modifier.size(16.dp)
-                                        ) {
-                                            Icon(Icons.Default.Close, contentDescription = "Remove", tint = Color.White)
-                                        }
-                                    },
-                                    colors = AssistChipDefaults.assistChipColors(containerColor = Color(0xFF1E2130)),
-                                    border = BorderStroke(1.dp, Color(0xFFA855F7).copy(alpha = 0.5f))
-                                )
-                            }
-                        }
-                    }
-
-                    ModernAgentChatBar(
+                    ProfessionalChatBar(
                         chatInputText = chatInputText,
                         onUpdateChatInputText = onUpdateChatInputText,
                         isThinking = isThinking,
@@ -2417,90 +2333,92 @@ fun ChatBubble(
                 }
             }
 
-            Card(
-                shape = RoundedCornerShape(
-                    topStart = 18.dp,
-                    topEnd = 18.dp,
-                    bottomStart = if (isUser) 18.dp else 6.dp,
-                    bottomEnd = if (isUser) 6.dp else 18.dp
-                ),
-                colors = CardDefaults.cardColors(containerColor = bg),
-                border = BorderStroke(1.dp, border),
-                modifier = Modifier.widthIn(max = 600.dp)
-            ) {
-                Box(
-                    modifier = Modifier.fillMaxWidth()
+            androidx.compose.foundation.text.selection.SelectionContainer {
+                Card(
+                    shape = RoundedCornerShape(
+                        topStart = 18.dp,
+                        topEnd = 18.dp,
+                        bottomStart = if (isUser) 18.dp else 6.dp,
+                        bottomEnd = if (isUser) 6.dp else 18.dp
+                    ),
+                    colors = CardDefaults.cardColors(containerColor = bg),
+                    border = BorderStroke(1.dp, border),
+                    modifier = Modifier.widthIn(max = 600.dp)
                 ) {
-                    // Background watermark: DEVELOPED BY MUSTASIM FUYAD
-                    Text(
-                        text = "DEVELOPED BY MUSTASIM FUYAD",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Black,
-                        color = Color.White.copy(alpha = 0.03f),
-                        fontFamily = FontFamily.Monospace,
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .rotate(-15f),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                        maxLines = 2
-                    )
-
-                    Column(
-                        modifier = Modifier.padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    Box(
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        if (isEditing) {
-                            OutlinedTextField(
-                                value = editedContent,
-                                onValueChange = { editedContent = it },
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = Color.White,
-                                    unfocusedTextColor = Color.White,
-                                    focusedBorderColor = Color(0xFF8B5CF6)
-                                ),
-                                textStyle = TextStyle(fontSize = 14.sp, color = Color.White, fontFamily = FontFamily.Default)
-                            )
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                                horizontalArrangement = Arrangement.End,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                TextButton(onClick = { isEditing = false }) {
-                                    Text("Cancel", color = Color.Gray, fontSize = 11.sp)
-                                }
-                                Button(
-                                    onClick = {
-                                        onEditMessage(message, editedContent)
-                                        isEditing = false
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6)),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                                    modifier = Modifier.height(28.dp)
+                        // Background watermark: DEVELOPED BY MUSTASIM FUYAD
+                        Text(
+                            text = "DEVELOPED BY MUSTASIM FUYAD",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Black,
+                            color = Color.White.copy(alpha = 0.03f),
+                            fontFamily = FontFamily.Monospace,
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .rotate(-15f),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            maxLines = 2
+                        )
+
+                        Column(
+                            modifier = Modifier.padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            if (isEditing) {
+                                OutlinedTextField(
+                                    value = editedContent,
+                                    onValueChange = { editedContent = it },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedTextColor = Color.White,
+                                        unfocusedTextColor = Color.White,
+                                        focusedBorderColor = Color(0xFF8B5CF6)
+                                    ),
+                                    textStyle = TextStyle(fontSize = 14.sp, color = Color.White, fontFamily = FontFamily.Default)
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                                    horizontalArrangement = Arrangement.End,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text("Save", color = Color.White, fontSize = 11.sp)
-                                }
-                            }
-                        } else {
-                            if (isUser) {
-                                if (mentionChips.isNotEmpty()) {
-                                    Row(
-                                        modifier = Modifier
-                                            .horizontalScroll(rememberScrollState())
-                                            .padding(bottom = 2.dp),
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                        verticalAlignment = Alignment.CenterVertically
+                                    TextButton(onClick = { isEditing = false }) {
+                                        Text("Cancel", color = Color.Gray, fontSize = 11.sp)
+                                    }
+                                    Button(
+                                        onClick = {
+                                            onEditMessage(message, editedContent)
+                                            isEditing = false
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6)),
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                                        modifier = Modifier.height(28.dp)
                                     ) {
-                                        mentionChips.forEach { chip ->
-                                            MentionChipBadge(chip = chip)
-                                        }
+                                        Text("Save", color = Color.White, fontSize = 11.sp)
                                     }
                                 }
-                                if (userDisplayText.isNotBlank()) {
-                                    FormattedMarkdownText(text = userDisplayText)
-                                }
                             } else {
-                                FormattedMarkdownText(text = message.content)
+                                if (isUser) {
+                                    if (mentionChips.isNotEmpty()) {
+                                        Row(
+                                            modifier = Modifier
+                                                .horizontalScroll(rememberScrollState())
+                                                .padding(bottom = 2.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            mentionChips.forEach { chip ->
+                                                MentionChipBadge(chip = chip)
+                                            }
+                                        }
+                                    }
+                                    if (userDisplayText.isNotBlank()) {
+                                        FormattedMarkdownText(text = userDisplayText)
+                                    }
+                                } else {
+                                    FormattedMarkdownText(text = message.content)
+                                }
                             }
                         }
                     }

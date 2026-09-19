@@ -42,7 +42,8 @@ data class ToolStyleSpec(
     val iconColor: Color,
     val isExecuting: Boolean,
     val isThought: Boolean = false,
-    val details: String? = null
+    val details: String? = null,
+    val lineBadge: String? = null
 )
 
 object ToolExecutionItemMapper {
@@ -295,44 +296,52 @@ object ToolExecutionItemMapper {
                     details = log.details
                 )
             }
-            lowerTitle.startsWith("edit:") || lowerTitle.startsWith("writing file") || lowerTitle.contains("edited file") || lowerTitle.contains("modified file") -> {
+            lowerTitle.startsWith("edit:") || lowerTitle.startsWith("writing file") || lowerTitle.contains("edited file") || lowerTitle.contains("modified file") || lowerTitle.contains("edit_file") || lowerTitle.contains("multi_edit") -> {
                 val target = extractPath(title, details, "Edit:").ifBlank {
-                    extractPath(title, details, "Writing file:").ifBlank { "file" }
+                    extractPath(title, details, "Writing file:").ifBlank {
+                        extractPath(title, details, "Modified file:").ifBlank {
+                            extractPath(title, details, "File operation:").ifBlank { details.lineSequence().firstOrNull()?.trim() ?: "file" }
+                        }
+                    }
                 }
-                val targetText = if (lineRange.isNotBlank()) "$target ($lineRange)" else "$target (all)"
+                val resolvedLineRange = if (lineRange.isNotBlank()) lineRange else extractLineRangeFromDetails(details)
+                val targetText = target.ifBlank { "file" }
                 ToolStyleSpec(
                     actionTitle = "Edited file",
                     targetLabel = targetText,
                     icon = Icons.Default.Edit,
                     iconColor = Color(0xFF00D8A5),
                     isExecuting = isExecuting,
-                    details = log.details
+                    details = log.details,
+                    lineBadge = resolvedLineRange.ifBlank { null }
                 )
             }
             lowerTitle.startsWith("append to file") || lowerTitle.startsWith("append") || lowerTitle.contains("appended to file") -> {
                 val target = extractPath(title, details, "Append to file:").ifBlank {
                     extractPath(title, details, "Append:").ifBlank { "file" }
                 }
-                val targetText = if (lineRange.isNotBlank()) "$target ($lineRange)" else target
+                val resolvedLineRange = if (lineRange.isNotBlank()) lineRange else extractLineRangeFromDetails(details)
                 ToolStyleSpec(
                     actionTitle = "Appended to file",
-                    targetLabel = targetText,
+                    targetLabel = target.ifBlank { "file" },
                     icon = Icons.Default.AddCircleOutline,
                     iconColor = Color(0xFF39D353),
                     isExecuting = isExecuting,
-                    details = log.details
+                    details = log.details,
+                    lineBadge = resolvedLineRange.ifBlank { null }
                 )
             }
             lowerTitle.startsWith("patch:") || lowerTitle.contains("patch file") || lowerTitle.contains("patched file") -> {
                 val target = extractPath(title, details, "Patch:").ifBlank { "file" }
-                val targetText = if (lineRange.isNotBlank()) "$target ($lineRange)" else target
+                val resolvedLineRange = if (lineRange.isNotBlank()) lineRange else extractLineRangeFromDetails(details)
                 ToolStyleSpec(
                     actionTitle = "Patched file",
-                    targetLabel = targetText,
+                    targetLabel = target.ifBlank { "file" },
                     icon = Icons.Default.Edit,
                     iconColor = Color(0xFF00D8A5),
                     isExecuting = isExecuting,
-                    details = log.details
+                    details = log.details,
+                    lineBadge = resolvedLineRange.ifBlank { null }
                 )
             }
             lowerTitle.startsWith("ran command:") || lowerTitle.startsWith("shell:") || lowerTitle.contains("command") || lowerTitle.contains("bash") -> {
@@ -569,9 +578,24 @@ object ToolExecutionItemMapper {
         val lower = clean.lowercase(Locale.ROOT)
         return when {
             lower.startsWith("line ") || lower.startsWith("lines ") -> lower
-            clean.all { it.isDigit() || it == '-' || it == ',' } -> "line $clean"
+            clean.all { it.isDigit() || it == '-' || it == ',' } -> "lines $clean"
             else -> clean
         }
+    }
+
+    private fun extractLineRangeFromDetails(details: String): String {
+        if (details.isBlank()) return ""
+        val lineRegex = Regex("""(?i)\b(?:lines|line)\s+(\d+(?:\s*-\s*\d+)?)""")
+        val match = lineRegex.find(details)
+        if (match != null) {
+            return match.value.lowercase(Locale.ROOT)
+        }
+        val chunkRegex = Regex("""(?i)chunk\s+(\d+)""")
+        val chunkMatch = chunkRegex.find(details)
+        if (chunkMatch != null) {
+            return chunkMatch.value.lowercase(Locale.ROOT)
+        }
+        return ""
     }
 
     private fun extractPath(title: String, details: String, prefix: String): String {
@@ -679,13 +703,34 @@ fun ToolExecutionIndicatorRow(
 
                 // Action Title and Subtitle Target
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = spec.actionTitle,
-                        fontSize = 13.5.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color(0xFFF0F6FC),
-                        letterSpacing = 0.1.sp
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = spec.actionTitle,
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFFF0F6FC),
+                            letterSpacing = 0.1.sp
+                        )
+                        if (!spec.lineBadge.isNullOrBlank()) {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = Color(0xFF238636).copy(alpha = 0.2f),
+                                border = BorderStroke(1.dp, Color(0xFF238636).copy(alpha = 0.5f))
+                            ) {
+                                Text(
+                                    text = spec.lineBadge,
+                                    fontSize = 10.5.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF3FB950),
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+                                )
+                            }
+                        }
+                    }
 
                     if (spec.targetLabel.isNotBlank()) {
                         Spacer(modifier = Modifier.height(2.dp))
@@ -758,13 +803,15 @@ fun ToolExecutionIndicatorRow(
                             )
                         }
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = spec.details ?: "",
-                            fontSize = 10.5.sp,
-                            fontFamily = FontFamily.Monospace,
-                            color = Color(0xFFC9D1D9),
-                            lineHeight = 14.sp
-                        )
+                        androidx.compose.foundation.text.selection.SelectionContainer {
+                            Text(
+                                text = spec.details ?: "",
+                                fontSize = 10.5.sp,
+                                fontFamily = FontFamily.Monospace,
+                                color = Color(0xFFC9D1D9),
+                                lineHeight = 14.sp
+                            )
+                        }
                     }
                 }
             }

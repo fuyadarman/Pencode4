@@ -1160,10 +1160,11 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    private fun updateAiLog(logId: String, status: String, details: String? = null, lineRange: String? = null) {
+    private fun updateAiLog(logId: String, status: String, details: String? = null, lineRange: String? = null, newTitle: String? = null) {
         _aiActionLogs.value = _aiActionLogs.value.map { log ->
             if (log.id == logId) {
                 log.copy(
+                    title = newTitle ?: log.title,
                     status = status,
                     details = details ?: log.details,
                     lineRange = lineRange ?: log.lineRange,
@@ -3820,6 +3821,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                     """.trimIndent()
 
                     val stepStartTime = System.currentTimeMillis()
+                    com.example.agent.AgentResponseStreamManager.startStreaming()
                     val stepResponse = GeminiClient.generateAgentStep(
                         apiKey = activeApiKey,
                         systemInstruction = dynamicSystemInstruction,
@@ -3828,8 +3830,12 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                         modelId = modelId,
                         customBaseUrl = baseUrl,
                         useCustom = useCustom,
-                        reasoningEffort = _reasoningEffort.value
+                        reasoningEffort = _reasoningEffort.value,
+                        onStreamChunk = { chunk ->
+                            com.example.agent.AgentResponseStreamManager.appendChunk(chunk)
+                        }
                     )
+                    com.example.agent.AgentResponseStreamManager.endStreaming()
                     val stepElapsedMs = System.currentTimeMillis() - stepStartTime
                     
                     val thought = stepResponse?.thought ?: ""
@@ -4083,11 +4089,13 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     )
                                 }
 
+                                val effectiveTitle = if (mutationRes.isSuccess) "${mutationRes.logTitle}: ${mutationRes.filePath}" else "File operation: $tool"
                                 updateAiLog(
                                     mutationLog.id,
                                     if (mutationRes.isSuccess) "success" else "failed",
                                     if (mutationRes.isSuccess) mutationRes.filePath else mutationRes.resultText,
-                                    lineRange = mutationRes.lineRange
+                                    lineRange = mutationRes.lineRange,
+                                    newTitle = effectiveTitle
                                 )
 
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
@@ -4689,6 +4697,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                         }
                     }
                     
+                    com.example.agent.AgentResponseStreamManager.endStreaming()
                     _isThinking.value = false
                     projectActionLogsMap[project.name] = _aiActionLogs.value
                     projectTodoListMap[project.name] = _todoList.value

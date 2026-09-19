@@ -48,14 +48,21 @@ fun AgentThoughtCollapsibleView(
     // Collapsed by default as requested
     var isExpanded by remember { mutableStateOf(false) }
 
-    val thoughtText = remember(log, spec) {
-        val raw = log.details?.trim()?.takeIf { it.isNotBlank() }
-            ?: spec.targetLabel.trim().takeIf { it.isNotBlank() }
-            ?: log.title
-        cleanThoughtJson(raw)
-    }
+    val streamingThought by com.example.agent.AgentResponseStreamManager.streamingThought.collectAsState()
+    val isStreaming by com.example.agent.AgentResponseStreamManager.isStreaming.collectAsState()
 
     val isCurrentlyExecuting = spec.isExecuting && isGlobalThinking
+
+    val thoughtText = remember(log, spec, streamingThought, isCurrentlyExecuting, isStreaming) {
+        if (isCurrentlyExecuting && isStreaming && streamingThought.isNotBlank()) {
+            streamingThought
+        } else {
+            val raw = log.details?.trim()?.takeIf { it.isNotBlank() }
+                ?: spec.targetLabel.trim().takeIf { it.isNotBlank() }
+                ?: log.title
+            cleanThoughtJson(raw)
+        }
+    }
 
     var liveElapsedSeconds by remember(log.id, isCurrentlyExecuting) {
         mutableStateOf(
@@ -179,13 +186,15 @@ fun AgentThoughtCollapsibleView(
                 Column(
                     modifier = Modifier.padding(12.dp)
                 ) {
-                    Text(
-                        text = thoughtText,
-                        fontSize = 12.5.sp,
-                        lineHeight = 18.sp,
-                        color = Color(0xFFC9D1D9),
-                        fontFamily = FontFamily.SansSerif
-                    )
+                    androidx.compose.foundation.text.selection.SelectionContainer {
+                        Text(
+                            text = thoughtText,
+                            fontSize = 12.5.sp,
+                            lineHeight = 18.sp,
+                            color = Color(0xFFC9D1D9),
+                            fontFamily = FontFamily.SansSerif
+                        )
+                    }
                 }
             }
         }

@@ -512,7 +512,8 @@ object GeminiClient {
         modelId: String = "gemini-2.0-flash",
         customBaseUrl: String? = null,
         useCustom: Boolean = false,
-        reasoningEffort: com.example.agent.ReasoningEffort = com.example.agent.ReasoningEffort.NORMAL
+        reasoningEffort: com.example.agent.ReasoningEffort = com.example.agent.ReasoningEffort.NORMAL,
+        onStreamChunk: ((String) -> Unit)? = null
     ): ToolCallResponse? = withContext(Dispatchers.IO) {
         val activeApiKey = apiKey.trim()
         if (activeApiKey.isEmpty()) {
@@ -1102,7 +1103,26 @@ object GeminiClient {
                             response?.close()
                             response = client.newCall(request).execute()
                             lastCode = response.code
-                            rawResponse = response.body?.string()
+                            if (response.isSuccessful && onStreamChunk != null) {
+                                val bodySource = response.body?.source()
+                                if (bodySource != null) {
+                                    val accumulated = java.lang.StringBuilder()
+                                    val buffer = okio.Buffer()
+                                    while (!bodySource.exhausted()) {
+                                        val readBytes = bodySource.read(buffer, 8192)
+                                        if (readBytes > 0) {
+                                            val chunk = buffer.readUtf8()
+                                            accumulated.append(chunk)
+                                            onStreamChunk.invoke(accumulated.toString())
+                                        }
+                                    }
+                                    rawResponse = accumulated.toString()
+                                } else {
+                                    rawResponse = response.body?.string()
+                                }
+                            } else {
+                                rawResponse = response.body?.string()
+                            }
                             Log.d(TAG, "Gemini Raw Response code: $lastCode")
 
                              if (!response.isSuccessful) {
