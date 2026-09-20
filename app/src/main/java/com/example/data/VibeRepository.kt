@@ -165,6 +165,8 @@ class VibeRepository(private val dao: VibeDao, private val context: Context) {
             val dbFiles = dao.getFilesForProject(projectName)
             val dbFilesMap = dbFiles.associateBy { it.path }
             val diskPaths = mutableSetOf<String>()
+            val toInsert = mutableListOf<ProjectFileEntity>()
+            val toUpdate = mutableListOf<ProjectFileEntity>()
             
             // Support large projects up to 10,000 files without dropping files
             diskFiles.take(10000).forEach { file ->
@@ -195,11 +197,21 @@ class VibeRepository(private val dao: VibeDao, private val context: Context) {
                 val existing = dbFilesMap[relativePath]
                 if (existing != null) {
                     if (existing.content != content && !content.startsWith("[Binary file:")) {
-                        dao.updateFile(existing.copy(content = content))
+                        toUpdate.add(existing.copy(content = content))
                     }
                 } else {
-                    dao.insertFile(ProjectFileEntity(projectName = projectName, path = relativePath, content = content))
+                    toInsert.add(ProjectFileEntity(projectName = projectName, path = relativePath, content = content))
                 }
+            }
+
+            // Perform batch insert and updates for instant performance
+            if (toInsert.isNotEmpty()) {
+                toInsert.chunked(250).forEach { chunk ->
+                    dao.insertFiles(chunk)
+                }
+            }
+            if (toUpdate.isNotEmpty()) {
+                toUpdate.forEach { dao.updateFile(it) }
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -388,9 +400,28 @@ class VibeRepository(private val dao: VibeDao, private val context: Context) {
         uris.forEach { uri ->
             try {
                 val fileName = getFileNameFromUri(uri) ?: "imported_${System.currentTimeMillis()}"
-                if (fileName.lowercase().endsWith(".zip")) {
+                val mimeType = context.contentResolver.getType(uri)?.lowercase() ?: ""
+                
+                // Read initial header bytes to check for ZIP / APK magic header
+                val headerBytes = ByteArray(4)
+                try {
+                    context.contentResolver.openInputStream(uri)?.use { input ->
+                        input.read(headerBytes)
+                    }
+                } catch (e: Exception) {
+                    // Ignore header probe failure
+                }
+
+                val isZipMagic = headerBytes.size >= 4 && 
+                    headerBytes[0] == 0x50.toByte() && headerBytes[1] == 0x4B.toByte() && 
+                    headerBytes[2] == 0x03.toByte() && headerBytes[3] == 0x04.toByte()
+                val isZipType = fileName.lowercase().endsWith(".zip") || 
+                    mimeType.contains("zip") || mimeType.contains("compressed") ||
+                    (isZipMagic && !fileName.lowercase().endsWith(".apk") && !mimeType.contains("android.package-archive"))
+
+                if (isZipType) {
                     extractZipToProject(projectName, uri)
-                } else if (fileName.lowercase().endsWith(".apk")) {
+                } else if (fileName.lowercase().endsWith(".apk") || mimeType.contains("android.package-archive")) {
                     // Save APK file first
                     val projectDir = getProjectDir(projectName)
                     val apkFile = File(projectDir, fileName)
