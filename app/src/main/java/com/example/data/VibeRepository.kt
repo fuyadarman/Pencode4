@@ -152,13 +152,11 @@ class VibeRepository(private val dao: VibeDao, private val context: Context) {
                         val ignoreDirs = listOf(".git", ".gradle", ".dart_tool", "build", "node_modules", "bin", "obj")
                         if (ignoreDirs.any { name.equals(it, ignoreCase = true) }) {
                             false
-                        } else if (name.startsWith(".") && !name.equals(".github", ignoreCase = true)) {
-                            false
                         } else {
                             true
                         }
                     }
-                    .filter { it.isFile && !it.name.startsWith(".") }
+                    .filter { it.isFile }
                     .toList()
             } catch (e: Exception) {
                 emptyList()
@@ -168,7 +166,8 @@ class VibeRepository(private val dao: VibeDao, private val context: Context) {
             val dbFilesMap = dbFiles.associateBy { it.path }
             val diskPaths = mutableSetOf<String>()
             
-            diskFiles.take(1500).forEach { file ->
+            // Support large projects up to 10,000 files without dropping files
+            diskFiles.take(10000).forEach { file ->
                 val relativePath = file.relativeTo(projectDir).path.replace("\\", "/")
                 diskPaths.add(relativePath)
                 
@@ -503,29 +502,7 @@ class VibeRepository(private val dao: VibeDao, private val context: Context) {
 
     suspend fun extractZipToProject(projectName: String, zipUri: android.net.Uri) = withContext(Dispatchers.IO) {
         val projectDir = getProjectDir(projectName)
-        context.contentResolver.openInputStream(zipUri)?.use { inputStream ->
-            val zipInputStream = ZipInputStream(inputStream)
-            var entry = zipInputStream.nextEntry
-            while (entry != null) {
-                if (!entry.isDirectory) {
-                    val entryName = entry.name
-                    val outFile = File(projectDir, entryName)
-                    outFile.parentFile?.mkdirs()
-                    
-                    val outputStream = FileOutputStream(outFile)
-                    val buffer = ByteArray(4096)
-                    var len = zipInputStream.read(buffer)
-                    while (len > 0) {
-                        outputStream.write(buffer, 0, len)
-                        len = zipInputStream.read(buffer)
-                    }
-                    outputStream.close()
-                }
-                zipInputStream.closeEntry()
-                entry = zipInputStream.nextEntry
-            }
-            zipInputStream.close()
-        }
+        com.example.util.ZipImportHelper.extractZipArchive(context, zipUri, projectDir)
         // After unzipping, sync storage back to DB
         syncStorageToDatabase(projectName)
     }
@@ -2638,53 +2615,28 @@ button {
     ): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             progressCallback("Initializing workspace...")
-            val cleanRepo = repo.trim().removePrefix("https://github.com/").removePrefix("http://github.com/").removeSuffix(".git")
-            val parts = cleanRepo.split("/")
-            if (parts.size < 2) {
+            val cleanRepo = com.example.git.GitRepositoryCloneEngine.parseGitHubRepoCoordinates(repo)
+            if (cleanRepo == null) {
                 return@withContext Result.failure(Exception("Invalid repository format. Please use 'owner/repo' or GitHub URL."))
             }
-            val owner = parts[0]
-            val repoName = parts[1]
+            val (owner, repoName) = cleanRepo
 
-            // Create project entry
+            // Create project entry if doesn't exist
             val project = ProjectEntity(projectName, "Cloned from $owner/$repoName", System.currentTimeMillis())
             dao.insertProject(project)
 
-            progressCallback("Downloading repository ZIP...")
-            val client = OkHttpClient()
-            val url = "https://api.github.com/repos/$owner/$repoName/zipball/$branch"
-            
-            val requestBuilder = Request.Builder().url(url)
-            if (!token.isNullOrBlank()) {
-                requestBuilder.header("Authorization", "token ${token.trim()}")
-            }
-            requestBuilder.header("Accept", "application/vnd.github.v3+json")
+            val cloneOutput = com.example.git.GitRepositoryCloneEngine.cloneGitHubRepository(
+                repoInput = repo,
+                projectName = projectName,
+                branch = branch,
+                token = token,
+                repository = this@VibeRepository,
+                progressCallback = progressCallback
+            )
 
-            val response = client.newCall(requestBuilder.build()).execute()
-            if (!response.isSuccessful) {
-                // If main branch fails, try master
-                if (branch == "main") {
-                    progressCallback("Main branch failed, trying master branch...")
-                    val fallbackUrl = "https://api.github.com/repos/$owner/$repoName/zipball/master"
-                    val fallbackReq = Request.Builder().url(fallbackUrl)
-                    if (!token.isNullOrBlank()) {
-                        fallbackReq.header("Authorization", "token ${token.trim()}")
-                    }
-                    val fallbackResp = client.newCall(fallbackReq.build()).execute()
-                    if (!fallbackResp.isSuccessful) {
-                        return@withContext Result.failure(Exception("Failed to download ZIP: ${fallbackResp.code} ${fallbackResp.message}"))
-                    }
-                    unzipAndLoad(projectName, fallbackResp.body?.byteStream() ?: throw Exception("Empty response body"))
-                } else {
-                    return@withContext Result.failure(Exception("Failed to download ZIP: ${response.code} ${response.message}"))
-                }
-            } else {
-                unzipAndLoad(projectName, response.body?.byteStream() ?: throw Exception("Empty response body"))
+            if (!cloneOutput.startsWith("Successfully")) {
+                return@withContext Result.failure(Exception(cloneOutput))
             }
-
-            // Sync database files to physical storage
-            progressCallback("Synchronizing database and local files...")
-            syncDatabaseToStorage(projectName)
 
             // Insert initial assistant message
             val welcomeMessage = ChatMessageEntity(

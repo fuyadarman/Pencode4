@@ -25,7 +25,8 @@ object ExtraToolHandlers {
         updateLog: (id: String, status: String, details: String) -> Unit,
         setAgentStatus: (String) -> Unit,
         normalizePath: (String) -> String,
-        activeSkills: List<AgentSkill> = emptyList()
+        activeSkills: List<AgentSkill> = emptyList(),
+        gitToken: String? = null
     ): String {
         return when (tool) {
             "generate_image", "pollinations_image", "create_image", "generate_logo", "create_logo" -> {
@@ -105,6 +106,43 @@ object ExtraToolHandlers {
 
                 val isSuccess = result.startsWith("Successfully")
                 updateLog(dupLog.id, if (isSuccess) "success" else "failed", result)
+                result
+            }
+            "clone_git_repo", "clone_github_repo", "clone_repo", "git_clone" -> {
+                val rawInput = (args?.url ?: args?.query ?: args?.message ?: args?.path ?: args?.search ?: "").trim()
+                // Extract GitHub URL or owner/repo from potential natural language instructions
+                val repoUrl = if (rawInput.contains("github.com/")) {
+                    val urlMatch = Regex("""https?://github\.com/[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+""").find(rawInput)?.value
+                    urlMatch ?: rawInput
+                } else if (rawInput.contains("/") && !rawInput.contains(" ")) {
+                    rawInput
+                } else {
+                    val slugMatch = Regex("""\b([a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+)\b""").find(rawInput)?.value
+                    slugMatch ?: rawInput
+                }
+                val targetBranch = args?.theme ?: args?.category ?: args?.solution ?: args?.issue ?: args?.filter ?: args?.instructions
+                val cloneLog = createLog(
+                    "Clone GitHub Repository",
+                    "thinking",
+                    "Cloning repository: $repoUrl",
+                    "git-clone"
+                )
+                addLog(cloneLog)
+                setAgentStatus("Cloning GitHub repository $repoUrl...")
+
+                val result = com.example.git.GitRepositoryCloneEngine.cloneGitHubRepository(
+                    repoInput = repoUrl,
+                    projectName = project.name,
+                    branch = targetBranch,
+                    token = gitToken,
+                    repository = repository,
+                    progressCallback = { status ->
+                        setAgentStatus(status)
+                    }
+                )
+
+                val isSuccess = result.startsWith("Successfully")
+                updateLog(cloneLog.id, if (isSuccess) "success" else "failed", result)
                 result
             }
             "clone_web_ui", "scrape_web_ui" -> {

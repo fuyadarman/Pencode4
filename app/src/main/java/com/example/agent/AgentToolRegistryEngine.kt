@@ -63,6 +63,7 @@ object AgentToolRegistryEngine {
         • generate_document(type: 'pdf'|'html'|'md'|'txt', title: string, content: string, theme?: string, path?: string) -> Generates documents.
 
         [WEB BROWSING & UI CLONING]
+        • clone_git_repo(url: string, branch?: string) -> Clones all files from a GitHub repository into current workspace.
         • browser_search(query: string) -> Searches the web or navigates to a URL.
         • browser_read() -> Reads the current webpage text.
         • browser_snapshot() -> Takes an indexed snapshot of all interactive elements on the page.
@@ -101,6 +102,7 @@ object AgentToolRegistryEngine {
             "'read_build_logs'(filter?, query?, maxLines?)",
             "'trigger_build'(message?) [Press Build button & push to GitHub]",
             "'list_all_tools'() [View all tools & commands with full docs]",
+            "'clone_git_repo'(url, branch?) [Clone GitHub repository files into workspace]",
             "'browser_search'(query)",
             "'browser_read'()",
             "'browser_snapshot'()",

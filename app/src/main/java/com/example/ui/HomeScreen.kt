@@ -771,7 +771,7 @@ fun CloneProjectDialog(
     var name by remember { mutableStateOf("") }
     var repo by remember { mutableStateOf("") }
     var token by remember { mutableStateOf("") }
-    var branch by remember { mutableStateOf("main") }
+    var branch by remember { mutableStateOf("") }
 
     Dialog(
         onDismissRequest = { if (gitProgress.isEmpty() || gitProgress.contains("complete", ignoreCase = true) || gitProgress.contains("failed", ignoreCase = true)) onDismiss() },
@@ -842,7 +842,19 @@ fun CloneProjectDialog(
 
                         OutlinedTextField(
                             value = repo,
-                            onValueChange = { repo = it },
+                            onValueChange = { input ->
+                                repo = input
+                                if (name.isBlank() && input.isNotBlank()) {
+                                    val guessedName = input.trim()
+                                        .removeSuffix(".git")
+                                        .removeSuffix("/")
+                                        .substringAfterLast("/")
+                                        .substringAfterLast(":")
+                                    if (guessedName.isNotBlank()) {
+                                        name = guessedName
+                                    }
+                                }
+                            },
                             label = { Text("Repository (owner/repo or URL)") },
                             placeholder = { Text("e.g. octocat/Hello-World") },
                             colors = OutlinedTextFieldDefaults.colors(
@@ -877,8 +889,8 @@ fun CloneProjectDialog(
                         OutlinedTextField(
                             value = branch,
                             onValueChange = { branch = it },
-                            label = { Text("Branch") },
-                            placeholder = { Text("main") },
+                            label = { Text("Branch (Optional)") },
+                            placeholder = { Text("Leave empty for default branch") },
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedTextColor = Color.White,
                                 unfocusedTextColor = Color.White,
@@ -936,7 +948,7 @@ fun CloneProjectDialog(
                         Button(
                             onClick = {
                                 if (name.isNotBlank() && repo.isNotBlank()) {
-                                    onClone(name, repo, token.ifBlank { null }, branch.ifBlank { "main" })
+                                    onClone(name, repo, token.ifBlank { null }, branch.trim())
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(

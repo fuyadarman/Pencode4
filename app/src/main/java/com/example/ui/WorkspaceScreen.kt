@@ -3244,6 +3244,21 @@ fun PreviewTabContent(
     val context = androidx.compose.ui.platform.LocalContext.current
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
 
+    val defaultPreviewUrl = remember(isReactViteFramework, hasWebDist) {
+        if (isReactViteFramework && hasWebDist) "http://localhost:5173" else "http://localhost:8080/index.html"
+    }
+    var customUrl by remember { mutableStateOf<String?>(null) }
+    var urlInputText by remember { mutableStateOf(defaultPreviewUrl) }
+    var canGoBack by remember { mutableStateOf(false) }
+    var canGoForward by remember { mutableStateOf(false) }
+
+    // Sync input text when project changes and no external site is loaded
+    LaunchedEffect(defaultPreviewUrl) {
+        if (customUrl == null) {
+            urlInputText = defaultPreviewUrl
+        }
+    }
+
     LaunchedEffect(isInspectorModeActive, webViewRef) {
         webViewRef?.evaluateJavascript("window.isInspectorModeActive = $isInspectorModeActive;", null)
     }
@@ -3257,31 +3272,134 @@ fun PreviewTabContent(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Browser URL/Title bar
+                // Navigation controls (Back & Forward)
+                if (customUrl != null) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(end = 6.dp)
+                    ) {
+                        IconButton(
+                            onClick = {
+                                if (webViewRef?.canGoBack() == true) {
+                                    webViewRef?.goBack()
+                                }
+                            },
+                            enabled = canGoBack,
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ArrowBack,
+                                contentDescription = "Back",
+                                tint = if (canGoBack) Color(0xFFC9D1D9) else Color(0xFF484F58),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        IconButton(
+                            onClick = {
+                                if (webViewRef?.canGoForward() == true) {
+                                    webViewRef?.goForward()
+                                }
+                            },
+                            enabled = canGoForward,
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ArrowForward,
+                                contentDescription = "Forward",
+                                tint = if (canGoForward) Color(0xFFC9D1D9) else Color(0xFF484F58),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
+
+                // Interactive Browser URL Address Bar
                 Surface(
                     color = Color(0xFF0D1117),
                     border = BorderStroke(1.dp, Color(0xFF30363D)),
                     shape = RoundedCornerShape(6.dp),
-                    modifier = Modifier.weight(1f).padding(end = 8.dp)
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp)
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Box(modifier = Modifier.size(7.dp).clip(CircleShape).background(Color(0xFF3FB950)))
-                        Text(
-                            text = if (isReactViteFramework && hasWebDist) "http://localhost:5173 (dist)" else "http://localhost:8080/index.html",
-                            color = Color(0xFF8B949E),
-                            fontSize = 11.sp,
-                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                            maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        Box(
+                            modifier = Modifier
+                                .size(7.dp)
+                                .clip(CircleShape)
+                                .background(if (customUrl != null) Color(0xFF38BDF8) else Color(0xFF3FB950))
                         )
+                        androidx.compose.foundation.text.BasicTextField(
+                            value = urlInputText,
+                            onValueChange = { urlInputText = it },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true,
+                            textStyle = androidx.compose.ui.text.TextStyle(
+                                color = Color(0xFFC9D1D9),
+                                fontSize = 11.sp,
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                            ),
+                            cursorBrush = androidx.compose.ui.graphics.SolidColor(Color(0xFF38BDF8)),
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                keyboardType = androidx.compose.ui.text.input.KeyboardType.Uri,
+                                imeAction = androidx.compose.ui.text.input.ImeAction.Go
+                            ),
+                            keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                                onGo = {
+                                    val raw = urlInputText.trim()
+                                    if (raw.isBlank() || raw == defaultPreviewUrl || raw == "http://localhost:8080" || raw == "http://localhost:5173") {
+                                        customUrl = null
+                                        urlInputText = defaultPreviewUrl
+                                        refreshTrigger++
+                                    } else {
+                                        val normalized = com.example.util.WebUrlHelper.normalizeUrl(raw)
+                                        customUrl = normalized
+                                        urlInputText = normalized
+                                        webViewRef?.loadUrl(normalized)
+                                    }
+                                }
+                            ),
+                            decorationBox = { innerTextField ->
+                                if (urlInputText.isEmpty()) {
+                                    Text(
+                                        text = "Search or type URL (e.g. youtube.com, google.com)",
+                                        color = Color(0xFF484F58),
+                                        fontSize = 11.sp,
+                                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                        maxLines = 1
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        )
+
+                        // Clear or Home button
+                        if (customUrl != null) {
+                            IconButton(
+                                onClick = {
+                                    customUrl = null
+                                    urlInputText = defaultPreviewUrl
+                                    refreshTrigger++
+                                },
+                                modifier = Modifier.size(20.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Return to Local Preview",
+                                    tint = Color(0xFF8B949E),
+                                    modifier = Modifier.size(13.dp)
+                                )
+                            }
+                        }
                     }
                 }
                 
@@ -3330,8 +3448,12 @@ fun PreviewTabContent(
 
                     Surface(
                         onClick = { 
-                            refreshTrigger++
-                            onClearLogs()
+                            if (customUrl != null) {
+                                webViewRef?.reload()
+                            } else {
+                                refreshTrigger++
+                                onClearLogs()
+                            }
                         },
                         shape = RoundedCornerShape(6.dp),
                         color = Color(0xFF21262D),
@@ -3352,22 +3474,25 @@ fun PreviewTabContent(
 
                     Surface(
                         onClick = {
-                            if (htmlFile == null) {
-                                android.widget.Toast.makeText(context, "No index.html found", android.widget.Toast.LENGTH_SHORT).show()
-                                return@Surface
+                            val targetUrl = if (customUrl != null) {
+                                customUrl!!
+                            } else {
+                                if (htmlFile == null && !hasWebDist) {
+                                    android.widget.Toast.makeText(context, "No index.html found", android.widget.Toast.LENGTH_SHORT).show()
+                                    return@Surface
+                                }
+                                com.example.api.LocalHttpServer.start()
+                                com.example.api.LocalHttpServer.updateFiles(files)
+                                "http://127.0.0.1:8080/index.html"
                             }
-                            com.example.api.LocalHttpServer.start()
-                            com.example.api.LocalHttpServer.updateFiles(files)
-
-                            val localUrl = "http://127.0.0.1:8080/index.html"
                             try {
-                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(localUrl)).apply {
+                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(targetUrl)).apply {
                                     addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                                 }
                                 context.startActivity(intent)
                             } catch (e: Exception) {
                                 try {
-                                    uriHandler.openUri(localUrl)
+                                    uriHandler.openUri(targetUrl)
                                 } catch (e2: Exception) {
                                     android.widget.Toast.makeText(context, "Failed to open browser: ${e2.message}", android.widget.Toast.LENGTH_SHORT).show()
                                 }
@@ -3401,7 +3526,7 @@ fun PreviewTabContent(
         ) {
             val activeProjectName = remember(files) { files.firstOrNull()?.projectName ?: "default" }
             key(activeProjectName, refreshTrigger, hasWebDist) {
-                if (!hasWebDist && isReactViteFramework) {
+                if (!hasWebDist && isReactViteFramework && customUrl == null) {
                     // Show a beautiful, native-looking compilation required card
                     AndroidView(
                         factory = { context ->
@@ -3427,14 +3552,14 @@ fun PreviewTabContent(
                         update = { /* no-op */ },
                         modifier = Modifier.fillMaxSize()
                     )
-                } else if (htmlFile == null && !hasWebDist) {
+                } else if (htmlFile == null && !hasWebDist && customUrl == null) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(Color(0xFF08080C)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("No HTML file found. Create index.html to preview.", color = Color.Gray)
+                        Text("No HTML file found. Create index.html to preview, or type any URL above.", color = Color.Gray)
                     }
                 } else {
                     val initialProcessedHtml = remember(htmlFile?.content) {
@@ -3460,6 +3585,7 @@ fun PreviewTabContent(
                                     cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
                                     allowFileAccessFromFileURLs = true
                                     allowUniversalAccessFromFileURLs = true
+                                    mediaPlaybackRequiresUserGesture = false
                                 }
                                 isFocusable = true
                                 isFocusableInTouchMode = true
@@ -3488,15 +3614,31 @@ fun PreviewTabContent(
                                 }
 
                                 webViewClient = object : WebViewClient() {
+                                    override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                                        return false
+                                    }
+
                                     override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                                         super.onPageStarted(view, url, favicon)
-                                        if (url == "https://virtual-app/" || url?.startsWith("https://virtual-app/") == true) {
-                                            onClearErrors()
+                                        if (url != null) {
+                                            if (url.startsWith("https://virtual-app/")) {
+                                                onClearErrors()
+                                            } else {
+                                                customUrl = url
+                                                urlInputText = url
+                                            }
+                                            canGoBack = view?.canGoBack() == true
+                                            canGoForward = view?.canGoForward() == true
                                         }
                                     }
 
                                     override fun onPageFinished(view: WebView?, url: String?) {
                                         super.onPageFinished(view, url)
+                                        canGoBack = view?.canGoBack() == true
+                                        canGoForward = view?.canGoForward() == true
+                                        if (url != null && !url.startsWith("https://virtual-app/")) {
+                                            urlInputText = url
+                                        }
                                         val js = """
                                             window.isInspectorModeActive = false;
                                             if (!window.inspectorInitialized) {
@@ -3652,7 +3794,9 @@ fun PreviewTabContent(
                                     currentOnElementSelected(identifier, outerHTML)
                                 }, "AndroidInspector")
                                 
-                                if (hasWebDist) {
+                                if (customUrl != null) {
+                                    loadUrl(customUrl!!)
+                                } else if (hasWebDist) {
                                     loadUrl("https://virtual-app/")
                                 } else if (htmlFile != null) {
                                     loadDataWithBaseURL(
@@ -3667,7 +3811,7 @@ fun PreviewTabContent(
                         },
                         update = { webView ->
                             webViewRef = webView
-                            if (!hasWebDist && htmlFile != null) {
+                            if (customUrl == null && !hasWebDist && htmlFile != null) {
                                 val currentContent = com.example.ui.preview.WebPreviewPerformanceGuard.preprocessHtmlSafely(htmlFile.content)
                                 if (lastLoadedHtml != currentContent) {
                                     lastLoadedHtml = currentContent
@@ -4839,6 +4983,17 @@ fun ExplorerPanel(
     var fileToMove by remember { mutableStateOf<String?>(null) }
     var fileToDeleteConfirm by remember { mutableStateOf<String?>(null) }
 
+    // Auto-expand top-level root folders on project load so files are immediately visible
+    LaunchedEffect(files) {
+        val rootFolders = files.mapNotNull { f ->
+            val clean = f.path.replace('\\', '/').trimStart('/')
+            if (clean.contains('/')) clean.substringBefore('/') else null
+        }.toSet()
+        if (rootFolders.isNotEmpty()) {
+            expandedFolders = expandedFolders + rootFolders
+        }
+    }
+
     val filePickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         contract = androidx.activity.result.contract.ActivityResultContracts.GetMultipleContents()
     ) { uris ->
@@ -4906,6 +5061,25 @@ fun ExplorerPanel(
                 letterSpacing = 1.sp
             )
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                IconButton(
+                    onClick = {
+                        val allFolderPaths = mutableSetOf<String>()
+                        fun collectFolders(n: FileNode) {
+                            if (!n.isFile && n.path.isNotEmpty()) allFolderPaths.add(n.path)
+                            n.children.forEach { collectFolders(it) }
+                        }
+                        collectFolders(rootNode)
+                        expandedFolders = if (expandedFolders.containsAll(allFolderPaths)) emptySet() else allFolderPaths
+                    },
+                    modifier = Modifier.size(20.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.UnfoldMore,
+                        contentDescription = "Expand or Collapse All",
+                        tint = Color(0xFF8B949E),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
                 IconButton(
                     onClick = onSearch,
                     modifier = Modifier.size(20.dp)
@@ -5159,7 +5333,7 @@ fun buildFileTree(files: List<ProjectFileEntity>): FileNode {
         val clean = f.path.replace('\\', '/').trimStart('/')
         !clean.startsWith("_next/") && !clean.startsWith(".next/") && !clean.startsWith("web-dist/")
     }
-    val displayFiles = if (filteredFiles.size > 2000) filteredFiles.take(2000) else filteredFiles
+    val displayFiles = if (filteredFiles.size > 10000) filteredFiles.take(10000) else filteredFiles
 
     displayFiles.forEach { file ->
         val normPath = file.path.replace('\\', '/').trimStart('/').trimEnd('/')

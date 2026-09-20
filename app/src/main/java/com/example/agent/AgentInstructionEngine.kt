@@ -53,8 +53,8 @@ object AgentInstructionEngine {
             return setOf(PromptIntent.CONVERSATIONAL_OR_EXPLANATION)
         }
 
-        // Web / Browser / UI Clone
-        if (hasBrowserUrls || p.contains("http://") || p.contains("https://") || p.contains("clone") || p.contains("website") || p.contains("inspect") || p.contains("screenshot") || p.contains("scrape") || p.contains("dom") || p.contains("css")) {
+        // Web / Browser / UI Clone / Git Clone
+        if (hasBrowserUrls || p.contains("http://") || p.contains("https://") || p.contains("github.com") || p.contains("clone") || p.contains("repo") || p.contains("github") || p.contains("ক্লোন") || p.contains("website") || p.contains("inspect") || p.contains("screenshot") || p.contains("scrape") || p.contains("dom") || p.contains("css")) {
             intents.add(PromptIntent.WEB_AND_UI_INSPECTION)
         }
 
@@ -165,16 +165,18 @@ object AgentInstructionEngine {
 
         // 3. Lean Core Directives (Optimized for KV Cache & low token footprint)
         sb.append("=== CORE DIRECTIVES ===\n")
-        sb.append("1. LATEST PROMPT: Execute current user prompt faithfully without unsolicited bloat. Call 'complete' when finished.\n")
-        sb.append("2. BUDGET: Max steps: $maxActionSteps. Language: match user (Bangla/English).\n")
-        sb.append("3. SEARCH FIRST (NO BLIND READ): STRICTLY FORBIDDEN from casually dumping files with 'read_file_range' or 'read_file'. If looking for code, functions, or text, you MUST use 'global_search' or 'grep' FIRST to locate the exact file and lines before reading!\n")
-        sb.append("4. NO VERIFICATION READS: STRICTLY FORBIDDEN from calling 'read_file' or 'read_file_range' to 'verify', 'check', or 'confirm' code edits. Once 'edit_file', 'multi_edit_file', or 'create_file' executes, your changes are already applied. Move directly to the next task or call 'complete'!\n")
-        sb.append("5. SURGICAL EDITS: Never overwrite files >30 lines. Read once before editing with 'edit_file'/'multi_edit_file'.\n")
-        sb.append("6. NEW FILES: Use 'create_file' ONLY for new files. Existing files must be edited.\n")
-        sb.append("7. DIAGNOSTICS: Use 'read_preview_errors' for preview bugs and 'read_build_errors' for build failures.\n")
-        sb.append("8. TOOL CATALOG: If any tool command is omitted or you need full documentation, invoke 'list_all_tools' to see all available tools and usage.\n")
-        sb.append("9. ${reasoningEffort.directive}\n")
-        sb.append("10. BUILD & PUSH: You can press the Build tab Build button to push code to GitHub and trigger compilation by invoking 'trigger_build'.\n")
+        sb.append("1. HIGHEST PRIORITY - LATEST CURRENT PROMPT ONLY: Focus STRICTLY and 100% on the latest user request. Do NOT repeat or get distracted by previous tasks or old queries in conversation history. Every action and tool call MUST directly serve the latest user prompt.\n")
+        sb.append("2. TIMELINE & CONTINUITY: Follow the chronological timeline of tool actions, thought reasoning, and responses recorded in this session. Never redo already completed work.\n")
+        sb.append("3. BUDGET: Max steps: $maxActionSteps. Language: match user (Bangla/English).\n")
+        sb.append("4. SEARCH FIRST (NO BLIND READ): STRICTLY FORBIDDEN from casually dumping files with 'read_file_range' or 'read_file'. If looking for code, functions, or text, you MUST use 'global_search' or 'grep' FIRST to locate the exact file and lines before reading!\n")
+        sb.append("5. NO VERIFICATION READS: STRICTLY FORBIDDEN from calling 'read_file' or 'read_file_range' to 'verify', 'check', or 'confirm' code edits. Once 'edit_file', 'multi_edit_file', or 'create_file' executes, your changes are already applied. Move directly to the next task or call 'complete'!\n")
+        sb.append("6. SURGICAL EDITS: Never overwrite files >30 lines. Read once before editing with 'edit_file'/'multi_edit_file'.\n")
+        sb.append("7. NEW FILES: Use 'create_file' ONLY for new files. Existing files must be edited.\n")
+        sb.append("8. DIAGNOSTICS: Use 'read_preview_errors' for preview bugs and 'read_build_errors' for build failures.\n")
+        sb.append("9. TOOL CATALOG: If any tool command is omitted or you need full documentation, invoke 'list_all_tools' to see all available tools and usage.\n")
+        sb.append("10. ${reasoningEffort.directive}\n")
+        sb.append("11. BUILD & PUSH: You can press the Build tab Build button to push code to GitHub and trigger compilation by invoking 'trigger_build'.\n")
+        sb.append("12. GITHUB CLONE: When user asks to clone a GitHub repository or gives a repository URL/link/name, immediately invoke 'clone_git_repo'(url = <repo_url_or_owner_slash_repo>). Do not ask manual steps or refuse.\n")
 
         // 4. Skills Module (Only if skills are active)
         if (activeSkills.isNotEmpty()) {
@@ -228,6 +230,7 @@ object AgentInstructionEngine {
         }
 
         // Web / Internet / Browser inspection & cloning tools
+        tools.add("'clone_git_repo'(url, branch?) [Clone GitHub repository files directly into workspace]")
         tools.add("'browser_search'(query)")
         tools.add("'browser_read'()")
         tools.add("'browser_snapshot'()")

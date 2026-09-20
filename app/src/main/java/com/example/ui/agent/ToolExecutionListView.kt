@@ -135,6 +135,17 @@ object ToolExecutionItemMapper {
                     details = log.details
                 )
             }
+            lowerTitle.contains("clone github repository") || lowerTitle.contains("clone_git_repo") || lowerTitle.contains("git_clone") || lowerTitle.contains("clone repo") -> {
+                val target = details.lineSequence().firstOrNull()?.trim() ?: title
+                ToolStyleSpec(
+                    actionTitle = "Cloned GitHub Repo",
+                    targetLabel = target.take(80),
+                    icon = Icons.Default.CloudDownload,
+                    iconColor = Color(0xFF58A6FF),
+                    isExecuting = isExecuting,
+                    details = log.details
+                )
+            }
             lowerTitle.contains("deep clone web ui") || lowerTitle.contains("clone web ui") || lowerTitle.contains("clone_web_ui") || lowerTitle.contains("scrape_web_ui") -> {
                 val target = details.lineSequence().firstOrNull()?.trim() ?: title
                 ToolStyleSpec(

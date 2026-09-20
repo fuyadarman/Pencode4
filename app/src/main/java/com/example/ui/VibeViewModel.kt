@@ -3960,6 +3960,13 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                             t.contains("delete") || t.contains("command") || t.contains("patch")
                         }
 
+                        var turnModelRecorded = false
+                        val stepResponseJsonStr = try {
+                            moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)
+                        } catch (e: Exception) {
+                            "{}"
+                        }
+
                         for (call in toolCalls) {
                             val tool = call.tool
                             val args = call.arguments
@@ -4270,6 +4277,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 break
                             }
                             "generate_image", "pollinations_image", "create_image", "generate_logo", "create_logo",
+                            "clone_git_repo", "clone_github_repo", "clone_repo", "git_clone",
                             "copy_file", "duplicate_code", "duplicate_file", "clone_web_ui", "scrape_web_ui", "deep_clone_web_ui",
                             "fetch_url", "read_url", "scrape_url", "skill_check", "list_skills", "inspect_skill",
                             "resize_image", "scale_image", "image_resize", "compress_image", "browser_search", "browser_click", "browser_read", "create_todo_list", "complete_todo_task",
@@ -4292,7 +4300,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     updateLog = { id, status, details -> updateAiLog(id, status, details) },
                                     setAgentStatus = { status -> _agentStatus.value = status },
                                     normalizePath = { path -> normalizePath(path) },
-                                    activeSkills = _agentSkills.value
+                                    activeSkills = _agentSkills.value,
+                                    gitToken = _githubToken.value.ifEmpty { _explorerGithubToken.value }
                                 )
 
                                 if (result.startsWith("Successfully") || result.contains("Successfully")) {
