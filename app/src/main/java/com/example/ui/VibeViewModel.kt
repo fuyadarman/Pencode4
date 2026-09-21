@@ -3745,6 +3745,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             val loopProtectionEngine = com.example.agent.AgentLoopProtectionEngine()
             com.example.agent.AgentSearchBlockAutoHealer.resetSession()
             com.example.agent.AgentReadLoopPolicy.resetSession()
+            com.example.agent.OpenCodeLoopGuardEngine.reset()
             var lastDiagnosedError: String? = null
 
             val handleComplete: suspend (String) -> Unit = { finishMsg: String ->
@@ -3925,7 +3926,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                             consecutiveThinkOnlyCount = 0
                         }
 
-                        if (toolCalls.isEmpty() || (toolCalls.size == 1 && toolCalls[0].tool == "complete") || consecutiveThinkOnlyCount >= 2) {
+                        val hasExplicitComplete = toolCalls.any { it.tool == "complete" }
+                        val hasModifiedFiles = filesModifiedThisPrompt || loopProtectionEngine.hasModifiedAnyFiles()
+
+                        if (hasExplicitComplete) {
                             val candidateMsg = toolCalls.firstOrNull { it.tool == "complete" }?.arguments?.message ?: stepMsg
                             val completionCheck = com.example.agent.AgentModelExecutionSafeguard.validateTaskCompletion(
                                 userPrompt = userPrompt,
@@ -3944,13 +3948,28 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 )
                                 _aiActionLogs.value = _aiActionLogs.value + failLog
                             } else {
-                                if (consecutiveThinkOnlyCount >= 2) {
-                                    handleComplete(lastThought ?: "Task completed after reasoning.")
-                                } else if (toolCalls.size == 1 && toolCalls[0].tool == "complete") {
-                                    handleComplete(toolCalls[0].arguments?.message ?: "Task completed successfully!")
-                                }
+                                handleComplete(candidateMsg ?: "Task completed successfully!")
                                 loopCompleted = true
                                 break
+                            }
+                        } else if (com.example.agent.OpenCodeLoopGuardEngine.shouldAutoCompleteFromThought(thoughtText, hasModifiedFiles)) {
+                            handleComplete(thoughtText.ifBlank { "Task completed successfully!" })
+                            loopCompleted = true
+                            break
+                        } else if (toolCalls.isEmpty() || consecutiveThinkOnlyCount >= 2) {
+                            if (hasModifiedFiles) {
+                                handleComplete(lastThought ?: "Task completed after reasoning.")
+                                loopCompleted = true
+                                break
+                            } else {
+                                val nudge = com.example.agent.OpenCodeLoopGuardEngine.buildIdleThinkingNudge(hasModifiedFiles = false)
+                                history.add(Content(role = "user", parts = listOf(Part(text = nudge))))
+                                val nudgeLog = createAiLog(
+                                    title = "AI Direct Action Guidance",
+                                    status = "thinking",
+                                    details = "Guiding model to execute tool actions..."
+                                )
+                                _aiActionLogs.value = _aiActionLogs.value + nudgeLog
                             }
                         }
 
@@ -4008,6 +4027,37 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 }
                                 actionsCount++
                                 _agentStatus.value = "Executing tool '$tool' (Action $actionsCount/$maxActionSteps)..."
+
+                                val repCheck = com.example.agent.OpenCodeLoopGuardEngine.checkAndRecordRepetition(
+                                    tool = tool,
+                                    args = args,
+                                    turn = turn,
+                                    hasModifiedFiles = filesModifiedThisPrompt || loopProtectionEngine.hasModifiedAnyFiles()
+                                )
+                                when (repCheck) {
+                                    is com.example.agent.OpenCodeLoopGuardEngine.RepetitionResult.AbortRepetition -> {
+                                        val abortLog = createAiLog(
+                                            title = "Repetition Loop Intercepted",
+                                            status = "success",
+                                            details = repCheck.summary
+                                        )
+                                        _aiActionLogs.value = _aiActionLogs.value + abortLog
+                                        handleComplete(repCheck.summary)
+                                        loopCompleted = true
+                                        break
+                                    }
+                                    is com.example.agent.OpenCodeLoopGuardEngine.RepetitionResult.WarnAndNudge -> {
+                                        val warnLog = createAiLog(
+                                            title = "Repetition Warning",
+                                            status = "failed",
+                                            details = repCheck.message
+                                        )
+                                        _aiActionLogs.value = _aiActionLogs.value + warnLog
+                                        history.add(Content(role = "user", parts = listOf(Part(text = "System Notice: ${repCheck.message}"))))
+                                        continue
+                                    }
+                                    com.example.agent.OpenCodeLoopGuardEngine.RepetitionResult.Proceed -> { /* proceed normally */ }
+                                }
                             }
                             
                             when (tool) {
