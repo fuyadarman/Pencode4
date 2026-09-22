@@ -34,8 +34,6 @@ fun McpPlatformLogo(
                     McpPlatformType.SUPABASE -> Color(0xFF121212)
                     McpPlatformType.CLOUDFLARE -> Color(0xFF1E1E1E)
                     McpPlatformType.VERCEL -> Color(0xFF000000)
-                    McpPlatformType.GOOGLE_SEARCH_CONSOLE -> Color(0xFF1F2937)
-                    McpPlatformType.GOOGLE_STITCH -> Color(0xFFF8F9FA)
                     McpPlatformType.CUSTOM -> Color(0xFF1E1B2E)
                 }
             ),
@@ -111,28 +109,6 @@ private fun CanvasLogoFallback(
                         close()
                     }
                     drawPath(path = path, color = white)
-                }
-                McpPlatformType.GOOGLE_SEARCH_CONSOLE -> {
-                    // Google Search Console Blue/White analytics bars & magnifier
-                    val gBlue = Color(0xFF4285F4)
-                    val gGreen = Color(0xFF34A853)
-                    val gYellow = Color(0xFFFBBC05)
-                    drawRect(gBlue, Offset(width * 0.18f, height * 0.55f), Size(width * 0.16f, height * 0.35f))
-                    drawRect(gYellow, Offset(width * 0.42f, height * 0.35f), Size(width * 0.16f, height * 0.55f))
-                    drawRect(gGreen, Offset(width * 0.66f, height * 0.15f), Size(width * 0.16f, height * 0.75f))
-                }
-                McpPlatformType.GOOGLE_STITCH -> {
-                    // Google 4-color dots
-                    val blue = Color(0xFF4285F4)
-                    val red = Color(0xFFEA4335)
-                    val yellow = Color(0xFFFBBC05)
-                    val green = Color(0xFF34A853)
-
-                    val r = width * 0.22f
-                    drawCircle(color = blue, radius = r, center = Offset(width * 0.3f, height * 0.3f))
-                    drawCircle(color = red, radius = r, center = Offset(width * 0.7f, height * 0.3f))
-                    drawCircle(color = yellow, radius = r, center = Offset(width * 0.3f, height * 0.7f))
-                    drawCircle(color = green, radius = r, center = Offset(width * 0.7f, height * 0.7f))
                 }
                 McpPlatformType.CUSTOM -> {
                     // Node Connection Purple symbol

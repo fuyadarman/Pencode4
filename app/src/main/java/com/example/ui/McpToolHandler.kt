@@ -125,24 +125,6 @@ object McpToolHandler {
                 result
             }
             else -> {
-                if (tool.startsWith("gsc_")) {
-                    val enabledServers = mcpManager.getEnabledServersForWorkspace(project.name)
-                    val gscServer = enabledServers.find { it.platform == "GOOGLE_SEARCH_CONSOLE" || it.url.contains("searchconsole") }
-                        ?: mcpManager.servers.value.find { it.platform == "GOOGLE_SEARCH_CONSOLE" }
-                    if (gscServer != null) {
-                        val mcpLog = createLog(
-                            "Search Console: $tool",
-                            "Executing Google Search Console operation '$tool'"
-                        )
-                        addLog(mcpLog)
-                        val mcpArgsJson = com.example.data.mcp.McpExecutionEngine.extractMcpPayload(args)
-                        val result = mcpManager.executeMcpToolCall(gscServer.id, tool, mcpArgsJson)
-                        val isSuccess = !result.startsWith("Error:") && !result.startsWith("MCP Call Error:")
-                        updateLog(mcpLog.id, if (isSuccess) "success" else "failed", if (isSuccess) "GSC ($tool)" else result)
-                        return result
-                    }
-                }
-
                 // Check tool registry & enabled servers for direct tool invocations (e.g. supabase_mcp__query or list_tables)
                 val enabledServers = mcpManager.getEnabledServersForWorkspace(project.name)
                 val allServers = mcpManager.servers.value

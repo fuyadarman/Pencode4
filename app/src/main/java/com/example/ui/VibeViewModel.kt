@@ -144,9 +144,9 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     val mcpManager = McpManager(application)
     val mcpServers: StateFlow<List<McpServer>> = mcpManager.servers
 
-    fun startMcpOAuthFlow(activity: android.content.Context, serverId: String, clientId: String?) {
+    fun startMcpOAuthFlow(activity: android.content.Context, serverId: String, clientId: String?, redirectUri: String? = null) {
         viewModelScope.launch {
-            mcpManager.startOAuthFlow(activity, serverId, clientId)
+            mcpManager.startOAuthFlow(activity, serverId, clientId, redirectUri)
         }
     }
 
@@ -4048,12 +4048,14 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                         break
                                     }
                                     is com.example.agent.OpenCodeLoopGuardEngine.RepetitionResult.WarnAndNudge -> {
-                                        val warnLog = createAiLog(
-                                            title = "Repetition Warning",
-                                            status = "failed",
-                                            details = repCheck.message
-                                        )
-                                        _aiActionLogs.value = _aiActionLogs.value + warnLog
+                                        if (!repCheck.silentInUi) {
+                                            val warnLog = createAiLog(
+                                                title = "Repetition Warning",
+                                                status = "failed",
+                                                details = repCheck.message
+                                            )
+                                            _aiActionLogs.value = _aiActionLogs.value + warnLog
+                                        }
                                         history.add(Content(role = "user", parts = listOf(Part(text = "System Notice: ${repCheck.message}"))))
                                         continue
                                     }

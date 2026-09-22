@@ -65,8 +65,6 @@ object McpExecutionEngine {
             cleanToolName.startsWith("supabase_") -> allServers.find { it.platform == "SUPABASE" }
             cleanToolName.startsWith("cloudflare_") -> allServers.find { it.platform == "CLOUDFLARE" }
             cleanToolName.startsWith("vercel_") -> allServers.find { it.platform == "VERCEL" }
-            cleanToolName.startsWith("gsc_") -> allServers.find { it.platform == "GOOGLE_SEARCH_CONSOLE" }
-            cleanToolName.startsWith("stitch_") -> allServers.find { it.platform == "GOOGLE_STITCH" }
             else -> null
         }
         if (platformPrefixMatch != null) return platformPrefixMatch

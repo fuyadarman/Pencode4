@@ -40,7 +40,7 @@ fun McpManagementDialog(
     onAddServer: (name: String, url: String, platform: String, apiKey: String?) -> Unit,
     onToggleWorkspace: (serverId: String, enabled: Boolean) -> Unit,
     onTestConnect: suspend (serverId: String) -> Unit,
-    onStartOAuthFlow: (android.content.Context, String, String?) -> Unit = { _, _, _ -> },
+    onStartOAuthFlow: (android.content.Context, String, String?, String?) -> Unit = { _, _, _, _ -> },
     onDeleteServer: (serverId: String) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -55,12 +55,12 @@ fun McpManagementDialog(
         val target = selectedOAuthServer!!
         McpOAuthConnectDialog(
             server = target,
-            onStartOAuth = { clientId ->
+            onStartOAuth = { clientId, redirectUri ->
                 selectedOAuthServer = null
                 onAddServer(target.name, target.url, target.platform, null)
                 val activeServerId = servers.find { it.platform == target.platform || it.id == target.id }?.id ?: target.id
                 val activity = context as? android.app.Activity ?: (context as? android.content.ContextWrapper)?.baseContext as? android.app.Activity ?: context
-                onStartOAuthFlow(activity, activeServerId, clientId)
+                onStartOAuthFlow(activity, activeServerId, clientId, redirectUri)
             },
             onConfirmConnect = { token ->
                 selectedOAuthServer = null
@@ -542,8 +542,6 @@ fun McpServerItemCard(
         McpPlatformType.SUPABASE -> Color(0xFF3ECF8E)
         McpPlatformType.CLOUDFLARE -> Color(0xFFF38020)
         McpPlatformType.VERCEL -> Color(0xFFE2E8F0)
-        McpPlatformType.GOOGLE_SEARCH_CONSOLE -> Color(0xFF4285F4)
-        McpPlatformType.GOOGLE_STITCH -> Color(0xFF60A5FA)
         McpPlatformType.CUSTOM -> Color(0xFFA78BFA)
     }
 

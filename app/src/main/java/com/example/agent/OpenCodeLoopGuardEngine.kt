@@ -62,7 +62,7 @@ object OpenCodeLoopGuardEngine {
 
     sealed class RepetitionResult {
         object Proceed : RepetitionResult()
-        data class WarnAndNudge(val message: String) : RepetitionResult()
+        data class WarnAndNudge(val message: String, val silentInUi: Boolean = false) : RepetitionResult()
         data class AbortRepetition(val summary: String) : RepetitionResult()
     }
 
@@ -95,6 +95,20 @@ object OpenCodeLoopGuardEngine {
         val normalizedTool = tool.lowercase().trim()
         val signature = ActionSignature(normalizedTool, target, turn)
         actionHistory.add(signature)
+
+        val isReadFile = normalizedTool in setOf("read_file", "view_file", "read_file_range")
+        if (isReadFile && target.isNotEmpty()) {
+            val previousReadsOfTarget = actionHistory.dropLast(1).count {
+                it.tool in setOf("read_file", "view_file", "read_file_range") && it.target.equals(target, ignoreCase = true)
+            }
+            if (previousReadsOfTarget >= 1) {
+                // Background warning when the AI reads the same file twice (invisible in app UI)
+                return RepetitionResult.WarnAndNudge(
+                    message = "Background Warning: You have already read '$target' earlier in this conversation. You already possess its complete contents in your history context. Do NOT re-read '$target'. Proceed directly to applying edits or calling the next necessary action.",
+                    silentInUi = true
+                )
+            }
+        }
 
         val isReadOrSearch = normalizedTool in setOf(
             "read_file", "view_file", "read_file_range",

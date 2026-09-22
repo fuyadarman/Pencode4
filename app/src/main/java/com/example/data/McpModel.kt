@@ -30,20 +30,6 @@ enum class McpPlatformType(
         "https://vercel.com/account/tokens",
         "https://cdn.simpleicons.org/vercel/FFFFFF"
     ),
-    GOOGLE_SEARCH_CONSOLE(
-        "Google Search Console",
-        "https://searchconsole.googleapis.com/mcp",
-        "Google Search Console Read & Write (Analytics, Sitemaps, Indexing)",
-        "https://search.google.com/search-console",
-        "https://cdn.simpleicons.org/googlesearchconsole/4285F4"
-    ),
-    GOOGLE_STITCH(
-        "Google Stitch",
-        "https://stitch.googleapis.com/mcp",
-        "Google Stitch Integration MCP",
-        "https://console.cloud.google.com/apis/credentials",
-        "https://cdn.simpleicons.org/google/4285F4"
-    ),
     CUSTOM(
         "Custom MCP",
         "https://my-mcp-server.com/mcp",

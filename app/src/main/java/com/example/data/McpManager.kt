@@ -82,7 +82,11 @@ class McpManager(private val context: Context) {
     }
 
     private fun deduplicateServers() {
-        val current = _servers.value.filter { it.platform != "APPWRITE" }
+        val current = _servers.value.filter { 
+            it.platform != "APPWRITE" &&
+            !it.platform.startsWith("GOOGLE") &&
+            !it.name.contains("Google", ignoreCase = true)
+        }
         val uniqueMap = mutableMapOf<String, McpServer>()
         for (server in current) {
             val key = if (server.platform != "CUSTOM") server.platform else server.url.lowercase().trim()
@@ -94,17 +98,6 @@ class McpManager(private val context: Context) {
                     uniqueMap[key] = server
                 }
             }
-        }
-        // Ensure Google Search Console preset is present
-        if (!uniqueMap.containsKey("GOOGLE_SEARCH_CONSOLE")) {
-            uniqueMap["GOOGLE_SEARCH_CONSOLE"] = McpServer(
-                id = UUID.randomUUID().toString(),
-                name = "Google Search Console",
-                url = "https://searchconsole.googleapis.com/mcp",
-                platform = "GOOGLE_SEARCH_CONSOLE",
-                status = "Disconnected",
-                availableTools = GoogleSearchConsoleMcpService.getAvailableTools()
-            )
         }
         val refreshed = uniqueMap.values.map { server ->
             if (server.availableTools.isEmpty()) {
@@ -152,22 +145,6 @@ class McpManager(private val context: Context) {
                 platform = "VERCEL",
                 status = "Disconnected",
                 availableTools = getPresetToolsForPlatform("VERCEL", "Vercel MCP")
-            ),
-            McpServer(
-                id = UUID.randomUUID().toString(),
-                name = "Google Search Console",
-                url = "https://searchconsole.googleapis.com/mcp",
-                platform = "GOOGLE_SEARCH_CONSOLE",
-                status = "Disconnected",
-                availableTools = GoogleSearchConsoleMcpService.getAvailableTools()
-            ),
-            McpServer(
-                id = UUID.randomUUID().toString(),
-                name = "Google Stitch MCP",
-                url = "https://stitch.googleapis.com/mcp",
-                platform = "GOOGLE_STITCH",
-                status = "Disconnected",
-                availableTools = getPresetToolsForPlatform("GOOGLE_STITCH", "Google Stitch MCP")
             )
         )
         _servers.value = presets
@@ -242,7 +219,8 @@ class McpManager(private val context: Context) {
     suspend fun startOAuthFlow(
         activityContext: Context,
         serverId: String,
-        customClientId: String? = null
+        customClientId: String? = null,
+        customRedirectUri: String? = null
     ): Result<String> = withContext(Dispatchers.IO) {
         val server = _servers.value.find { it.id == serverId }
             ?: return@withContext Result.failure(Exception("MCP Server '$serverId' not found."))
@@ -274,6 +252,7 @@ class McpManager(private val context: Context) {
             serverId = server.id,
             metadata = metadata,
             customClientId = customClientId,
+            customRedirectUri = customRedirectUri,
             onLocalCallback = { uri ->
                 CoroutineScope(Dispatchers.IO).launch {
                     handleOAuthCallback(server.id, uri)
@@ -333,13 +312,6 @@ class McpManager(private val context: Context) {
         updateServer(server.copy(status = "Connecting"))
 
         try {
-            if (server.platform == "GOOGLE_SEARCH_CONSOLE" || server.url.contains("searchconsole") || server.url.contains("webmasters")) {
-                val gscTools = GoogleSearchConsoleMcpService.getAvailableTools()
-                toolRegistry.registerToolsForServer(server, gscTools)
-                updateServer(server.copy(status = "Connected", availableTools = gscTools))
-                return@withContext Result.success(gscTools)
-            }
-
             val metadata = cachedMetadata[server.id] ?: authManager.discoverOAuthMetadata(server.url).getOrNull()
             val tokenEp = metadata?.tokenEndpoint
 
@@ -502,14 +474,6 @@ class McpManager(private val context: Context) {
                     parametersJsonSchema = """{"type":"object","properties":{"key":{"type":"string"},"value":{"type":"string"},"target":{"type":"string","enum":["production","preview","development"]}},"required":["key","value"]}"""
                 )
             )
-            "GOOGLE_SEARCH_CONSOLE" -> GoogleSearchConsoleMcpService.getAvailableTools()
-            "GOOGLE_STITCH" -> listOf(
-                McpToolInfo(
-                    name = "stitch_sync_schema",
-                    description = "Sync data pipeline connectors and database tables in Google Stitch.",
-                    parametersJsonSchema = """{"type":"object","properties":{"connector_name":{"type":"string"},"action":{"type":"string","enum":["sync","status","list_tables"]}},"required":["action"]}"""
-                )
-            )
             else -> emptyList()
         }
     }
@@ -531,10 +495,6 @@ class McpManager(private val context: Context) {
             } 
         } ?: _servers.value.firstOrNull { it.status.startsWith("Connected") }
           ?: return@withContext "Error: MCP Server '$serverId' not found or no connected MCP server available."
-
-        if (server.platform == "GOOGLE_SEARCH_CONSOLE" || server.url.contains("searchconsole") || toolName.startsWith("gsc_")) {
-            return@withContext gscService.executeTool(server.id, toolName, argumentsJson, server)
-        }
 
         val metadata = cachedMetadata[server.id] ?: authManager.discoverOAuthMetadata(server.url).getOrNull()
         val tokenEp = metadata?.tokenEndpoint

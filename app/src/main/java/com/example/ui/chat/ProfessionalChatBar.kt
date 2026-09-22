@@ -53,6 +53,18 @@ fun ProfessionalChatBar(
 ) {
     val canSend = chatInputText.isNotBlank() || attachedFiles.isNotEmpty() || taggedFiles.isNotEmpty() || taggedSkills.isNotEmpty()
     var showPlusMenu by remember { mutableStateOf(false) }
+    var showReasoningEffortDialog by remember { mutableStateOf(false) }
+
+    if (showReasoningEffortDialog) {
+        ReasoningEffortSelectorDialog(
+            currentEffort = currentReasoningEffort,
+            onSelectEffort = {
+                onSelectReasoningEffort(it)
+                showReasoningEffortDialog = false
+            },
+            onDismiss = { showReasoningEffortDialog = false }
+        )
+    }
 
     Column(
         modifier = modifier.fillMaxWidth()
@@ -209,13 +221,7 @@ fun ProfessionalChatBar(
                                     },
                                     onClick = {
                                         showPlusMenu = false
-                                        val nextEffort = when (currentReasoningEffort) {
-                                            ReasoningEffort.SMALL -> ReasoningEffort.NORMAL
-                                            ReasoningEffort.NORMAL -> ReasoningEffort.MEDIUM
-                                            ReasoningEffort.MEDIUM -> ReasoningEffort.MAX
-                                            ReasoningEffort.MAX -> ReasoningEffort.SMALL
-                                        }
-                                        onSelectReasoningEffort(nextEffort)
+                                        showReasoningEffortDialog = true
                                     }
                                 )
                             }
@@ -251,7 +257,7 @@ fun ProfessionalChatBar(
                             }
                         }
 
-                        // Dedicated Thinking Effort Pill Button
+                        // Dedicated Thinking Effort Pill Button (Opens list selection dialog)
                         val effortColor = when (currentReasoningEffort) {
                             ReasoningEffort.SMALL -> Color(0xFF38BDF8)
                             ReasoningEffort.NORMAL -> Color(0xFF34D399)
@@ -260,13 +266,7 @@ fun ProfessionalChatBar(
                         }
                         Surface(
                             onClick = {
-                                val nextEffort = when (currentReasoningEffort) {
-                                    ReasoningEffort.SMALL -> ReasoningEffort.NORMAL
-                                    ReasoningEffort.NORMAL -> ReasoningEffort.MEDIUM
-                                    ReasoningEffort.MEDIUM -> ReasoningEffort.MAX
-                                    ReasoningEffort.MAX -> ReasoningEffort.SMALL
-                                }
-                                onSelectReasoningEffort(nextEffort)
+                                showReasoningEffortDialog = true
                             },
                             shape = RoundedCornerShape(14.dp),
                             color = effortColor.copy(alpha = 0.16f),
@@ -288,6 +288,12 @@ fun ProfessionalChatBar(
                                     fontSize = 11.5.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = effortColor
+                                )
+                                Icon(
+                                    imageVector = Icons.Default.KeyboardArrowDown,
+                                    contentDescription = "Choose effort",
+                                    tint = effortColor.copy(alpha = 0.8f),
+                                    modifier = Modifier.size(13.dp)
                                 )
                             }
                         }

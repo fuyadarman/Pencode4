@@ -404,6 +404,7 @@ class McpAuthManager(
         serverId: String,
         metadata: McpOAuthMetadata,
         customClientId: String? = null,
+        customRedirectUri: String? = null,
         scopes: List<String> = emptyList(),
         onLocalCallback: ((Uri) -> Unit)? = null
     ): Result<String> = withContext(Dispatchers.Main) {
@@ -417,8 +418,12 @@ class McpAuthManager(
             tokenStore.saveCodeVerifier(serverId, verifier, state)
 
             val currentTokens = tokenStore.getTokens(serverId) ?: McpTokenData(serverId = serverId, accessToken = "")
-            val chosenRedirectUri = currentTokens.redirectUri
-                ?: (if (metadata.authorizationEndpoint.contains("vercel") || serverId.contains("vercel", ignoreCase = true)) "http://localhost:8080/callback" else DEFAULT_REDIRECT_URI)
+            val chosenRedirectUri = when {
+                !customRedirectUri.isNullOrBlank() -> customRedirectUri
+                !currentTokens.redirectUri.isNullOrBlank() -> currentTokens.redirectUri!!
+                metadata.authorizationEndpoint.contains("vercel") || serverId.contains("vercel", ignoreCase = true) -> "http://localhost:8080/callback"
+                else -> DEFAULT_REDIRECT_URI
+            }
 
             tokenStore.saveTokens(
                 currentTokens.copy(

@@ -15,6 +15,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -29,27 +31,28 @@ import com.example.data.McpServer
 @Composable
 fun McpOAuthConnectDialog(
     server: McpServer,
-    onStartOAuth: (clientId: String?) -> Unit,
+    onStartOAuth: (clientId: String?, redirectUri: String?) -> Unit,
     onConfirmConnect: (tokenOrApiKey: String) -> Unit,
     onDismiss: () -> Unit
 ) {
     val uriHandler = LocalUriHandler.current
+    val clipboardManager = LocalClipboardManager.current
     val platformType = McpPlatformType.fromString(server.platform)
+
     var authMode by remember { mutableStateOf(0) } // 0: OAuth 2.0 Flow, 1: Personal Access Token
     var tokenValue by remember { mutableStateOf(server.apiKey ?: "") }
     var oauthClientId by remember { 
         val envClientId = com.example.BuildConfig.SUPABASE_CLIENT_ID
         val defaultSupabaseId = if (envClientId.isNotBlank() && envClientId != "null") envClientId else "0191848f-8044-4d51-b69a-296f32c4d900"
-        val envGoogleId = try { com.example.BuildConfig.GOOGLE_OAUTH_CLIENT_ID } catch (e: Throwable) { "" }
-        val defaultGoogleId = if (envGoogleId.isNotBlank() && envGoogleId != "null") envGoogleId else "798989414934-nn16qvt7t909d7hvc73ccvr1u0t24rom.apps.googleusercontent.com"
-        val isGooglePlatform = platformType == com.example.data.McpPlatformType.GOOGLE_SEARCH_CONSOLE || platformType == com.example.data.McpPlatformType.GOOGLE_STITCH
         mutableStateOf(
             when {
                 platformType == com.example.data.McpPlatformType.SUPABASE -> defaultSupabaseId
-                isGooglePlatform -> defaultGoogleId
                 else -> ""
             }
         ) 
+    }
+    var oauthRedirectUri by remember {
+        mutableStateOf("https://pencode.vercel.app/oauth/callback")
     }
     var showToken by remember { mutableStateOf(false) }
     var isAuthorizing by remember { mutableStateOf(false) }
@@ -234,18 +237,14 @@ fun McpOAuthConnectDialog(
                         onValueChange = { oauthClientId = it },
                         label = {
                             Text(
-                                if (platformType == com.example.data.McpPlatformType.GOOGLE_SEARCH_CONSOLE || platformType == com.example.data.McpPlatformType.GOOGLE_STITCH)
-                                    "Google Cloud OAuth Client ID"
-                                else
-                                    "OAuth Client ID / App ID (Optional)",
+                                "OAuth Client ID / App ID (Optional)",
                                 fontSize = 11.sp
                             )
                         },
                         placeholder = { 
                             Text(
-                                when (platformType) {
-                                    com.example.data.McpPlatformType.SUPABASE -> "e.g. 123e4567-e89b-12d3-a456-426614174000 (UUID)"
-                                    com.example.data.McpPlatformType.GOOGLE_SEARCH_CONSOLE, com.example.data.McpPlatformType.GOOGLE_STITCH -> "e.g. 123456...apps.googleusercontent.com"
+                                when {
+                                    platformType == com.example.data.McpPlatformType.SUPABASE -> "e.g. 123e4567-e89b-12d3-a456-426614174000 (UUID)"
                                     else -> "e.g. mcp_app_${platformType.name.lowercase()}"
                                 },
                                 fontSize = 11.sp,
@@ -256,6 +255,80 @@ fun McpOAuthConnectDialog(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(8.dp)
                     )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = oauthRedirectUri,
+                        onValueChange = { oauthRedirectUri = it },
+                        label = { Text("Authorized Redirect URI (PKCE)", fontSize = 11.sp) },
+                        placeholder = { Text("e.g. https://pencode.vercel.app/oauth/callback", fontSize = 11.sp, color = Color(0xFF64748B)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        trailingIcon = {
+                            IconButton(onClick = {
+                                clipboardManager.setText(AnnotatedString(oauthRedirectUri))
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Default.ContentCopy,
+                                    contentDescription = "Copy redirect URI",
+                                    tint = Color(0xFF818CF8),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // Preset selection chips
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Surface(
+                            onClick = { oauthRedirectUri = "https://pencode.vercel.app/oauth/callback" },
+                            shape = RoundedCornerShape(6.dp),
+                            color = if (oauthRedirectUri == "https://pencode.vercel.app/oauth/callback") Color(0xFF6366F1).copy(alpha = 0.25f) else Color(0xFF1E293B),
+                            border = androidx.compose.foundation.BorderStroke(0.5.dp, Color(0xFF475569))
+                        ) {
+                            Text(
+                                text = "Default (Vercel)",
+                                fontSize = 10.sp,
+                                color = if (oauthRedirectUri == "https://pencode.vercel.app/oauth/callback") Color(0xFF818CF8) else Color(0xFF94A3B8),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                            )
+                        }
+
+                        Surface(
+                            onClick = { oauthRedirectUri = "http://localhost:8080/callback" },
+                            shape = RoundedCornerShape(6.dp),
+                            color = if (oauthRedirectUri == "http://localhost:8080/callback") Color(0xFF6366F1).copy(alpha = 0.25f) else Color(0xFF1E293B),
+                            border = androidx.compose.foundation.BorderStroke(0.5.dp, Color(0xFF475569))
+                        ) {
+                            Text(
+                                text = "Localhost Loopback",
+                                fontSize = 10.sp,
+                                color = if (oauthRedirectUri == "http://localhost:8080/callback") Color(0xFF818CF8) else Color(0xFF94A3B8),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                            )
+                        }
+
+                        Surface(
+                            onClick = { oauthRedirectUri = "pencode://mcp/oauth/callback" },
+                            shape = RoundedCornerShape(6.dp),
+                            color = if (oauthRedirectUri == "pencode://mcp/oauth/callback") Color(0xFF6366F1).copy(alpha = 0.25f) else Color(0xFF1E293B),
+                            border = androidx.compose.foundation.BorderStroke(0.5.dp, Color(0xFF475569))
+                        ) {
+                            Text(
+                                text = "App Scheme",
+                                fontSize = 10.sp,
+                                color = if (oauthRedirectUri == "pencode://mcp/oauth/callback") Color(0xFF818CF8) else Color(0xFF94A3B8),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(8.dp))
 
@@ -370,7 +443,7 @@ fun McpOAuthConnectDialog(
                                 onConfirmConnect(tokenValue.trim())
                             } else if (authMode == 0) {
                                 isAuthorizing = true
-                                onStartOAuth(oauthClientId.ifBlank { null })
+                                onStartOAuth(oauthClientId.ifBlank { null }, oauthRedirectUri.ifBlank { null })
                             } else {
                                 onConfirmConnect(tokenValue.trim())
                             }

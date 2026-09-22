@@ -189,7 +189,7 @@ class MainActivity : ComponentActivity() {
                                 onAddMcpServer = { name, url, platform, apiKey -> viewModel.mcpManager.addServer(name, url, platform, apiKey) },
                                 onToggleMcpWorkspace = { serverId, enabled -> viewModel.mcpManager.toggleWorkspaceForServer(serverId, currentProject?.name ?: "", enabled) },
                                 onTestConnectMcp = { serverId -> viewModel.mcpManager.testAndConnectServer(serverId) },
-                                onStartMcpOAuthFlow = { context, serverId, clientId -> viewModel.startMcpOAuthFlow(context, serverId, clientId) },
+                                onStartMcpOAuthFlow = { context, serverId, clientId, redirectUri -> viewModel.startMcpOAuthFlow(context, serverId, clientId, redirectUri) },
                                 onDeleteMcpServer = { serverId -> viewModel.mcpManager.deleteServer(serverId) },
                                 terminalOutput = terminalOutput,
                                 isLoadingWorkspace = isLoadingWorkspace,
