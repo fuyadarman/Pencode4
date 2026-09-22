@@ -75,28 +75,51 @@ object OpenCodeLoopGuardEngine {
         turn: Int,
         hasModifiedFiles: Boolean
     ): RepetitionResult {
-        val target = (args?.path ?: args?.targetFile ?: args?.destinationPath ?: args?.search ?: "").trim()
-        val signature = ActionSignature(tool.lowercase().trim(), target, turn)
+        val target = (
+            args?.query ?:
+            args?.pattern ?:
+            args?.search ?:
+            args?.find ?:
+            args?.command ?:
+            args?.path ?:
+            args?.targetFile ?:
+            args?.targetFilePascal ?:
+            args?.filePath ?:
+            args?.file_path ?:
+            args?.file ?:
+            args?.name ?:
+            args?.destinationPath ?:
+            ""
+        ).trim()
+
+        val normalizedTool = tool.lowercase().trim()
+        val signature = ActionSignature(normalizedTool, target, turn)
         actionHistory.add(signature)
 
-        val isRead = signature.tool == "read_file" || signature.tool == "view_file" || signature.tool == "read_file_range"
+        val isReadOrSearch = normalizedTool in setOf(
+            "read_file", "view_file", "read_file_range",
+            "global_search", "grep", "search_files", "find_files", "list_dir"
+        )
 
-        // If repeating the exact same read 4+ times consecutively
-        if (isRead && actionHistory.size >= 4) {
-            val lastFour = actionHistory.takeLast(4)
-            if (lastFour.all { it.tool == signature.tool && it.target == signature.target }) {
-                return RepetitionResult.WarnAndNudge(
-                    "You have already read '$target' multiple times. Content has already been provided. Please proceed with making your edits using 'edit_file' or 'create_file'."
-                )
+        // Read or Search operations: allow exploring freely. Only warn if the EXACT same query/path is repeated 4+ times consecutively.
+        if (isReadOrSearch) {
+            if (target.isNotEmpty() && actionHistory.size >= 4) {
+                val lastFour = actionHistory.takeLast(4)
+                if (lastFour.all { it.tool == signature.tool && it.target == signature.target }) {
+                    return RepetitionResult.WarnAndNudge(
+                        "You have already searched or read '$target' multiple times. Please proceed with making your edits using 'edit_file' or 'create_file'."
+                    )
+                }
             }
+            return RepetitionResult.Proceed
         }
 
-        // If repeating the exact same modification/command action 3+ times
-        if (!isRead && actionHistory.size >= 3) {
+        // Modification/Command actions (e.g. edit_file, create_file, execute_command)
+        if (actionHistory.size >= 3) {
             val lastThree = actionHistory.takeLast(3)
             val allSameTool = lastThree.all { it.tool == signature.tool }
             val allSameTarget = lastThree.all { it.target == signature.target }
-            if (allSameTool && allSameTarget) {
+            if (allSameTool && allSameTarget && target.isNotEmpty()) {
                 if (actionHistory.size >= 5 && hasModifiedFiles) {
                     return RepetitionResult.AbortRepetition(
                         "Task finished: modifications are already in place and repetitive action on '$target' was halted."

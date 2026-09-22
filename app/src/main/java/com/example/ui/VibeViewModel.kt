@@ -3745,6 +3745,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             val loopProtectionEngine = com.example.agent.AgentLoopProtectionEngine()
             com.example.agent.AgentSearchBlockAutoHealer.resetSession()
             com.example.agent.AgentReadLoopPolicy.resetSession()
+            com.example.agent.AgentFileReadQuotaGuard.resetSession()
             com.example.agent.OpenCodeLoopGuardEngine.reset()
             var lastDiagnosedError: String? = null
 
@@ -4108,8 +4109,13 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 )
                                 _aiActionLogs.value = _aiActionLogs.value + readLog
 
+                                val readTarget = (args?.path ?: args?.targetFile ?: readRes.pathsRead.firstOrNull())
+                                val quotaDirective = if (readTarget != null) {
+                                    com.example.agent.AgentFileReadQuotaGuard.recordAndGetDirective(readTarget) ?: ""
+                                } else ""
+
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
-                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': ${readRes.output}"))))
+                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': ${readRes.output}$quotaDirective"))))
                                 loopProtectionEngine.recordActionOutcome(tool, args, isSuccess = readRes.isSuccess, turn = turn)
                             }
                             "create_file", "write_file", "write", "append",
@@ -4138,6 +4144,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     consecutiveFailedEdits = 0
                                     lastEditError = null
                                     com.example.agent.AgentReadLoopPolicy.onFileModified(mutationRes.filePath)
+                                    com.example.agent.AgentFileReadQuotaGuard.onFileModified(mutationRes.filePath)
                                     _projectFiles.value = repository.getFilesForProject(project.name)
                                     _editHistory.value = _editHistory.value + EditRecord(
                                         tool = mutationRes.recordTool,
