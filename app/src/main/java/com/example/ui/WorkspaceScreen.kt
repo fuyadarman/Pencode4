@@ -6452,134 +6452,269 @@ fun PushProjectDialog(
     var repo by remember { mutableStateOf(initialRepo) }
     var token by remember { mutableStateOf(initialToken) }
     var branch by remember { mutableStateOf(initialBranch) }
-    var forcePush by remember { mutableStateOf(true) }
+    var forcePush by remember { mutableStateOf(false) }
+    var showToken by remember { mutableStateOf(false) }
 
-    Dialog(onDismissRequest = { if (gitProgress.isEmpty() || gitProgress.contains("complete", ignoreCase = true) || gitProgress.contains("failed", ignoreCase = true)) onDismiss() }) {
+    val isPushing = gitProgress.isNotEmpty() && !gitProgress.contains("complete", ignoreCase = true) && !gitProgress.contains("failed", ignoreCase = true) && !gitProgress.contains("error", ignoreCase = true)
+
+    Dialog(onDismissRequest = { if (!isPushing) onDismiss() }) {
         Card(
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF0D0E15)),
-            border = BorderStroke(1.dp, Color(0xFF1E2230)),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF161B22)),
+            border = BorderStroke(1.dp, Color(0xFF30363D)),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(8.dp)
         ) {
             Column(
                 modifier = Modifier
-                    .padding(24.dp)
+                    .padding(20.dp)
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text(
-                    text = "Push to GitHub",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(Color(0xFF21262D), RoundedCornerShape(10.dp))
+                            .border(1.dp, Color(0xFF30363D), RoundedCornerShape(10.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CloudUpload,
+                            contentDescription = "Push to GitHub",
+                            tint = Color(0xFF58A6FF),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Push to GitHub",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFF0F6FC)
+                        )
+                        Text(
+                            text = "Synchronize local project with remote repository",
+                            color = Color(0xFF8B949E),
+                            fontSize = 11.5.sp
+                        )
+                    }
+                }
 
-                Text(
-                    text = "Deploy this current active workspace directly to a designated GitHub repository.",
-                    color = Color(0xFF80809B),
-                    fontSize = 12.sp,
-                    lineHeight = 16.sp
-                )
+                HorizontalDivider(color = Color(0xFF21262D), thickness = 1.dp)
 
+                // Repository Field
                 OutlinedTextField(
                     value = repo,
                     onValueChange = { 
                         repo = it 
                         onSaveRepo(it)
                     },
-                    label = { Text("Repository (owner/repo or just repo-name)") },
-                    placeholder = { Text("e.g. Hello-World") },
+                    label = { Text("Repository (owner/repo or repo-name)", fontSize = 12.sp) },
+                    placeholder = { Text("e.g. android-vibe-studio", color = Color(0xFF484F58)) },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Folder,
+                            contentDescription = null,
+                            tint = Color(0xFF58A6FF),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = Color(0xFF38BDF8),
-                        unfocusedBorderColor = Color(0xFF222533)
+                        unfocusedTextColor = Color(0xFFE6EDF3),
+                        focusedBorderColor = Color(0xFF58A6FF),
+                        unfocusedBorderColor = Color(0xFF30363D),
+                        focusedLabelColor = Color(0xFF58A6FF),
+                        unfocusedLabelColor = Color(0xFF8B949E),
+                        focusedContainerColor = Color(0xFF0D1117),
+                        unfocusedContainerColor = Color(0xFF0D1117)
                     ),
+                    singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(10.dp)
                 )
 
-                Text(
-                    text = "💡 আপনি চাইলে শুধুমাত্র রিপোজিটরির নাম (যেমন 'my-repo') দিতে পারেন। ইউজারনেমটি আপনার অ্যাক্সেস টোকেন থেকে স্বয়ংক্রিয়ভাবে খুঁজে নেওয়া হবে।",
-                    color = Color(0xFF38BDF8),
-                    fontSize = 11.sp,
-                    lineHeight = 15.sp,
-                    modifier = Modifier.padding(horizontal = 4.dp)
-                )
+                // Helper Card in English
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = Color(0xFF1F242C),
+                    border = BorderStroke(1.dp, Color(0xFF388BFD).copy(alpha = 0.25f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.Top,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text("💡", fontSize = 13.sp)
+                        Text(
+                            text = "You can enter just the repository name (e.g., 'my-app'). The owner username will be automatically retrieved from your access token.",
+                            color = Color(0xFF79C0FF),
+                            fontSize = 11.sp,
+                            lineHeight = 15.sp
+                        )
+                    }
+                }
 
+                // GitHub Token Field with Show/Hide toggle
                 OutlinedTextField(
                     value = token,
                     onValueChange = { 
                         token = it
                         onSaveToken(it)
                     },
-                    label = { Text("GitHub Access Token") },
-                    placeholder = { Text("ghp_xxxxxxxxxxxx") },
+                    label = { Text("GitHub Access Token (PAT)", fontSize = 12.sp) },
+                    placeholder = { Text("ghp_xxxxxxxxxxxxxxxxxxxx", color = Color(0xFF484F58)) },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.VpnKey,
+                            contentDescription = null,
+                            tint = Color(0xFFD29922),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
+                    trailingIcon = {
+                        IconButton(onClick = { showToken = !showToken }) {
+                            Icon(
+                                imageVector = if (showToken) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = if (showToken) "Hide Token" else "Show Token",
+                                tint = Color(0xFF8B949E),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    },
+                    visualTransformation = if (showToken) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = Color(0xFF38BDF8),
-                        unfocusedBorderColor = Color(0xFF222533)
+                        unfocusedTextColor = Color(0xFFE6EDF3),
+                        focusedBorderColor = Color(0xFF58A6FF),
+                        unfocusedBorderColor = Color(0xFF30363D),
+                        focusedLabelColor = Color(0xFF58A6FF),
+                        unfocusedLabelColor = Color(0xFF8B949E),
+                        focusedContainerColor = Color(0xFF0D1117),
+                        unfocusedContainerColor = Color(0xFF0D1117)
                     ),
+                    singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(10.dp)
                 )
 
+                // Branch Field
                 OutlinedTextField(
                     value = branch,
                     onValueChange = { 
                         branch = it 
                         onSaveBranch(it)
                     },
-                    label = { Text("Branch") },
-                    placeholder = { Text("main") },
+                    label = { Text("Branch", fontSize = 12.sp) },
+                    placeholder = { Text("main", color = Color(0xFF484F58)) },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.CallSplit,
+                            contentDescription = null,
+                            tint = Color(0xFF3FB950),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = Color(0xFF38BDF8),
-                        unfocusedBorderColor = Color(0xFF222533)
+                        unfocusedTextColor = Color(0xFFE6EDF3),
+                        focusedBorderColor = Color(0xFF58A6FF),
+                        unfocusedBorderColor = Color(0xFF30363D),
+                        focusedLabelColor = Color(0xFF58A6FF),
+                        unfocusedLabelColor = Color(0xFF8B949E),
+                        focusedContainerColor = Color(0xFF0D1117),
+                        unfocusedContainerColor = Color(0xFF0D1117)
                     ),
+                    singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(10.dp)
                 )
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                // Force Overwrite Push - Defaults to OFF
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (forcePush) Color(0xFF321417) else Color(0xFF1C2128),
+                    border = BorderStroke(1.dp, if (forcePush) Color(0xFFF85149).copy(alpha = 0.5f) else Color(0xFF30363D)),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column {
-                        Text("Force Overwrite Push", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                        Text("Overwrite origin reference completely", color = Color(0xFFEE5253), fontSize = 11.sp)
-                    }
-                    Switch(
-                        checked = forcePush,
-                        onCheckedChange = { forcePush = it },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color(0xFFEE5253),
-                            checkedTrackColor = Color(0xFF1E2130)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    text = "Force Overwrite Push",
+                                    color = if (forcePush) Color(0xFFFF7B72) else Color(0xFFE6EDF3),
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                if (forcePush) {
+                                    Surface(
+                                        color = Color(0xFFF85149).copy(alpha = 0.2f),
+                                        shape = RoundedCornerShape(4.dp)
+                                    ) {
+                                        Text(
+                                            text = "DESTRUCTIVE",
+                                            color = Color(0xFFFF7B72),
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+                            }
+                            Text(
+                                text = if (forcePush) "Replaces remote commits completely" else "Standard safe push (recommended)",
+                                color = if (forcePush) Color(0xFFFFA198) else Color(0xFF8B949E),
+                                fontSize = 11.sp
+                            )
+                        }
+                        Switch(
+                            checked = forcePush,
+                            onCheckedChange = { forcePush = it },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color(0xFFF85149),
+                                checkedTrackColor = Color(0xFF4C1D24),
+                                uncheckedThumbColor = Color(0xFF8B949E),
+                                uncheckedTrackColor = Color(0xFF21262D)
+                            )
                         )
-                    )
+                    }
                 }
 
+                // Git Progress Status Box
                 if (gitProgress.isNotEmpty()) {
                     val isSuccess = gitProgress.contains("complete", ignoreCase = true) || gitProgress.contains("success", ignoreCase = true)
                     val isFailure = gitProgress.contains("failed", ignoreCase = true) || gitProgress.contains("error", ignoreCase = true)
-                    val indicatorColor = if (isSuccess) Color(0xFF2ED573) else if (isFailure) Color(0xFFEE5253) else Color(0xFF38BDF8)
+                    val indicatorColor = if (isSuccess) Color(0xFF3FB950) else if (isFailure) Color(0xFFF85149) else Color(0xFF58A6FF)
+                    val containerBg = if (isSuccess) Color(0xFF132B1C) else if (isFailure) Color(0xFF321417) else Color(0xFF1B2A4A)
 
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Color(0xFF1E293B), RoundedCornerShape(12.dp))
-                            .padding(12.dp),
-                        contentAlignment = Alignment.Center
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        color = containerBg,
+                        border = BorderStroke(1.dp, indicatorColor.copy(alpha = 0.4f))
                     ) {
                         Row(
+                            modifier = Modifier.padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             if (isSuccess) {
                                 Icon(
@@ -6598,31 +6733,33 @@ fun PushProjectDialog(
                             } else {
                                 CircularProgressIndicator(
                                     color = indicatorColor,
-                                    modifier = Modifier.size(20.dp),
+                                    modifier = Modifier.size(18.dp),
                                     strokeWidth = 2.dp
                                 )
                             }
                             Text(
                                 text = gitProgress,
-                                color = Color.White,
-                                fontSize = 13.sp,
+                                color = Color(0xFFF0F6FC),
+                                fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium
                             )
                         }
                     }
                 }
 
+                // Action Buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextButton(
                         onClick = onDismiss,
-                        enabled = gitProgress.isEmpty() || gitProgress.contains("complete", ignoreCase = true) || gitProgress.contains("failed", ignoreCase = true)
+                        enabled = !isPushing
                     ) {
-                        Text("Cancel", color = Color(0xFF80809B))
+                        Text("Cancel", color = Color(0xFF8B949E), fontSize = 13.sp)
                     }
-                    Spacer(modifier = Modifier.width(16.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
                     Button(
                         onClick = {
                             if (repo.isNotBlank() && token.isNotBlank()) {
@@ -6630,13 +6767,21 @@ fun PushProjectDialog(
                             }
                         },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF38BDF8),
-                            contentColor = Color.Black
+                            containerColor = Color(0xFF238636),
+                            contentColor = Color.White,
+                            disabledContainerColor = Color(0xFF21262D),
+                            disabledContentColor = Color(0xFF484F58)
                         ),
-                        shape = RoundedCornerShape(12.dp),
-                        enabled = repo.isNotBlank() && token.isNotBlank() && (gitProgress.isEmpty() || gitProgress.contains("complete", ignoreCase = true) || gitProgress.contains("failed", ignoreCase = true))
+                        shape = RoundedCornerShape(8.dp),
+                        enabled = repo.isNotBlank() && token.isNotBlank() && !isPushing
                     ) {
-                        Text("Push to origin", fontWeight = FontWeight.Bold)
+                        Icon(
+                            imageVector = Icons.Default.CloudUpload,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Push to origin", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                     }
                 }
             }
