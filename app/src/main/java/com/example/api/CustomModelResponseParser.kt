@@ -18,12 +18,13 @@ object CustomModelResponseParser {
 
     data class ExtractedResult(
         val text: String?,
-        val toolCallResponse: ToolCallResponse?
+        val toolCallResponse: ToolCallResponse?,
+        val reasoning: String? = null
     )
 
     fun extractContentOrTool(rawResponse: String, provider: String = "custom"): ExtractedResult {
         if (rawResponse.isBlank()) {
-            return ExtractedResult(null, null)
+            return ExtractedResult(null, null, null)
         }
 
         try {
@@ -43,31 +44,33 @@ object CustomModelResponseParser {
                                 val toolCalls = messageObj.optJSONArray("tool_calls")
                                 val converted = parseNativeToolCalls(toolCalls)
                                 if (converted != null) {
-                                    return ExtractedResult(null, converted)
+                                    return ExtractedResult(null, converted, null)
                                 }
-                            }
-
-                            // Check content (can be String, JSONArray, or JSONObject)
-                            val contentVal = messageObj.opt("content")
-                            val parsedContent = parseContentValue(contentVal)
-                            if (!parsedContent.isNullOrBlank()) {
-                                return ExtractedResult(parsedContent, null)
                             }
 
                             // Check reasoning fields for reasoning models (DeepSeek-R1, QwQ, etc.)
                             val reasoning = messageObj.optString("reasoning_content", "")
                                 .ifBlank { messageObj.optString("reasoning", "") }
                                 .ifBlank { messageObj.optString("thought", "") }
-                            if (reasoning.isNotBlank()) {
+                                .takeIf { it.isNotBlank() }
+
+                            // Check content (can be String, JSONArray, or JSONObject)
+                            val contentVal = messageObj.opt("content")
+                            val parsedContent = parseContentValue(contentVal)
+                            if (!parsedContent.isNullOrBlank()) {
+                                return ExtractedResult(parsedContent, null, reasoning)
+                            }
+
+                            if (!reasoning.isNullOrBlank()) {
                                 Log.d(TAG, "Using reasoning_content as response text")
-                                return ExtractedResult(reasoning, null)
+                                return ExtractedResult(reasoning, null, reasoning)
                             }
                         }
 
                         // Check legacy choice.text
                         val choiceText = firstChoice.optString("text", "")
                         if (choiceText.isNotBlank()) {
-                            return ExtractedResult(choiceText, null)
+                            return ExtractedResult(choiceText, null, null)
                         }
                     }
                 }
@@ -77,7 +80,7 @@ object CustomModelResponseParser {
             if (json.has("content")) {
                 val directContent = parseContentValue(json.opt("content"))
                 if (!directContent.isNullOrBlank()) {
-                    return ExtractedResult(directContent, null)
+                    return ExtractedResult(directContent, null, null)
                 }
             }
 
@@ -86,14 +89,14 @@ object CustomModelResponseParser {
                 .ifBlank { json.optString("output", "") }
                 .ifBlank { json.optString("text", "") }
             if (simpleResponse.isNotBlank()) {
-                return ExtractedResult(simpleResponse, null)
+                return ExtractedResult(simpleResponse, null, null)
             }
 
         } catch (e: Exception) {
             Log.w(TAG, "Non-JSON or parsing error in extractContentOrTool: ${e.message}")
         }
 
-        return ExtractedResult(null, null)
+        return ExtractedResult(null, null, null)
     }
 
     private fun parseContentValue(contentVal: Any?): String? {

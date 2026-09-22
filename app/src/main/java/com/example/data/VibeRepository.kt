@@ -2120,13 +2120,15 @@ h1 {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>3D Globe World</title>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 </head>
 <body>
     <canvas id="bg"></canvas>
-    <script src="main.js"></script>
+    <script defer src="main.js"></script>
 </body>
 </html>"""
                 ),
@@ -2157,21 +2159,38 @@ body, html {
                 ProjectFileEntity(
                     projectName = projectName,
                     path = "main.js",
-                    content = """// Initialize Three.js Scene
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x030408);
+                    content = """// Resilient Three.js Initialization
+function startThreeApp() {
+    if (typeof THREE === 'undefined' || typeof THREE.OrbitControls === 'undefined') {
+        setTimeout(startThreeApp, 50);
+        return;
+    }
 
-// Camera Setup
-const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-camera.position.set(0, 0, 4.2);
+    const canvas = document.querySelector('#bg');
+    if (!canvas) {
+        setTimeout(startThreeApp, 50);
+        return;
+    }
 
-// Renderer Setup
-const renderer = new THREE.WebGLRenderer({
-    canvas: document.querySelector('#bg'),
-    antialias: true
-});
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setSize(window.innerWidth, window.innerHeight);
+    // Initialize Three.js Scene
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x030408);
+
+    // Initial safe dimensions
+    const width = window.innerWidth || window.clientWidth || 360;
+    const height = window.innerHeight || window.clientHeight || 640;
+
+    // Camera Setup
+    const camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000);
+    camera.position.set(0, 0, 4.2);
+
+    // Renderer Setup
+    const renderer = new THREE.WebGLRenderer({
+        canvas: canvas,
+        antialias: true
+    });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(width, height);
 
 // Orbit Controls for smooth drag, rotate & zoom
 const controls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -2248,21 +2267,34 @@ const starMat = new THREE.PointsMaterial({
 const starField = new THREE.Points(starGeo, starMat);
 scene.add(starField);
 
-// Handle Window Resize
-window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-});
+// Handle Window Resize dynamically
+    function onResize() {
+        const w = window.innerWidth || window.clientWidth;
+        const h = window.innerHeight || window.clientHeight;
+        if (w > 0 && h > 0) {
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+        }
+    }
+    window.addEventListener('resize', onResize);
+    setTimeout(onResize, 100);
+    setTimeout(onResize, 400);
 
-// Animation Loop
-function animate() {
-    requestAnimationFrame(animate);
-    controls.update();
-    renderer.render(scene, camera);
+    // Animation Loop
+    function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+    }
+    animate();
 }
 
-animate();"""
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', startThreeApp);
+} else {
+    startThreeApp();
+}"""
                 )
             )
             "apk_decompile" -> listOf(

@@ -42,7 +42,7 @@ enum class ReasoningEffort(
     MAX(
         id = "max",
         label = "Max",
-        thinkingBudget = 32768,
+        thinkingBudget = 24576,
         reasoningEffortParam = "high",
         description = "Exhaustive reasoning and self-debugging. Highest cognitive power.",
         directive = "EFFORT LEVEL: MAX. Apply maximum cognitive depth and exhaustive multi-angle verification. Formulate extensive architecture plans, verify contract correctness, trace error paths, and self-debug before executing changes."

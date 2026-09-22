@@ -39,13 +39,58 @@ object WebPreviewPerformanceGuard {
     }
 
     /**
-     * Efficiently processes HTML for Babel only when explicitly needed.
+     * Efficiently processes HTML for Babel and WebGL/Three.js preview optimizations.
      */
     fun preprocessHtmlSafely(html: String): String {
-        if (shouldSkipBabel(html)) {
-            return html
+        var result = html
+        if (!shouldSkipBabel(result)) {
+            result = preprocessHtmlForBabelCore(result)
         }
-        return preprocessHtmlForBabelCore(html)
+        if (result.contains("three", ignoreCase = true) || result.contains("<canvas", ignoreCase = true)) {
+            result = enhanceWebGLPreviewHtml(result)
+        }
+        return result
+    }
+
+    private fun enhanceWebGLPreviewHtml(html: String): String {
+        var content = html
+        // 1. Inject viewport meta if absent to prevent 980px zoom stalls
+        if (!content.contains("name=\"viewport\"", ignoreCase = true) && !content.contains("name='viewport'", ignoreCase = true)) {
+            val headMatch = Regex("""(<head[^>]*>)""", RegexOption.IGNORE_CASE).find(content)
+            if (headMatch != null) {
+                content = content.replaceFirst(headMatch.value, "${headMatch.value}\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no\">")
+            }
+        }
+
+        // 2. Inject resilient auto-resize triggers so Three.js renders immediately after WebView layout completes
+        if (!content.contains("__three_autoresize_guard__", ignoreCase = true)) {
+            val resizeScript = """
+                <script id="__three_autoresize_guard__">
+                (function() {
+                    function triggerResize() {
+                        try { window.dispatchEvent(new Event('resize')); } catch (e) {}
+                    }
+                    if (document.readyState === 'complete') {
+                        triggerResize();
+                    } else {
+                        window.addEventListener('load', function() {
+                            triggerResize();
+                            setTimeout(triggerResize, 80);
+                            setTimeout(triggerResize, 300);
+                        });
+                    }
+                })();
+                </script>
+            """.trimIndent()
+
+            val bodyEndMatch = Regex("""(</body>)""", RegexOption.IGNORE_CASE).find(content)
+            if (bodyEndMatch != null) {
+                content = content.replaceFirst(bodyEndMatch.value, "$resizeScript\n${bodyEndMatch.value}")
+            } else {
+                content += "\n$resizeScript"
+            }
+        }
+        return content
     }
 
     private fun preprocessHtmlForBabelCore(html: String): String {

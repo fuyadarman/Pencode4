@@ -22,7 +22,8 @@ data class InlineData(
 @JsonClass(generateAdapter = true)
 data class Part(
     val text: String? = null,
-    val inlineData: InlineData? = null
+    val inlineData: InlineData? = null,
+    val thought: Boolean? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -33,7 +34,9 @@ data class Content(
 
 @JsonClass(generateAdapter = true)
 data class ThinkingConfig(
-    val thinkingBudget: Int? = null
+    val thinkingBudget: Int? = null,
+    val includeThoughts: Boolean? = null,
+    val thinkingLevel: String? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -701,12 +704,19 @@ object GeminiClient {
                     messages.add(mapOf("role" to role, "content" to textPart))
                 }
 
+                val isOSeries = modelId.startsWith("o1") || modelId.startsWith("o3") || modelId.startsWith("o4")
                 val bodyMap = mutableMapOf<String, Any>(
                     "model" to modelId,
-                    "messages" to messages,
-                    "temperature" to if (reasoningEffort == com.example.agent.ReasoningEffort.MAX) 0.3f else 0.4f,
-                    "reasoning_effort" to reasoningEffort.reasoningEffortParam
+                    "messages" to messages
                 )
+                if (isOSeries) {
+                    bodyMap["reasoning_effort"] = reasoningEffort.reasoningEffortParam
+                } else {
+                    bodyMap["temperature"] = if (reasoningEffort == com.example.agent.ReasoningEffort.MAX) 0.2f else 0.4f
+                    if (provider == "openrouter") {
+                        bodyMap["reasoning"] = mapOf("effort" to reasoningEffort.reasoningEffortParam)
+                    }
+                }
                 
                 // Use response_format for OpenAI, Mistral and Groq to enforce JSON mode
                 val supportsJsonMode = provider == "openai" || provider == "mistral" || provider == "groq" || provider == "openrouter" ||
@@ -885,7 +895,16 @@ object GeminiClient {
                     }
 
                     val cleaned = cleanJsonString(responseText)
-                    return@withContext parseToolCallResponse(cleaned, responseText)
+                    val parsed = parseToolCallResponse(cleaned, responseText)
+                    if (!extracted.reasoning.isNullOrBlank()) {
+                        val mergedThought = if (parsed.thought.isNullOrBlank() || parsed.thought == "Direct response" || parsed.thought == "Parsed via fallback parser.") {
+                            extracted.reasoning
+                        } else {
+                            "${extracted.reasoning}\n\n${parsed.thought}"
+                        }
+                        return@withContext parsed.copy(thought = mergedThought)
+                    }
+                    return@withContext parsed
                 } catch (e: Exception) {
                     Log.e(TAG, "Exception during $provider API call", e)
                     return@withContext ToolCallResponse(
@@ -921,6 +940,16 @@ object GeminiClient {
                     "max_tokens" to maxTokens,
                     "temperature" to if (reasoningEffort == com.example.agent.ReasoningEffort.MAX) 0.3f else 0.5f
                 )
+
+                if (modelId.contains("3-7") || modelId.contains("3.7") || modelId.contains("thinking")) {
+                    val claudeBudget = com.example.agent.ReasoningEffortEngine.getClaudeThinkingBudget(reasoningEffort)
+                    bodyMap["thinking"] = mapOf(
+                        "type" to "enabled",
+                        "budget_tokens" to claudeBudget
+                    )
+                    bodyMap["temperature"] = 1.0f
+                    bodyMap["max_tokens"] = claudeBudget + 4096
+                }
 
                 val bodyJson = moshi.adapter(Map::class.java).toJson(bodyMap)
                 val body = bodyJson.toRequestBody(mediaType)
@@ -1039,19 +1068,40 @@ object GeminiClient {
 
                     val responseMap = moshi.adapter(Map::class.java).fromJson(rawResponse) as? Map<*, *>
                     val contentList = responseMap?.get("content") as? List<*>
-                    val contentItem = contentList?.firstOrNull() as? Map<*, *>
-                    val responseText = contentItem?.get("text") as? String
+                    var claudeThinking = ""
+                    var responseText: String? = null
+                    contentList?.forEach { item ->
+                        if (item is Map<*, *>) {
+                            val type = item["type"] as? String
+                            if (type == "thinking") {
+                                val th = item["thinking"] as? String ?: ""
+                                if (th.isNotBlank()) claudeThinking = if (claudeThinking.isEmpty()) th else "$claudeThinking\n$th"
+                            } else if (type == "text" || item.containsKey("text")) {
+                                val tx = item["text"] as? String
+                                if (!tx.isNullOrBlank()) responseText = tx
+                            }
+                        }
+                    }
 
                     if (responseText == null) {
                         return@withContext ToolCallResponse(
-                            thought = "Empty content from Claude response.",
+                            thought = if (claudeThinking.isNotBlank()) claudeThinking else "Empty content from Claude response.",
                             tool = "complete",
                             arguments = ToolArguments(message = "Empty text content received from Claude model.")
                         )
                     }
 
                     val cleaned = cleanJsonString(responseText)
-                    return@withContext parseToolCallResponse(cleaned, responseText)
+                    val parsed = parseToolCallResponse(cleaned, responseText)
+                    if (claudeThinking.isNotBlank()) {
+                        val mergedThought = if (parsed.thought.isNullOrBlank() || parsed.thought == "Direct response" || parsed.thought == "Parsed via fallback parser.") {
+                            claudeThinking
+                        } else {
+                            "$claudeThinking\n\n${parsed.thought}"
+                        }
+                        return@withContext parsed.copy(thought = mergedThought)
+                    }
+                    return@withContext parsed
                 } catch (e: Exception) {
                     Log.e(TAG, "Exception during Claude API call", e)
                     return@withContext ToolCallResponse(
@@ -1078,7 +1128,11 @@ object GeminiClient {
                     generationConfig = GenerationConfig(
                         responseMimeType = "application/json",
                         temperature = if (reasoningEffort == com.example.agent.ReasoningEffort.MAX) 0.3f else 0.5f,
-                        thinkingConfig = ThinkingConfig(thinkingBudget = reasoningEffort.thinkingBudget)
+                        thinkingConfig = ThinkingConfig(
+                            thinkingBudget = com.example.agent.ReasoningEffortEngine.getGeminiThinkingBudget(reasoningEffort),
+                            includeThoughts = true,
+                            thinkingLevel = com.example.agent.ReasoningEffortEngine.getGeminiThinkingLevel(reasoningEffort)
+                        )
                     )
                 )
 
@@ -1213,13 +1267,17 @@ object GeminiClient {
                     val responseAdapter = moshi.adapter(GenerateContentResponse::class.java)
                     val responseObj = responseAdapter.fromJson(rawResponse)
                     val candidate = responseObj?.candidates?.firstOrNull()
-                    val responseText = candidate?.content?.parts?.firstOrNull()?.text
+                    val parts = candidate?.content?.parts ?: emptyList()
+                    val (extractedThoughts, extractedContent) = com.example.agent.ReasoningEffortEngine.extractGeminiThinkingAndContent(
+                        parts.map { com.example.agent.GeminiPartData(text = it.text, thought = it.thought) }
+                    )
+                    val responseText = if (extractedContent.isNotBlank()) extractedContent else parts.firstOrNull()?.text
                     val finishReason = candidate?.finishReason
 
                     if (responseText == null) {
                         Log.e(TAG, "Empty text from candidate")
                         return@withContext ToolCallResponse(
-                            thought = "Empty response received.",
+                            thought = if (extractedThoughts.isNotBlank()) extractedThoughts else "Empty response received.",
                             tool = "complete",
                             arguments = ToolArguments(message = "The AI did not return a valid response. Please check your connection, API key, or custom settings.")
                         )
@@ -1227,7 +1285,16 @@ object GeminiClient {
 
                     Log.d(TAG, "Response Text: $responseText")
                     val cleaned = cleanJsonString(responseText)
-                    return@withContext parseToolCallResponse(cleaned, responseText, finishReason)
+                    val parsed = parseToolCallResponse(cleaned, responseText, finishReason)
+                    if (extractedThoughts.isNotBlank()) {
+                        val mergedThought = if (parsed.thought.isNullOrBlank() || parsed.thought == "Direct response" || parsed.thought == "Parsed via fallback parser.") {
+                            extractedThoughts
+                        } else {
+                            "$extractedThoughts\n\n${parsed.thought}"
+                        }
+                        return@withContext parsed.copy(thought = mergedThought)
+                    }
+                    return@withContext parsed
 
                 } catch (e: Exception) {
                     Log.e(TAG, "Exception during Gemini API call", e)

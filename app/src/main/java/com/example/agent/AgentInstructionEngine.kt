@@ -126,18 +126,21 @@ object AgentInstructionEngine {
         // 1. Core Agent Identity
         sb.append("You are PenCode AI, an elite Autonomous Development Agent.\n\n")
 
-        // Pure Chat Mode: Ultra-lightweight ~200 tokens
+        // Pure Chat Mode: Lightweight conversation with enforced thinking effort
         if (isPureChat) {
             sb.append("""
                 === CONVERSATION MODE ===
                 - Respond directly, helpfully, and conversationally to the user in their language.
                 - If no workspace tool actions are needed, return your final response or invoke 'complete'.
                 
+                === THINKING & REASONING EFFORT ===
+                ${ReasoningEffortEngine.getConversationDirective(reasoningEffort)}
+                
                 === TOOLS ===
                 - 'ai_think'(message) [Optional: analyze concept], 'complete'(message) [Finish response]
                 
                 === MANDATORY FORMAT ===
-                {"thought":"Short reasoning","tool":"complete","arguments":{"message":"Your helpful response"}}
+                {"thought":"Your internal reasoning matching the thinking effort above","tool":"complete","arguments":{"message":"Your helpful response"}}
             """.trimIndent())
             return sb.toString()
         }
@@ -174,7 +177,7 @@ object AgentInstructionEngine {
         sb.append("7. NEW FILES: Use 'create_file' ONLY for new files. Existing files must be edited.\n")
         sb.append("8. DIAGNOSTICS: Use 'read_preview_errors' for preview bugs and 'read_build_errors' for build failures.\n")
         sb.append("9. TOOL CATALOG: If any tool command is omitted or you need full documentation, invoke 'list_all_tools' to see all available tools and usage.\n")
-        sb.append("10. ${reasoningEffort.directive}\n")
+        sb.append("10. COGNITIVE REASONING & PLANNING DEPTH:\n").append(ReasoningEffortEngine.getCodingDirective(reasoningEffort)).append("\n")
         sb.append("11. BUILD & PUSH: You can press the Build tab Build button to push code to GitHub and trigger compilation by invoking 'trigger_build'.\n")
         sb.append("12. GITHUB CLONE: When user asks to clone a GitHub repository or gives a repository URL/link/name, immediately invoke 'clone_git_repo'(url = <repo_url_or_owner_slash_repo>). Do not ask manual steps or refuse.\n")
 

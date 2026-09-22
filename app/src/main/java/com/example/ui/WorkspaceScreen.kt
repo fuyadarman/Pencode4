@@ -3566,74 +3566,93 @@ fun PreviewTabContent(
                         htmlFile?.content?.let { com.example.ui.preview.WebPreviewPerformanceGuard.preprocessHtmlSafely(it) } ?: ""
                     }
                     var lastLoadedHtml by remember { mutableStateOf(initialProcessedHtml) }
-                    AndroidView(
-                        factory = { context ->
-                            WebView(context).apply {
-                                setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
-                                settings.apply {
-                                    javaScriptEnabled = true
-                                    domStorageEnabled = true
-                                    databaseEnabled = true
-                                    allowFileAccess = true
-                                    allowContentAccess = true
-                                    useWideViewPort = true
-                                    loadWithOverviewMode = true
-                                    setSupportZoom(true)
-                                    builtInZoomControls = true
-                                    displayZoomControls = false
-                                    mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                                    cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
-                                    allowFileAccessFromFileURLs = true
-                                    allowUniversalAccessFromFileURLs = true
-                                    mediaPlaybackRequiresUserGesture = false
-                                }
-                                isFocusable = true
-                                isFocusableInTouchMode = true
-                                scrollBarStyle = android.view.View.SCROLLBARS_INSIDE_OVERLAY
-                                
-                                webChromeClient = object : WebChromeClient() {
-                                    override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
-                                        if (consoleMessage != null) {
-                                            val level = when (consoleMessage.messageLevel()) {
-                                                ConsoleMessage.MessageLevel.ERROR -> "error"
-                                                ConsoleMessage.MessageLevel.WARNING -> "warning"
-                                                else -> "log"
-                                            }
-                                            val msg = consoleMessage.message() ?: ""
-                                            val src = consoleMessage.sourceId() ?: ""
-                                            val line = consoleMessage.lineNumber()
-                                            if (com.example.ui.preview.WebPreviewPerformanceGuard.shouldEmitLog()) {
-                                                onConsoleLog(msg, level, src, line)
-                                            }
-                                            if (level == "error" && com.example.ui.preview.WebPreviewPerformanceGuard.shouldEmitWebError(msg, src, line)) {
-                                                onWebError(msg, src, line)
+                    var isPageLoading by remember { mutableStateOf(true) }
+                    var pageProgress by remember { mutableStateOf(0) }
+                    val previewContext = androidx.compose.ui.platform.LocalContext.current
+                    DisposableEffect(Unit) {
+                        com.example.ui.preview.WebPreviewCdnCacheEngine.init(previewContext)
+                        onDispose { }
+                    }
+
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        AndroidView(
+                            factory = { context ->
+                                WebView(context).apply {
+                                    setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
+                                    settings.apply {
+                                        javaScriptEnabled = true
+                                        domStorageEnabled = true
+                                        databaseEnabled = true
+                                        allowFileAccess = true
+                                        allowContentAccess = true
+                                        useWideViewPort = true
+                                        loadWithOverviewMode = true
+                                        setSupportZoom(true)
+                                        builtInZoomControls = true
+                                        displayZoomControls = false
+                                        mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                                        cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+                                        allowFileAccessFromFileURLs = true
+                                        allowUniversalAccessFromFileURLs = true
+                                        mediaPlaybackRequiresUserGesture = false
+                                    }
+                                    isFocusable = true
+                                    isFocusableInTouchMode = true
+                                    scrollBarStyle = android.view.View.SCROLLBARS_INSIDE_OVERLAY
+                                    
+                                    webChromeClient = object : WebChromeClient() {
+                                        override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                                            super.onProgressChanged(view, newProgress)
+                                            pageProgress = newProgress
+                                            if (newProgress >= 100) {
+                                                isPageLoading = false
                                             }
                                         }
-                                        return true
-                                    }
-                                }
 
-                                webViewClient = object : WebViewClient() {
-                                    override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                                        return false
-                                    }
-
-                                    override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
-                                        super.onPageStarted(view, url, favicon)
-                                        if (url != null) {
-                                            if (url.startsWith("https://virtual-app/")) {
-                                                onClearErrors()
-                                            } else {
-                                                customUrl = url
-                                                urlInputText = url
+                                        override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+                                            if (consoleMessage != null) {
+                                                val level = when (consoleMessage.messageLevel()) {
+                                                    ConsoleMessage.MessageLevel.ERROR -> "error"
+                                                    ConsoleMessage.MessageLevel.WARNING -> "warning"
+                                                    else -> "log"
+                                                }
+                                                val msg = consoleMessage.message() ?: ""
+                                                val src = consoleMessage.sourceId() ?: ""
+                                                val line = consoleMessage.lineNumber()
+                                                if (com.example.ui.preview.WebPreviewPerformanceGuard.shouldEmitLog()) {
+                                                    onConsoleLog(msg, level, src, line)
+                                                }
+                                                if (level == "error" && com.example.ui.preview.WebPreviewPerformanceGuard.shouldEmitWebError(msg, src, line)) {
+                                                    onWebError(msg, src, line)
+                                                }
                                             }
-                                            canGoBack = view?.canGoBack() == true
-                                            canGoForward = view?.canGoForward() == true
+                                            return true
                                         }
                                     }
 
-                                    override fun onPageFinished(view: WebView?, url: String?) {
-                                        super.onPageFinished(view, url)
+                                    webViewClient = object : WebViewClient() {
+                                        override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                                            return false
+                                        }
+
+                                        override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                                            super.onPageStarted(view, url, favicon)
+                                            isPageLoading = true
+                                            if (url != null) {
+                                                if (url.startsWith("https://virtual-app/")) {
+                                                    onClearErrors()
+                                                } else {
+                                                    customUrl = url
+                                                    urlInputText = url
+                                                }
+                                                canGoBack = view?.canGoBack() == true
+                                                canGoForward = view?.canGoForward() == true
+                                            }
+                                        }
+
+                                        override fun onPageFinished(view: WebView?, url: String?) {
+                                            super.onPageFinished(view, url)
+                                            isPageLoading = false
                                         canGoBack = view?.canGoBack() == true
                                         canGoForward = view?.canGoForward() == true
                                         if (url != null && !url.startsWith("https://virtual-app/")) {
@@ -3787,6 +3806,15 @@ fun PreviewTabContent(
                                             }
                                             return com.example.ui.preview.WebPreviewPerformanceGuard.createFast404Response(cleanPath)
                                         }
+
+                                        // Fast CDN cache & instant offline serving for Three.js, React, Tailwind, and WebGL assets
+                                        if (com.example.ui.preview.WebPreviewCdnCacheEngine.shouldIntercept(urlString)) {
+                                            val cdnResponse = com.example.ui.preview.WebPreviewCdnCacheEngine.interceptAndServe(urlString)
+                                            if (cdnResponse != null) {
+                                                return cdnResponse
+                                            }
+                                        }
+
                                         return super.shouldInterceptRequest(view, request)
                                     }
                                 }
@@ -3831,6 +3859,19 @@ fun PreviewTabContent(
                         },
                         modifier = Modifier.fillMaxSize()
                     )
+
+                    if (isPageLoading) {
+                        LinearProgressIndicator(
+                            progress = { (pageProgress.coerceIn(0, 100)) / 100f },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(3.dp)
+                                .align(Alignment.TopCenter),
+                            color = Color(0xFF38BDF8),
+                            trackColor = Color(0xFF161B22)
+                        )
+                    }
+                }
                 }
             }
         }

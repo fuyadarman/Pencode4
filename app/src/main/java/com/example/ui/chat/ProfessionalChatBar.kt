@@ -250,6 +250,47 @@ fun ProfessionalChatBar(
                                 )
                             }
                         }
+
+                        // Dedicated Thinking Effort Pill Button
+                        val effortColor = when (currentReasoningEffort) {
+                            ReasoningEffort.SMALL -> Color(0xFF38BDF8)
+                            ReasoningEffort.NORMAL -> Color(0xFF34D399)
+                            ReasoningEffort.MEDIUM -> Color(0xFFFBBF24)
+                            ReasoningEffort.MAX -> Color(0xFFA855F7)
+                        }
+                        Surface(
+                            onClick = {
+                                val nextEffort = when (currentReasoningEffort) {
+                                    ReasoningEffort.SMALL -> ReasoningEffort.NORMAL
+                                    ReasoningEffort.NORMAL -> ReasoningEffort.MEDIUM
+                                    ReasoningEffort.MEDIUM -> ReasoningEffort.MAX
+                                    ReasoningEffort.MAX -> ReasoningEffort.SMALL
+                                }
+                                onSelectReasoningEffort(nextEffort)
+                            },
+                            shape = RoundedCornerShape(14.dp),
+                            color = effortColor.copy(alpha = 0.16f),
+                            border = BorderStroke(1.dp, effortColor.copy(alpha = 0.6f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Psychology,
+                                    contentDescription = "Thinking Effort",
+                                    tint = effortColor,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = currentReasoningEffort.name.lowercase().replaceFirstChar { it.uppercase() },
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = effortColor
+                                )
+                            }
+                        }
                     }
 
                     // Right: Mic icon + Blue Circular Send Button
