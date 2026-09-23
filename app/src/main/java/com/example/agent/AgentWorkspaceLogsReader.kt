@@ -33,53 +33,12 @@ object AgentWorkspaceLogsReader {
             ?: args?.search?.trim()?.lowercase(Locale.ROOT)
         val maxLines = (args?.maxLines ?: args?.count ?: 50).coerceIn(1, 250)
 
-        var filtered = logs.asSequence()
-
-        if (!filterLevel.isNullOrBlank() && filterLevel != "all") {
-            filtered = filtered.filter { log ->
-                val level = log.level.lowercase(Locale.ROOT)
-                when (filterLevel) {
-                    "error", "errors", "err" -> level.contains("error") || level.contains("err")
-                    "warn", "warning", "warnings" -> level.contains("warn")
-                    "info" -> level.contains("info")
-                    "log" -> level == "log" || level == "info"
-                    else -> level.contains(filterLevel)
-                }
-            }
-        }
-
-        if (!query.isNullOrBlank()) {
-            filtered = filtered.filter { log ->
-                log.message.lowercase(Locale.ROOT).contains(query) ||
-                        log.sourceId.lowercase(Locale.ROOT).contains(query)
-            }
-        }
-
-        val resultList = filtered.toList()
-        if (resultList.isEmpty()) {
-            return "No web console logs matched the filter criteria (filter: '$filterLevel', query: '$query'). Total available logs: ${logs.size}."
-        }
-
-        val displayLogs = if (resultList.size > maxLines) {
-            resultList.takeLast(maxLines)
-        } else {
-            resultList
-        }
-
-        val sb = StringBuilder()
-        sb.append("=== Preview Tab Web Console Logs (Showing ${displayLogs.size} of ${resultList.size} logs) ===\n")
-        displayLogs.forEach { log ->
-            val time = try {
-                timeFormat.format(Date(log.timestamp))
-            } catch (e: Exception) {
-                ""
-            }
-            val src = if (log.sourceId.isNotBlank()) " [${log.sourceId}:${log.lineNumber}]" else ""
-            val timeStr = if (time.isNotBlank()) "[$time] " else ""
-            sb.append("$timeStr[${log.level.uppercase(Locale.ROOT)}]$src: ${log.message}\n")
-        }
-
-        return sb.toString().trimEnd()
+        return com.example.ui.preview.WebConsoleSyncManager.generateDiagnosticConsoleOutput(
+            logs = logs,
+            filterLevel = filterLevel,
+            query = query,
+            maxLines = maxLines
+        )
     }
 
     /**

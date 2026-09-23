@@ -315,11 +315,11 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun checkAndTriggerAutoFixOnAgentFinish() {
-        if (_allowAutoFix.value && !_isThinking.value) {
+        if (com.example.agent.AgentInterruptionStateManager.shouldAllowAutoFix(_isThinking.value, _isInterrupted.value, _allowAutoFix.value)) {
             viewModelScope.launch(Dispatchers.Main) {
                 // Realtime check: Wait 2500ms for web preview to reload and emit fresh errors if the bug persists
                 kotlinx.coroutines.delay(2500)
-                if (_isThinking.value) return@launch
+                if (_isThinking.value || _isInterrupted.value) return@launch
 
                 val currentFiles = repository.getFilesForProject(_currentProject.value?.name ?: "")
                 // Filter detected errors to ensure they still match existing project files and have not been attempted
@@ -2549,15 +2549,10 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         _isInterrupted.value = true
         _interruptionReason.value = "AI task paused or stopped by user."
         _agentStatus.value = "AI task stopped by user."
-        checkAndTriggerAutoFixOnAgentFinish()
         
-        // Add log for cancellation
-        val cancelLog = AiActionLog(
-            title = "Task Interrupted",
-            status = "failed",
-            details = "Execution was paused/stopped by the user. Press 'Continue' or type 'continue' to resume."
-        )
-        val updatedLogs = _aiActionLogs.value + cancelLog
+        // Add log for cancellation cleanly via AgentInterruptionStateManager
+        val cancelLog = com.example.agent.AgentInterruptionStateManager.buildInterruptionLog(_interruptionReason.value)
+        val updatedLogs = com.example.agent.AgentInterruptionStateManager.sanitizeCurrentTurnLogs(_aiActionLogs.value, cancelLog)
         _aiActionLogs.value = updatedLogs
         
         val project = _currentProject.value
@@ -2828,37 +2823,18 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             pollJob?.cancel()
             pollJob = null
             
-            // Restore action logs, todo list, and status from memory or persistent chat message
-            val cachedLogs = projectActionLogsMap[project.name]
-            if (!cachedLogs.isNullOrEmpty()) {
-                _aiActionLogs.value = cachedLogs
-            } else {
-                val chats = repository.getChatsForProject(project.name)
-                val lastAssistant = chats.lastOrNull { it.role == "assistant" && !it.aiActionLogsJson.isNullOrBlank() }
-                if (lastAssistant?.aiActionLogsJson != null) {
-                    try {
-                        val listType = Types.newParameterizedType(List::class.java, AiActionLog::class.java)
-                        val restoredLogs = moshi.adapter<List<AiActionLog>>(listType).fromJson(lastAssistant.aiActionLogsJson) ?: emptyList()
-                        _aiActionLogs.value = restoredLogs
-                        projectActionLogsMap[project.name] = restoredLogs
-                    } catch (e: Exception) {
-                        _aiActionLogs.value = emptyList()
-                    }
-                } else {
-                    _aiActionLogs.value = emptyList()
-                }
-            }
-
-            _todoList.value = projectTodoListMap[project.name] ?: emptyList()
-            _editHistory.value = projectEditHistoryMap[project.name] ?: emptyList()
-            
             val isProjectCurrentlyThinking = runningProjectName == project.name && currentAiJob?.isActive == true
             _isThinking.value = isProjectCurrentlyThinking
             if (isProjectCurrentlyThinking) {
                 _agentStatus.value = projectAgentStatusMap[project.name] ?: "AI is working..."
+                _aiActionLogs.value = projectActionLogsMap[project.name] ?: emptyList()
             } else {
                 _agentStatus.value = projectAgentStatusMap[project.name] ?: ""
+                _aiActionLogs.value = emptyList()
             }
+
+            _todoList.value = projectTodoListMap[project.name] ?: emptyList()
+            _editHistory.value = projectEditHistoryMap[project.name] ?: emptyList()
 
             startPollingBuild()
             
@@ -4147,6 +4123,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     lastEditError = null
                                     com.example.agent.AgentReadLoopPolicy.onFileModified(mutationRes.filePath)
                                     com.example.agent.AgentFileReadQuotaGuard.onFileModified(mutationRes.filePath)
+                                    com.example.ui.preview.WebConsoleSyncManager.notifyCodeEdited(mutationRes.filePath)
                                     _projectFiles.value = repository.getFilesForProject(project.name)
                                     _editHistory.value = _editHistory.value + EditRecord(
                                         tool = mutationRes.recordTool,
@@ -4780,8 +4757,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                         _detectedWebErrors.value = emptyList()
                         _webConsoleLogs.value = emptyList()
                         _webPreviewRefreshTrigger.value += 1
+                        com.example.ui.preview.WebConsoleSyncManager.notifyReloadTriggered()
                     }
-                    checkAndTriggerAutoFixOnAgentFinish()
+                    if (!_isInterrupted.value) {
+                        checkAndTriggerAutoFixOnAgentFinish()
+                    }
 
                     // Auto-trigger framework detection and Github push prompting on task completion
                     try {
