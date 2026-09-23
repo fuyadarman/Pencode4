@@ -11,8 +11,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -43,7 +45,9 @@ data class ToolStyleSpec(
     val isExecuting: Boolean,
     val isThought: Boolean = false,
     val details: String? = null,
-    val lineBadge: String? = null
+    val lineBadge: String? = null,
+    val isWebSearch: Boolean = false,
+    val webSearchInfo: WebSearchInfo? = null
 )
 
 object ToolExecutionItemMapper {
@@ -251,15 +255,17 @@ object ToolExecutionItemMapper {
                     details = log.details
                 )
             }
-            lowerTitle.contains("browser search") || lowerTitle.contains("browser_search") -> {
-                val query = details.lineSequence().firstOrNull()?.trim() ?: title
+            lowerTitle.contains("browser search") || lowerTitle.contains("browser_search") || lowerTitle.contains("web search") || lowerTitle.contains("search web") || lowerTitle.contains("searched web") || lowerTitle.contains("google_search") -> {
+                val searchInfo = WebSearchExecutionFormatter.parseWebSearch(null, log.details)
                 ToolStyleSpec(
-                    actionTitle = "Searched web",
-                    targetLabel = query.take(80),
-                    icon = Icons.Default.TravelExplore,
-                    iconColor = Color(0xFF58A6FF),
+                    actionTitle = "Searched the web",
+                    targetLabel = searchInfo.query,
+                    icon = Icons.Default.Search,
+                    iconColor = Color(0xFFC9D1D9),
                     isExecuting = isExecuting,
-                    details = log.details
+                    details = log.details,
+                    isWebSearch = true,
+                    webSearchInfo = searchInfo
                 )
             }
             lowerTitle.contains("browser read") || lowerTitle.contains("fetch_url") || lowerTitle.contains("read_url") -> {
@@ -743,7 +749,40 @@ fun ToolExecutionIndicatorRow(
                         }
                     }
 
-                    if (spec.targetLabel.isNotBlank()) {
+                    if (spec.isWebSearch && spec.webSearchInfo != null) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        // Pill box container for search query matching Screenshot_20260923-170551_cropped.png
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFF161B22),
+                            border = BorderStroke(0.5.dp, Color(0xFF30363D)),
+                            modifier = Modifier.fillMaxWidth().padding(end = 8.dp)
+                        ) {
+                            Text(
+                                text = spec.webSearchInfo.query,
+                                fontSize = 11.5.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Normal,
+                                color = Color(0xFFE6EDF3),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(3.dp))
+                        // "Fetched N results.Sources include: domain1.com, domain2.com and X more."
+                        Text(
+                            text = WebSearchExecutionFormatter.buildSourcesAnnotatedString(
+                                resultCount = spec.webSearchInfo.resultCount,
+                                sourceDomains = spec.webSearchInfo.sourceDomains
+                            ),
+                            fontSize = 11.sp,
+                            lineHeight = 15.sp,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                    } else if (spec.targetLabel.isNotBlank()) {
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = spec.targetLabel,
@@ -782,6 +821,13 @@ fun ToolExecutionIndicatorRow(
 
             // Expandable details (code diff, output, etc.)
             AnimatedVisibility(visible = isExpanded && !spec.details.isNullOrBlank()) {
+                val payload = remember(spec.actionTitle, spec.details, spec.lineBadge) {
+                    ToolExecutionPayloadFormatter.format(
+                        title = spec.actionTitle,
+                        details = spec.details,
+                        lineRange = spec.lineBadge
+                    )
+                }
                 Surface(
                     shape = RoundedCornerShape(6.dp),
                     color = Color(0xFF161B22),
@@ -790,38 +836,92 @@ fun ToolExecutionIndicatorRow(
                         .fillMaxWidth()
                         .padding(top = 8.dp, start = 40.dp)
                 ) {
-                    Column(modifier = Modifier.padding(8.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Output / Payload",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFF8B949E)
-                            )
-                            Text(
-                                text = "Copy",
-                                fontSize = 10.sp,
-                                color = Color(0xFF58A6FF),
-                                modifier = Modifier.clickable {
-                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    clipboard.setPrimaryClip(ClipData.newPlainText("Tool Output", spec.details ?: ""))
-                                    Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
-                                }
-                            )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp)
+                    ) {
+                        if (payload.hasInput && payload.inputContent.isNotBlank()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = payload.inputTitle,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF8B949E)
+                                )
+                                Text(
+                                    text = "Copy",
+                                    fontSize = 10.sp,
+                                    color = Color(0xFF58A6FF),
+                                    modifier = Modifier.clickable {
+                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        clipboard.setPrimaryClip(ClipData.newPlainText(payload.inputTitle, payload.inputContent))
+                                        Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
+                                    }
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            androidx.compose.foundation.text.selection.SelectionContainer(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 200.dp)
+                                    .verticalScroll(rememberScrollState())
+                            ) {
+                                Text(
+                                    text = payload.inputContent,
+                                    fontSize = 10.5.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = Color(0xFFC9D1D9),
+                                    lineHeight = 14.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            HorizontalDivider(color = Color(0xFF30363D), thickness = 0.5.dp)
+                            Spacer(modifier = Modifier.height(8.dp))
                         }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        androidx.compose.foundation.text.selection.SelectionContainer {
-                            Text(
-                                text = spec.details ?: "",
-                                fontSize = 10.5.sp,
-                                fontFamily = FontFamily.Monospace,
-                                color = Color(0xFFC9D1D9),
-                                lineHeight = 14.sp
-                            )
+
+                        if (payload.hasOutput && payload.outputContent.isNotBlank()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = payload.outputTitle,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF8B949E)
+                                )
+                                Text(
+                                    text = "Copy",
+                                    fontSize = 10.sp,
+                                    color = Color(0xFF58A6FF),
+                                    modifier = Modifier.clickable {
+                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        clipboard.setPrimaryClip(ClipData.newPlainText(payload.outputTitle, payload.outputContent))
+                                        Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
+                                    }
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            androidx.compose.foundation.text.selection.SelectionContainer(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 350.dp)
+                                    .verticalScroll(rememberScrollState())
+                            ) {
+                                Text(
+                                    text = payload.outputContent,
+                                    fontSize = 10.5.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = Color(0xFFC9D1D9),
+                                    lineHeight = 14.sp
+                                )
+                            }
                         }
                     }
                 }

@@ -248,18 +248,6 @@ object WebPreviewPerformanceGuard {
      * requestAnimationFrame loops, and audio/timers from lingering in memory.
      */
     fun safelyReleaseWebView(webView: WebView?) {
-        if (webView == null) return
-        try {
-            webView.stopLoading()
-            webView.onPause()
-            webView.pauseTimers()
-            webView.webChromeClient = null
-            webView.webViewClient = android.webkit.WebViewClient()
-            webView.removeJavascriptInterface("AndroidInspector")
-            webView.loadUrl("about:blank")
-            webView.destroy()
-        } catch (e: Exception) {
-            // Ignore teardown errors
-        }
+        WebPreviewLifecycleManager.releaseWebView(webView)
     }
 }

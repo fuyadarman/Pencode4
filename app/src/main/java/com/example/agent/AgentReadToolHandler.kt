@@ -52,7 +52,7 @@ object AgentReadToolHandler {
                     output = scanResult.output,
                     isSuccess = scanResult.isSuccess,
                     logTitle = "Scanned directory (scan_dir)",
-                    logDetails = if (scanResult.isSuccess) "Found ${scanResult.fileCount} files in $rawPath" else scanResult.output,
+                    logDetails = if (scanResult.isSuccess) com.example.ui.agent.ToolCodeBlockFormatter.formatScanDir(rawPath, scanResult.fileCount, scanResult.output) else scanResult.output,
                     lineRange = null,
                     pathsRead = scanResult.matchedFiles
                 )
@@ -90,7 +90,7 @@ object AgentReadToolHandler {
                             output = "--- File: $filePath ---\n${targetFile.content}$warningSuffix",
                             isSuccess = true,
                             logTitle = "Read file",
-                            logDetails = "Read ${targetFile.content.lines().size} lines from $filePath",
+                            logDetails = com.example.ui.agent.ToolCodeBlockFormatter.formatReadRange(filePath, 1, targetFile.content.lines().size, targetFile.content),
                             lineRange = "all",
                             pathsRead = paths
                         )
@@ -102,7 +102,7 @@ object AgentReadToolHandler {
                                 output = "--- File: ${diskResolved.path} ---\n${diskResolved.content}$warningSuffix",
                                 isSuccess = true,
                                 logTitle = "Read file",
-                                logDetails = "Read ${diskResolved.linesCount} lines from ${diskResolved.path}",
+                                logDetails = com.example.ui.agent.ToolCodeBlockFormatter.formatReadRange(diskResolved.path, 1, diskResolved.linesCount, diskResolved.content),
                                 lineRange = "all",
                                 pathsRead = paths
                             )
@@ -181,7 +181,7 @@ object AgentReadToolHandler {
                             output = "--- File: $filePath (Lines ${startIdx + 1}-$endIdx) ---\n$selectedLines$warningSuffix",
                             isSuccess = true,
                             logTitle = "read :$filePath",
-                            logDetails = "Read lines $startLine-$endLine from $filePath",
+                            logDetails = com.example.ui.agent.ToolCodeBlockFormatter.formatReadRange(filePath, startIdx + 1, endIdx, selectedLines),
                             lineRange = lineRangeDesc,
                             pathsRead = paths
                         )
@@ -197,7 +197,7 @@ object AgentReadToolHandler {
                                 output = "--- File: ${diskResolved.path} (Lines ${startIdx + 1}-$endIdx) ---\n$selectedLines$warningSuffix",
                                 isSuccess = true,
                                 logTitle = "read :${diskResolved.path}",
-                                logDetails = "Read lines $startLine-$endLine from ${diskResolved.path}",
+                                logDetails = com.example.ui.agent.ToolCodeBlockFormatter.formatReadRange(diskResolved.path, startIdx + 1, endIdx, selectedLines),
                                 lineRange = lineRangeDesc,
                                 pathsRead = paths
                             )

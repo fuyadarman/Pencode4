@@ -305,7 +305,7 @@ object ExtraToolHandlers {
 
                 val isSuccess = !result.startsWith("Error")
                 val logDetails = if (isSuccess) {
-                    "Navigated to: $lastUrl\nTitle: $lastTitle\nArticle Excerpt: $lastExcerpt..."
+                    "Query: $queryVal\nNavigated to: $lastUrl\nTitle: $lastTitle\n\n$result"
                 } else result
                 updateLog(searchLog.id, if (isSuccess) "success" else "failed", logDetails)
                 result

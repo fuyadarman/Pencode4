@@ -25,7 +25,8 @@ object AgentFileMutationHandler {
         val filePath: String,
         val lineRange: String,
         val logTitle: String,
-        val recordTool: String? = null
+        val recordTool: String? = null,
+        val detailsPayload: String? = null
     )
 
     suspend fun handleMutation(
@@ -146,7 +147,8 @@ object AgentFileMutationHandler {
             filePath = filePath,
             lineRange = rangeDesc,
             logTitle = if (fileAlreadyExists) "Updated existing file" else "Created new file",
-            recordTool = if (isSuccess) "create_file" else null
+            recordTool = if (isSuccess) "create_file" else null,
+            detailsPayload = if (isSuccess) "File: $filePath\n\n$fileContent" else result
         )
     }
 
@@ -204,7 +206,8 @@ object AgentFileMutationHandler {
             filePath = filePath,
             lineRange = args?.lineRange ?: "all",
             logTitle = "Writing file",
-            recordTool = if (isSuccess) "write_file" else null
+            recordTool = if (isSuccess) "write_file" else null,
+            detailsPayload = if (isSuccess) "File: $filePath\n\n$fileContent" else result
         )
     }
 
@@ -265,7 +268,8 @@ object AgentFileMutationHandler {
             filePath = filePath,
             lineRange = calculatedRange,
             logTitle = "Append to file",
-            recordTool = if (isSuccess) "append" else null
+            recordTool = if (isSuccess) "append" else null,
+            detailsPayload = if (isSuccess) "File: $filePath (Appended)\n\n$fileContent" else result
         )
     }
 
@@ -317,7 +321,8 @@ object AgentFileMutationHandler {
                     filePath = filePath,
                     lineRange = execResult.rangeDesc,
                     logTitle = "Modified file",
-                    recordTool = execResult.editRecord.tool
+                    recordTool = execResult.editRecord.tool,
+                    detailsPayload = com.example.ui.agent.ToolCodeBlockFormatter.formatEditFileChunks(filePath, searchStr, replaceStr, execResult.rangeDesc)
                 )
             }
             is AgentEditToolExecutor.EditExecutionResult.Failure -> {
@@ -329,7 +334,8 @@ object AgentFileMutationHandler {
                     isSuccess = false,
                     filePath = filePath,
                     lineRange = args?.lineRange ?: "",
-                    logTitle = "Modified file"
+                    logTitle = "Modified file",
+                    detailsPayload = com.example.ui.agent.ToolCodeBlockFormatter.formatEditFileChunks(filePath, searchStr, replaceStr, args?.lineRange) + "\n\nError: " + execResult.errorMessage
                 )
             }
         }
@@ -446,13 +452,15 @@ object AgentFileMutationHandler {
         }
 
         val isSuccess = result.startsWith("Successfully") && saved
+        val chunksPairs = chunks.map { MultiEditChunkParser.getEffectiveSearch(it) to MultiEditChunkParser.getEffectiveReplace(it) }
         return MutationResult(
             resultText = result,
             isSuccess = isSuccess,
             filePath = filePath,
             lineRange = if (foundRange.isNotEmpty()) foundRange else args?.lineRange ?: "",
             logTitle = "Multi-edited file",
-            recordTool = if (isSuccess) "multi_edit" else null
+            recordTool = if (isSuccess) "multi_edit" else null,
+            detailsPayload = if (chunksPairs.isNotEmpty()) com.example.ui.agent.ToolCodeBlockFormatter.formatMultiEditChunks(filePath, chunksPairs) else result
         )
     }
 }

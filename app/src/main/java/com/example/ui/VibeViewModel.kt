@@ -4136,7 +4136,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 updateAiLog(
                                     mutationLog.id,
                                     if (mutationRes.isSuccess) "success" else "failed",
-                                    if (mutationRes.isSuccess) mutationRes.filePath else mutationRes.resultText,
+                                    if (mutationRes.isSuccess) (mutationRes.detailsPayload ?: mutationRes.filePath) else mutationRes.resultText,
                                     lineRange = mutationRes.lineRange,
                                     newTitle = effectiveTitle
                                 )
@@ -4251,7 +4251,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 
                                 val result = com.example.agent.AgentToolRegistryEngine.ALL_TOOLS_DOCUMENTATION
 
-                                updateAiLog(logEntry.id, "success", "Retrieved all tools specifications")
+                                updateAiLog(logEntry.id, "success", result)
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool':\n$result"))))
                             }
@@ -4268,7 +4268,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     args = args
                                 )
 
-                                updateAiLog(logEntry.id, "success", result.take(300))
+                                updateAiLog(logEntry.id, "success", result)
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool':\n$result"))))
                             }
@@ -4286,7 +4286,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     args = args
                                 )
 
-                                updateAiLog(logEntry.id, "success", result.take(300))
+                                updateAiLog(logEntry.id, "success", result)
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool':\n$result"))))
                             }

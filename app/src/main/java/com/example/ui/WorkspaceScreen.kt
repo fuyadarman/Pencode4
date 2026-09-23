@@ -3541,11 +3541,11 @@ fun PreviewTabContent(
                                     loadWithOverviewMode = true
                                 }
                                 loadDataWithBaseURL(
-                                    "https://virtual-app/",
+                                    com.example.ui.preview.WebPreviewLifecycleManager.VIRTUAL_BASE_URL,
                                     instructionHtml,
                                     "text/html",
                                     "UTF-8",
-                                    null
+                                    com.example.ui.preview.WebPreviewLifecycleManager.VIRTUAL_BASE_URL + "instruction.html"
                                 )
                             }
                         },
@@ -3568,6 +3568,14 @@ fun PreviewTabContent(
                     var lastLoadedHtml by remember { mutableStateOf(initialProcessedHtml) }
                     var isPageLoading by remember { mutableStateOf(true) }
                     var pageProgress by remember { mutableStateOf(0) }
+
+                    // Safety timeout: Never let the preview tab loading bar hang permanently
+                    LaunchedEffect(isPageLoading) {
+                        if (isPageLoading) {
+                            kotlinx.coroutines.delay(2500)
+                            isPageLoading = false
+                        }
+                    }
                     val previewContext = androidx.compose.ui.platform.LocalContext.current
                     DisposableEffect(Unit) {
                         com.example.ui.preview.WebPreviewCdnCacheEngine.init(previewContext)
@@ -3639,7 +3647,7 @@ fun PreviewTabContent(
                                             super.onPageStarted(view, url, favicon)
                                             isPageLoading = true
                                             if (url != null) {
-                                                if (url.startsWith("https://virtual-app/")) {
+                                                if (com.example.ui.preview.WebPreviewLifecycleManager.isInternalVirtualUrl(url)) {
                                                     onClearErrors()
                                                 } else {
                                                     customUrl = url
@@ -3653,11 +3661,11 @@ fun PreviewTabContent(
                                         override fun onPageFinished(view: WebView?, url: String?) {
                                             super.onPageFinished(view, url)
                                             isPageLoading = false
-                                        canGoBack = view?.canGoBack() == true
-                                        canGoForward = view?.canGoForward() == true
-                                        if (url != null && !url.startsWith("https://virtual-app/")) {
-                                            urlInputText = url
-                                        }
+                                            canGoBack = view?.canGoBack() == true
+                                            canGoForward = view?.canGoForward() == true
+                                            if (url != null && !com.example.ui.preview.WebPreviewLifecycleManager.isInternalVirtualUrl(url)) {
+                                                urlInputText = url
+                                            }
                                         val js = """
                                             window.isInspectorModeActive = false;
                                             if (!window.inspectorInitialized) {
@@ -3822,33 +3830,36 @@ fun PreviewTabContent(
                                     currentOnElementSelected(identifier, outerHTML)
                                 }, "AndroidInspector")
                                 
+                                com.example.ui.preview.WebPreviewLifecycleManager.prepareWebView(this)
+
                                 if (customUrl != null) {
                                     loadUrl(customUrl!!)
                                 } else if (hasWebDist) {
-                                    loadUrl("https://virtual-app/")
+                                    loadUrl(com.example.ui.preview.WebPreviewLifecycleManager.VIRTUAL_BASE_URL)
                                 } else if (htmlFile != null) {
                                     loadDataWithBaseURL(
-                                        "https://virtual-app/",
+                                        com.example.ui.preview.WebPreviewLifecycleManager.VIRTUAL_BASE_URL,
                                         initialProcessedHtml,
                                         "text/html",
                                         "UTF-8",
-                                        null
+                                        com.example.ui.preview.WebPreviewLifecycleManager.VIRTUAL_HISTORY_URL
                                     )
                                 }
                             }
                         },
                         update = { webView ->
                             webViewRef = webView
+                            com.example.ui.preview.WebPreviewLifecycleManager.prepareWebView(webView)
                             if (customUrl == null && !hasWebDist && htmlFile != null) {
                                 val currentContent = com.example.ui.preview.WebPreviewPerformanceGuard.preprocessHtmlSafely(htmlFile.content)
                                 if (lastLoadedHtml != currentContent) {
                                     lastLoadedHtml = currentContent
                                     webView.loadDataWithBaseURL(
-                                        "https://virtual-app/",
+                                        com.example.ui.preview.WebPreviewLifecycleManager.VIRTUAL_BASE_URL,
                                         currentContent,
                                         "text/html",
                                         "UTF-8",
-                                        null
+                                        com.example.ui.preview.WebPreviewLifecycleManager.VIRTUAL_HISTORY_URL
                                     )
                                 }
                             }
