@@ -3933,20 +3933,39 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                             handleComplete(thoughtText.ifBlank { "Task completed successfully!" })
                             loopCompleted = true
                             break
-                        } else if (toolCalls.isEmpty() || consecutiveThinkOnlyCount >= 2) {
-                            if (hasModifiedFiles) {
-                                handleComplete(lastThought ?: "Task completed after reasoning.")
-                                loopCompleted = true
-                                break
-                            } else {
-                                val nudge = com.example.agent.OpenCodeLoopGuardEngine.buildIdleThinkingNudge(hasModifiedFiles = false)
-                                history.add(Content(role = "user", parts = listOf(Part(text = nudge))))
-                                val nudgeLog = createAiLog(
-                                    title = "AI Direct Action Guidance",
-                                    status = "thinking",
-                                    details = "Guiding model to execute tool actions..."
-                                )
-                                _aiActionLogs.value = _aiActionLogs.value + nudgeLog
+                        } else if (toolCalls.isEmpty() || realActionTools.isEmpty()) {
+                            val thoughtDecision = com.example.agent.AgentThoughtLoopGuard.evaluateTurn(
+                                consecutiveThoughtCount = consecutiveThinkOnlyCount,
+                                lastThought = lastThought,
+                                currentThought = thoughtText,
+                                userPrompt = userPrompt,
+                                hasModifiedFiles = hasModifiedFiles,
+                                hasReadFiles = readFilesThisSession.isNotEmpty()
+                            )
+                            when (thoughtDecision) {
+                                is com.example.agent.AgentThoughtLoopGuard.ThoughtDecision.BreakAndComplete -> {
+                                    val interceptLog = createAiLog(
+                                        title = "Thought Loop Circuit Breaker",
+                                        status = "success",
+                                        details = thoughtDecision.reason
+                                    )
+                                    _aiActionLogs.value = _aiActionLogs.value + interceptLog
+                                    handleComplete(thoughtDecision.finalResponse)
+                                    loopCompleted = true
+                                    break
+                                }
+                                is com.example.agent.AgentThoughtLoopGuard.ThoughtDecision.NudgeAction -> {
+                                    history.add(Content(role = "user", parts = listOf(Part(text = thoughtDecision.guidance))))
+                                    val nudgeLog = createAiLog(
+                                        title = "Action Execution Directive",
+                                        status = "thinking",
+                                        details = "Instructing model to execute tool calls (Attempt ${thoughtDecision.attempt})..."
+                                    )
+                                    _aiActionLogs.value = _aiActionLogs.value + nudgeLog
+                                }
+                                com.example.agent.AgentThoughtLoopGuard.ThoughtDecision.ProceedNormal -> {
+                                    // Proceed to execute tool calls
+                                }
                             }
                         }
 
@@ -4067,7 +4086,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 } else {
                                     "System/Tool Output for '$toolName': $title logged. You have formulated your plan. Now in your NEXT response, you MUST execute the required tool calls (e.g. 'create_file', 'edit_file', 'multi_edit_file') in JSON format to implement it. Do not return an orphan thought without tools."
                                 }
-                                history.add(Content(role = "user", parts = listOf(Part(text = nextGuidance))))
+                                if (history.lastOrNull()?.role != "user") {
+                                    history.add(Content(role = "user", parts = listOf(Part(text = nextGuidance))))
+                                }
                             }
                             "list_directory", "scan_dir", "read_file", "read_file_range", "multi_read_file", "multi_read" -> {
                                 val readRes = com.example.agent.AgentReadToolHandler.handleReadTool(

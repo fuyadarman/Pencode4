@@ -109,6 +109,7 @@ object AgentFileMutationHandler {
 
         var saved = false
         var rangeDesc = args?.lineRange ?: "all"
+        val isOverwriteAllowed = AgentArgumentNormalizer.resolveOverwrite(args)
         val result = if (fileAlreadyExists) {
             when (val decision = AgentFileCreationResolver.resolveExistingFileCreation(
                 filePath = filePath,
@@ -116,7 +117,8 @@ object AgentFileMutationHandler {
                 targetFile = existingFileEntity,
                 fileOnDisk = fileOnDisk,
                 project = project,
-                repository = repository
+                repository = repository,
+                isOverwriteAllowed = isOverwriteAllowed
             )) {
                 is AgentFileCreationResolver.FileCreationDecision.Saved -> {
                     saved = true
@@ -134,6 +136,8 @@ object AgentFileMutationHandler {
             try {
                 repository.saveFile(project.name, filePath, fileContent)
                 saved = true
+                val linesCount = fileContent.lines().size
+                rangeDesc = if (linesCount <= 1) "line 1" else "lines 1-$linesCount"
                 "Successfully created new file '$filePath'. Content is saved. DO NOT re-read this file to verify. If all requested changes are done, call 'complete'."
             } catch (e: Exception) {
                 "Error creating file: ${e.localizedMessage}"
@@ -141,12 +145,13 @@ object AgentFileMutationHandler {
         }
 
         val isSuccess = !result.startsWith("Error") && saved
+        val effectiveTitle = if (fileAlreadyExists) "Overwrote file" else "Created file"
         return MutationResult(
             resultText = result,
             isSuccess = isSuccess,
             filePath = filePath,
             lineRange = rangeDesc,
-            logTitle = if (fileAlreadyExists) "Updated existing file" else "Created new file",
+            logTitle = effectiveTitle,
             recordTool = if (isSuccess) "create_file" else null,
             detailsPayload = if (isSuccess) "File: $filePath\n\n$fileContent" else result
         )
@@ -320,7 +325,7 @@ object AgentFileMutationHandler {
                     isSuccess = true,
                     filePath = filePath,
                     lineRange = execResult.rangeDesc,
-                    logTitle = "Modified file",
+                    logTitle = "Edited file",
                     recordTool = execResult.editRecord.tool,
                     detailsPayload = com.example.ui.agent.ToolCodeBlockFormatter.formatEditFileChunks(filePath, searchStr, replaceStr, execResult.rangeDesc)
                 )
@@ -334,7 +339,7 @@ object AgentFileMutationHandler {
                     isSuccess = false,
                     filePath = filePath,
                     lineRange = args?.lineRange ?: "",
-                    logTitle = "Modified file",
+                    logTitle = "Edited file",
                     detailsPayload = com.example.ui.agent.ToolCodeBlockFormatter.formatEditFileChunks(filePath, searchStr, replaceStr, args?.lineRange) + "\n\nError: " + execResult.errorMessage
                 )
             }

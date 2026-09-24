@@ -313,18 +313,46 @@ object ToolExecutionItemMapper {
                     details = log.details
                 )
             }
-            lowerTitle.startsWith("edit:") || lowerTitle.startsWith("writing file") || lowerTitle.contains("edited file") || lowerTitle.contains("modified file") || lowerTitle.contains("edit_file") || lowerTitle.contains("multi_edit") -> {
-                val target = extractPath(title, details, "Edit:").ifBlank {
-                    extractPath(title, details, "Writing file:").ifBlank {
-                        extractPath(title, details, "Modified file:").ifBlank {
-                            extractPath(title, details, "File operation:").ifBlank { details.lineSequence().firstOrNull()?.trim() ?: "file" }
+            lowerTitle.contains("multi-edit") || lowerTitle.contains("multi_edit") || lowerTitle.contains("multiedit") || lowerTitle.contains("multi_patch") -> {
+                val target = extractPath(title, details, "Multi-edited file:").ifBlank {
+                    extractPath(title, details, "Edited file:").ifBlank {
+                        extractPath(title, details, "File operation:").ifBlank { details.lineSequence().firstOrNull()?.trim() ?: "file" }
+                    }
+                }
+                val rawRange = if (lineRange.isNotBlank()) lineRange else extractLineRangeFromDetails(details)
+                val resolvedLineRange = formatDisplayLineRange(rawRange)
+                val targetText = target.ifBlank { "file" }
+                ToolStyleSpec(
+                    actionTitle = "Multi-edited file",
+                    targetLabel = targetText,
+                    icon = Icons.Default.Edit,
+                    iconColor = Color(0xFF00D8A5),
+                    isExecuting = isExecuting,
+                    details = log.details,
+                    lineBadge = resolvedLineRange.ifBlank { null }
+                )
+            }
+            lowerTitle.startsWith("edit:") || lowerTitle.startsWith("writing file") || lowerTitle.contains("edited file") || lowerTitle.contains("modified file") || lowerTitle.contains("edit_file") || lowerTitle.contains("updated existing file") || lowerTitle.contains("updated file") || lowerTitle.contains("update existing file") || lowerTitle.contains("overwrote file") -> {
+                val target = extractPath(title, details, "Edited file:").ifBlank {
+                    extractPath(title, details, "Overwrote file:").ifBlank {
+                        extractPath(title, details, "Updated existing file:").ifBlank {
+                            extractPath(title, details, "Updated file:").ifBlank {
+                                extractPath(title, details, "Modified file:").ifBlank {
+                                    extractPath(title, details, "Edit:").ifBlank {
+                                        extractPath(title, details, "Writing file:").ifBlank {
+                                            extractPath(title, details, "File operation:").ifBlank { details.lineSequence().firstOrNull()?.trim() ?: "file" }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
-                val resolvedLineRange = if (lineRange.isNotBlank()) lineRange else extractLineRangeFromDetails(details)
+                val rawRange = if (lineRange.isNotBlank()) lineRange else extractLineRangeFromDetails(details)
+                val resolvedLineRange = formatDisplayLineRange(rawRange)
                 val targetText = target.ifBlank { "file" }
                 ToolStyleSpec(
-                    actionTitle = "Edited file",
+                    actionTitle = if (lowerTitle.contains("overwrote")) "Overwrote file" else "Edited file",
                     targetLabel = targetText,
                     icon = Icons.Default.Edit,
                     iconColor = Color(0xFF00D8A5),
@@ -590,13 +618,32 @@ object ToolExecutionItemMapper {
     }
 
     private fun formatLineRange(raw: String?): String {
-        if (raw.isNullOrBlank()) return ""
+        return formatDisplayLineRange(raw ?: "")
+    }
+
+    private fun formatDisplayLineRange(raw: String): String {
+        if (raw.isBlank()) return ""
         val clean = raw.trim()
         val lower = clean.lowercase(Locale.ROOT)
-        return when {
-            lower.startsWith("line ") || lower.startsWith("lines ") -> lower
-            clean.all { it.isDigit() || it == '-' || it == ',' } -> "lines $clean"
-            else -> clean
+        if (lower == "all") return "all"
+
+        return clean.split(",").joinToString(", ") { part ->
+            val p = part.trim()
+                .removePrefix("lines")
+                .removePrefix("line")
+                .removePrefix("Lines")
+                .removePrefix("Line")
+                .trim()
+            if (p.matches(Regex("""\d+\s*-\s*\d+"""))) {
+                val tokens = p.split("-").map { it.trim() }
+                "L${tokens[0]}-L${tokens[1]}"
+            } else if (p.matches(Regex("""\d+"""))) {
+                "L$p"
+            } else if (p.startsWith("L", ignoreCase = true)) {
+                p.uppercase(Locale.ROOT)
+            } else {
+                p
+            }
         }
     }
 

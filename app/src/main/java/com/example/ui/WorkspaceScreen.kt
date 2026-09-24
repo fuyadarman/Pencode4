@@ -3646,9 +3646,12 @@ fun PreviewTabContent(
                                         override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                                             super.onPageStarted(view, url, favicon)
                                             isPageLoading = true
+                                            onClearLogs()
+                                            onClearErrors()
+                                            com.example.ui.preview.WebConsoleSyncManager.notifyReloadTriggered()
                                             if (url != null) {
                                                 if (com.example.ui.preview.WebPreviewLifecycleManager.isInternalVirtualUrl(url)) {
-                                                    onClearErrors()
+                                                    // Virtual internal URL
                                                 } else {
                                                     customUrl = url
                                                     urlInputText = url

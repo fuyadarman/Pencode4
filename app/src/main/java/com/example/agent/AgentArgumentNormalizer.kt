@@ -81,4 +81,9 @@ object AgentArgumentNormalizer {
             ?: args.text
             ?: resolveReplace(args)
     }
+
+    fun resolveOverwrite(args: ToolArguments?): Boolean {
+        if (args == null) return false
+        return args.overwrite == true || args.overwritePascal == true
+    }
 }

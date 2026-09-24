@@ -191,7 +191,9 @@ data class ToolArguments(
     val issue: String? = null,
     val solution: String? = null,
     val instructions: String? = null,
-    val tags: List<String>? = null
+    val tags: List<String>? = null,
+    val overwrite: Boolean? = null,
+    @Json(name = "Overwrite") val overwritePascal: Boolean? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -704,27 +706,14 @@ object GeminiClient {
                     messages.add(mapOf("role" to role, "content" to textPart))
                 }
 
-                val isOSeries = modelId.startsWith("o1") || modelId.startsWith("o3") || modelId.startsWith("o4")
-                val bodyMap = mutableMapOf<String, Any>(
-                    "model" to modelId,
-                    "messages" to messages
+                val bodyMap = ApiRequestCompatibilityEngine.buildOpenAiCompatiblePayload(
+                    modelId = modelId,
+                    messages = messages,
+                    effort = reasoningEffort,
+                    provider = provider,
+                    baseUrl = baseUrl,
+                    safeFallbackMode = false
                 )
-                if (isOSeries) {
-                    bodyMap["reasoning_effort"] = reasoningEffort.reasoningEffortParam
-                } else {
-                    bodyMap["temperature"] = if (reasoningEffort == com.example.agent.ReasoningEffort.MAX) 0.2f else 0.4f
-                    if (provider == "openrouter") {
-                        bodyMap["reasoning"] = mapOf("effort" to reasoningEffort.reasoningEffortParam)
-                    }
-                }
-                
-                // Use response_format for OpenAI, Mistral and Groq to enforce JSON mode
-                val supportsJsonMode = provider == "openai" || provider == "mistral" || provider == "groq" || provider == "openrouter" ||
-                                      (provider == "custom" && !baseUrl.contains("anthropic") && !baseUrl.contains("groq"))
-                
-                if (supportsJsonMode) {
-                    bodyMap["response_format"] = mapOf("type" to "json_object")
-                }
 
                 val bodyJson = moshi.adapter(Map::class.java).lenient().toJson(bodyMap)
                 val body = bodyJson.toRequestBody(mediaType)
@@ -739,7 +728,7 @@ object GeminiClient {
                     requestBuilder.header("X-Title", "AI Studio Android")
                 }
 
-                val request = requestBuilder.build()
+                var currentRequest = requestBuilder.build()
 
                 val modelDisplayName = if (modelId.isNotBlank()) modelId else when (provider.lowercase()) {
                     "cline" -> "Cline"
@@ -760,16 +749,42 @@ object GeminiClient {
                     var response: okhttp3.Response? = null
                     var rawResponse: String? = null
                     var lastCode = 0
+                    var safeFallbackUsed = false
 
                     while (attempt < maxAttempts) {
                         try {
                             response?.close()
-                            response = client.newCall(request).execute()
+                            response = client.newCall(currentRequest).execute()
                             lastCode = response.code
                             rawResponse = response.body?.string()
                             Log.d(TAG, "$provider Raw Response code: $lastCode")
 
                              if (!response.isSuccessful) {
+                                // Auto-recover from HTTP 400 parameter errors (e.g. response_format or reasoning rejected)
+                                if (lastCode == 400 && !safeFallbackUsed && ApiRequestCompatibilityEngine.isProviderParameterError(lastCode, rawResponse)) {
+                                    Log.w(TAG, "$provider returned parameter mismatch ($rawResponse). Retrying with safe fallback payload...")
+                                    safeFallbackUsed = true
+                                    val safePayload = ApiRequestCompatibilityEngine.buildOpenAiCompatiblePayload(
+                                        modelId = modelId,
+                                        messages = messages,
+                                        effort = reasoningEffort,
+                                        provider = provider,
+                                        baseUrl = baseUrl,
+                                        safeFallbackMode = true
+                                    )
+                                    val safeJson = moshi.adapter(Map::class.java).lenient().toJson(safePayload)
+                                    val safeBuilder = Request.Builder()
+                                        .url(url)
+                                        .header("Authorization", "Bearer $activeApiKey")
+                                        .post(safeJson.toRequestBody(mediaType))
+                                    if (provider == "openrouter") {
+                                        safeBuilder.header("HTTP-Referer", "https://ai.studio/build")
+                                        safeBuilder.header("X-Title", "AI Studio Android")
+                                    }
+                                    currentRequest = safeBuilder.build()
+                                    continue
+                                }
+
                                 attempt++
                                 if (attempt < maxAttempts) {
                                     val isTransientError = (lastCode == 429 || lastCode == 503 || lastCode == 502 || lastCode == 504) || (rawResponse ?: "").contains("quota", ignoreCase = true) || (rawResponse ?: "").contains("rate limit", ignoreCase = true) || (rawResponse ?: "").contains("overloaded", ignoreCase = true) || (rawResponse ?: "").contains("unavailable", ignoreCase = true) || (rawResponse ?: "").contains("RESOURCE_EXHAUSTED", ignoreCase = true) || (rawResponse ?: "").contains("exhausted", ignoreCase = true) || (rawResponse ?: "").contains("503", ignoreCase = true) || (rawResponse ?: "").contains("429", ignoreCase = true)
@@ -961,22 +976,40 @@ object GeminiClient {
                     .post(body)
                     .build()
 
+                var currentRequest = request
+
                 try {
                     var attempt = 0
                     val maxAttempts = 10
                     var response: okhttp3.Response? = null
                     var rawResponse: String? = null
                     var lastCode = 0
+                    var claudeFallbackUsed = false
 
                     while (attempt < maxAttempts) {
                         try {
                             response?.close()
-                            response = client.newCall(request).execute()
+                            response = client.newCall(currentRequest).execute()
                             lastCode = response.code
                             rawResponse = response.body?.string()
                             Log.d(TAG, "Claude Raw Response code: $lastCode")
 
                              if (!response.isSuccessful) {
+                                if (lastCode == 400 && !claudeFallbackUsed && (rawResponse ?: "").contains("thinking", ignoreCase = true)) {
+                                    Log.w(TAG, "Claude thinking rejected ($rawResponse). Retrying without thinking...")
+                                    claudeFallbackUsed = true
+                                    bodyMap.remove("thinking")
+                                    bodyMap["temperature"] = 0.5f
+                                    bodyMap["max_tokens"] = 4096
+                                    val safeJson = moshi.adapter(Map::class.java).toJson(bodyMap)
+                                    currentRequest = Request.Builder()
+                                        .url(url)
+                                        .header("x-api-key", activeApiKey)
+                                        .header("anthropic-version", "2023-06-01")
+                                        .post(safeJson.toRequestBody(mediaType))
+                                        .build()
+                                    continue
+                                }
                                 attempt++
                                 if (attempt < maxAttempts) {
                                     val isTransientError = (lastCode == 429 || lastCode == 503 || lastCode == 502 || lastCode == 504) || (rawResponse ?: "").contains("quota", ignoreCase = true) || (rawResponse ?: "").contains("rate limit", ignoreCase = true) || (rawResponse ?: "").contains("overloaded", ignoreCase = true) || (rawResponse ?: "").contains("unavailable", ignoreCase = true) || (rawResponse ?: "").contains("RESOURCE_EXHAUSTED", ignoreCase = true) || (rawResponse ?: "").contains("exhausted", ignoreCase = true) || (rawResponse ?: "").contains("503", ignoreCase = true) || (rawResponse ?: "").contains("429", ignoreCase = true)
@@ -1128,10 +1161,9 @@ object GeminiClient {
                     generationConfig = GenerationConfig(
                         responseMimeType = "application/json",
                         temperature = if (reasoningEffort == com.example.agent.ReasoningEffort.MAX) 0.3f else 0.5f,
-                        thinkingConfig = ThinkingConfig(
-                            thinkingBudget = com.example.agent.ReasoningEffortEngine.getGeminiThinkingBudget(reasoningEffort),
-                            includeThoughts = true,
-                            thinkingLevel = com.example.agent.ReasoningEffortEngine.getGeminiThinkingLevel(reasoningEffort)
+                        thinkingConfig = ApiRequestCompatibilityEngine.buildGeminiThinkingConfig(
+                            modelId = activeModel,
+                            effort = reasoningEffort
                         )
                     )
                 )
@@ -1140,7 +1172,7 @@ object GeminiClient {
                 val jsonRequest = requestAdapter.toJson(requestBodyData)
                 val body = jsonRequest.toRequestBody(mediaType)
 
-                val request = Request.Builder()
+                var currentRequest = Request.Builder()
                     .url(url)
                     .post(body)
                     .build()
@@ -1151,11 +1183,12 @@ object GeminiClient {
                     var response: okhttp3.Response? = null
                     var rawResponse: String? = null
                     var lastCode = 0
+                    var thinkingFallbackUsed = false
 
                     while (attempt < maxAttempts) {
                         try {
                             response?.close()
-                            response = client.newCall(request).execute()
+                            response = client.newCall(currentRequest).execute()
                             lastCode = response.code
                             if (response.isSuccessful && onStreamChunk != null) {
                                 val bodySource = response.body?.source()
@@ -1180,6 +1213,27 @@ object GeminiClient {
                             Log.d(TAG, "Gemini Raw Response code: $lastCode")
 
                              if (!response.isSuccessful) {
+                                // Auto-recover from Gemini thinkingConfig rejection (HTTP 400)
+                                if (lastCode == 400 && !thinkingFallbackUsed && ApiRequestCompatibilityEngine.isGeminiThinkingConfigError(lastCode, rawResponse)) {
+                                    Log.w(TAG, "Gemini thinkingConfig rejected ($rawResponse). Retrying without thinkingConfig...")
+                                    thinkingFallbackUsed = true
+                                    val fallbackReq = GenerateContentRequest(
+                                        contents = conversationHistory,
+                                        systemInstruction = Content(parts = listOf(Part(text = systemInstruction))),
+                                        generationConfig = GenerationConfig(
+                                            responseMimeType = "application/json",
+                                            temperature = if (reasoningEffort == com.example.agent.ReasoningEffort.MAX) 0.3f else 0.5f,
+                                            thinkingConfig = null
+                                        )
+                                    )
+                                    val fallbackJson = moshi.adapter(GenerateContentRequest::class.java).toJson(fallbackReq)
+                                    currentRequest = Request.Builder()
+                                        .url(url)
+                                        .post(fallbackJson.toRequestBody(mediaType))
+                                        .build()
+                                    continue
+                                }
+
                                 attempt++
                                 if (attempt < maxAttempts) {
                                     val isTransientError = (lastCode == 429 || lastCode == 503 || lastCode == 502 || lastCode == 504) || (rawResponse ?: "").contains("quota", ignoreCase = true) || (rawResponse ?: "").contains("rate limit", ignoreCase = true) || (rawResponse ?: "").contains("overloaded", ignoreCase = true) || (rawResponse ?: "").contains("unavailable", ignoreCase = true) || (rawResponse ?: "").contains("RESOURCE_EXHAUSTED", ignoreCase = true) || (rawResponse ?: "").contains("exhausted", ignoreCase = true) || (rawResponse ?: "").contains("503", ignoreCase = true) || (rawResponse ?: "").contains("429", ignoreCase = true)

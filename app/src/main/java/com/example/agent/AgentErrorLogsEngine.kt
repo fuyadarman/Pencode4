@@ -49,14 +49,38 @@ object AgentErrorLogsEngine {
             return "✅ No errors found in Preview Tab! Total console entries: ${logs.size} (all info/warnings, no critical errors)."
         }
 
-        val displayLogs = if (errorLogs.size > maxLines) errorLogs.takeLast(maxLines) else errorLogs
+        // Separate active fresh logs from stale historical logs before the latest code edit
+        val activeErrors = errorLogs.filter { !com.example.ui.preview.WebConsoleSyncManager.isStaleLog(it.timestamp) }
+        val staleErrorsCount = errorLogs.size - activeErrors.size
+
+        if (activeErrors.isEmpty()) {
+            return "✅ No active errors in Preview Tab! Current preview is running cleanly (all $staleErrorsCount historical errors occurred prior to the latest code update and were resolved)."
+        }
+
+        // Group identical duplicate errors to avoid flooding (e.g. 64 repeated classList errors in animation loop)
+        data class ErrorGroup(val log: VibeViewModel.WebConsoleLog, var count: Int)
+        val groupedList = mutableListOf<ErrorGroup>()
+        activeErrors.forEach { log ->
+            val existing = groupedList.find { 
+                it.log.message == log.message && it.log.sourceId == log.sourceId && it.log.lineNumber == log.lineNumber 
+            }
+            if (existing != null) {
+                existing.count++
+            } else {
+                groupedList.add(ErrorGroup(log, 1))
+            }
+        }
+
+        val displayGroups = if (groupedList.size > maxLines) groupedList.takeLast(maxLines) else groupedList
         val sb = StringBuilder()
-        sb.append("🚨 PREVIEW TAB ERRORS (Found ${errorLogs.size} errors, showing latest ${displayLogs.size}):\n")
-        displayLogs.forEach { log ->
+        sb.append("🚨 PREVIEW TAB ERRORS (Found ${activeErrors.size} active errors across ${groupedList.size} issue points):\n")
+        displayGroups.forEach { group ->
+            val log = group.log
             val time = try { timeFormat.format(Date(log.timestamp)) } catch (e: Exception) { "" }
             val timePrefix = if (time.isNotBlank()) "[$time] " else ""
             val src = if (log.sourceId.isNotBlank()) " at ${log.sourceId}:${log.lineNumber}" else ""
-            sb.append("$timePrefix❌ ${log.message}$src\n")
+            val countSuffix = if (group.count > 1) " (occurred ${group.count} times)" else ""
+            sb.append("$timePrefix❌ ${log.message}$src$countSuffix\n")
         }
         sb.append("\nTip: Analyze the error message and source line above to locate and fix the bug in your codebase.")
         return sb.toString().trimEnd()
