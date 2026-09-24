@@ -487,6 +487,11 @@ object GeminiClient {
     }
 
     private fun parseToolCallResponse(cleaned: String, rawText: String, finishReason: String? = null): ToolCallResponse {
+        val dsmlParsed = com.example.agent.DsmlToolCallParser.parse(rawText, finishReason)
+        if (dsmlParsed != null) {
+            return dsmlParsed
+        }
+
         val argKeyParsed = parseArgKeyXmlToolCall(rawText, finishReason)
         if (argKeyParsed != null) {
             return argKeyParsed

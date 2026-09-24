@@ -58,6 +58,10 @@ object CustomModelResponseParser {
                             val contentVal = messageObj.opt("content")
                             val parsedContent = parseContentValue(contentVal)
                             if (!parsedContent.isNullOrBlank()) {
+                                val dsml = com.example.agent.DsmlToolCallParser.parse(parsedContent)
+                                if (dsml != null) {
+                                    return ExtractedResult(null, dsml, reasoning)
+                                }
                                 return ExtractedResult(parsedContent, null, reasoning)
                             }
 

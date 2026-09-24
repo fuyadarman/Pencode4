@@ -34,6 +34,12 @@ object AgentThoughtAndToolParser {
     ): ToolCallResponse {
         val trimmedRaw = rawText.trim()
 
+        // 0. Check for DSML or XML-like tool calls (<｜DSML｜ calls> or <invoke name="...">)
+        val dsmlResult = DsmlToolCallParser.parse(rawText, finishReason)
+        if (dsmlResult != null) {
+            return dsmlResult
+        }
+
         // 1. Try standard JSON parsing on cleaned text
         val adapter = moshi.adapter(ToolCallResponse::class.java).lenient()
         val standardParsed = try {

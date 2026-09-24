@@ -151,13 +151,13 @@ object ExtraToolHandlers {
                 val cloneLog = createLog(
                     "Clone Web UI",
                     "thinking",
-                    "Scraping and cloning UI from: $targetUrl",
+                    "Cloning complete website UI (HTML, CSS, JS, assets) from: $targetUrl",
                     "web-clone"
                 )
                 addLog(cloneLog)
-                setAgentStatus("Scraping and cloning UI design from $targetUrl...")
+                setAgentStatus("Cloning complete website UI from $targetUrl...")
 
-                val result = com.example.agent.WebScraperAndUiCloneEngine.cloneWebUi(
+                val result = com.example.agent.WebsiteUiCloneEngine.cloneFullWebsite(
                     url = targetUrl,
                     targetFilePath = targetFile,
                     projectName = project.name,
@@ -981,13 +981,13 @@ object ExtraToolHandlers {
                 val cloneLog = createLog(
                     "Deep Clone Web UI",
                     "thinking",
-                    "Deeply inspecting & cloning layout and design tokens from: $targetUrl",
+                    "Deeply cloning complete website UI (HTML, CSS, JS, assets) from: $targetUrl",
                     "web-clone"
                 )
                 addLog(cloneLog)
-                setAgentStatus("Deeply cloning UI design from $targetUrl...")
+                setAgentStatus("Deeply cloning UI from $targetUrl...")
 
-                val result = com.example.browser.BrowserControllerAgentEngine.deepCloneWebUi(
+                val result = com.example.agent.WebsiteUiCloneEngine.cloneFullWebsite(
                     url = targetUrl,
                     targetFilePath = targetFile,
                     projectName = project.name,
