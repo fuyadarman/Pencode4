@@ -238,16 +238,25 @@ object MultiEditChunkParser {
             .ifBlank { null }
         val sourcePath = argsObj.optString("sourcePath", "")
             .ifBlank { argsObj.optString("source_path", "") }
+            .ifBlank { argsObj.optString("sourceFile", "") }
+            .ifBlank { argsObj.optString("source_file", "") }
             .ifBlank { argsObj.optString("fromPath", "") }
+            .ifBlank { argsObj.optString("from_path", "") }
             .ifBlank { oldPath }
         val targetPath = argsObj.optString("targetPath", "")
             .ifBlank { argsObj.optString("target_path", "") }
+            .ifBlank { argsObj.optString("targetFile", "") }
+            .ifBlank { argsObj.optString("target_file", "") }
             .ifBlank { argsObj.optString("toPath", "") }
+            .ifBlank { argsObj.optString("to_path", "") }
             .ifBlank { newPath }
         val sourceBlock = argsObj.optString("sourceBlock", "")
+            .ifBlank { argsObj.optString("codeBlock", "") }
+            .ifBlank { argsObj.optString("code_block", "") }
             .ifBlank { argsObj.optString("codeChunk", "") }
             .ifBlank { argsObj.optString("code_chunk", "") }
             .ifBlank { argsObj.optString("chunk", "") }
+            .ifBlank { argsObj.optString("block", "") }
             .ifBlank { argsObj.optString("code", "") }
             .ifBlank { extractFirstString(argsObj, SEARCH_KEYS) }
         val targetAnchor = argsObj.optString("targetAnchor", "")

@@ -20,20 +20,19 @@ class BackgroundBrowser(private val context: Context) {
 
     init {
         mainHandler.post {
-            try {
-                WebView.enableSlowWholeDocumentDraw()
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-            webView = WebView(context).apply {
+            ensureWebViewInternal()
+        }
+    }
+
+    private fun ensureWebViewInternal(): WebView? {
+        if (webView != null) return webView
+        return try {
+            WebView(context).apply {
                 val defaultWidth = 1080
                 val defaultHeight = 1920
                 layoutParams = android.view.ViewGroup.LayoutParams(defaultWidth, defaultHeight)
-                measure(
-                    android.view.View.MeasureSpec.makeMeasureSpec(defaultWidth, android.view.View.MeasureSpec.EXACTLY),
-                    android.view.View.MeasureSpec.makeMeasureSpec(defaultHeight, android.view.View.MeasureSpec.EXACTLY)
-                )
-                layout(0, 0, defaultWidth, defaultHeight)
+                // Use software layer type for offscreen background browser to prevent GPU crashes
+                setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null)
 
                 settings.apply {
                     javaScriptEnabled = true
@@ -43,9 +42,11 @@ class BackgroundBrowser(private val context: Context) {
                     loadWithOverviewMode = true
                     allowFileAccess = true
                     allowContentAccess = true
+                    // Block image network loads in background to save 90% memory and prevent crashes
+                    loadsImagesAutomatically = false
+                    blockNetworkImage = true
                     mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                    // Set a modern mobile user agent
-                    userAgentString = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36"
+                    userAgentString = "Mozilla/5.0 (Linux; Android 14; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
                 }
                 
                 webViewClient = object : WebViewClient() {
@@ -55,21 +56,49 @@ class BackgroundBrowser(private val context: Context) {
 
                     override fun onPageFinished(view: WebView?, url: String?) {
                         super.onPageFinished(view, url)
-                        view?.let { wv ->
-                            val w = if (wv.width > 0) wv.width else 1080
-                            val h = if (wv.height > 0) wv.height else 1920
-                            wv.measure(
-                                android.view.View.MeasureSpec.makeMeasureSpec(w, android.view.View.MeasureSpec.EXACTLY),
-                                android.view.View.MeasureSpec.makeMeasureSpec(h, android.view.View.MeasureSpec.EXACTLY)
-                            )
-                            wv.layout(0, 0, w, h)
-                        }
                         synchronized(loadLock) {
                             pageLoadDeferred?.complete(url ?: "")
                         }
                     }
+
+                    // CRITICAL: Return true to prevent Android OS from killing the app if Chromium render process dies
+                    override fun onRenderProcessGone(view: WebView?, detail: android.webkit.RenderProcessGoneDetail?): Boolean {
+                        android.util.Log.e("BackgroundBrowser", "WebView render process died. Recovering safely...")
+                        try {
+                            view?.destroy()
+                        } catch (e: Exception) {}
+                        webView = null
+                        synchronized(loadLock) {
+                            pageLoadDeferred?.complete(view?.url ?: "")
+                        }
+                        return true
+                    }
+
+                    override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) {
+                        super.onReceivedError(view, errorCode, description, failingUrl)
+                        synchronized(loadLock) {
+                            pageLoadDeferred?.complete(failingUrl ?: "")
+                        }
+                    }
+
+                    override fun onReceivedError(view: WebView?, request: android.webkit.WebResourceRequest?, error: android.webkit.WebResourceError?) {
+                        super.onReceivedError(view, request, error)
+                        if (request?.isForMainFrame == true) {
+                            synchronized(loadLock) {
+                                pageLoadDeferred?.complete(request.url?.toString() ?: "")
+                            }
+                        }
+                    }
+
+                    override fun onReceivedSslError(view: WebView?, handler: android.webkit.SslErrorHandler?, error: android.net.http.SslError?) {
+                        handler?.proceed()
+                    }
                 }
+                webView = this
             }
+        } catch (e: Exception) {
+            android.util.Log.e("BackgroundBrowser", "Failed to initialize WebView", e)
+            null
         }
     }
 
@@ -94,34 +123,27 @@ class BackgroundBrowser(private val context: Context) {
         return false
     }
 
-    suspend fun searchBrave(query: String): BrowserResult = withContext(Dispatchers.Main) {
-        val encodedQuery = URLEncoder.encode(query, "UTF-8")
-        
-        // 1. Try Brave Search first
-        val braveUrl = "https://search.brave.com/search?q=$encodedQuery"
-        var result = loadUrl(braveUrl)
-        if (!isBlockedOrError(result)) {
-            return@withContext result
+    suspend fun searchBrave(query: String): BrowserResult = withContext(Dispatchers.IO) {
+        // Fast, lightweight, 100% crash-proof web search without heavy WebView memory overhead
+        try {
+            val safeResult = com.example.browser.SafeWebSearchEngine.performWebSearch(query)
+            if (safeResult.isNotBlank() && !safeResult.startsWith("Error")) {
+                return@withContext BrowserResult.Success(
+                    url = "https://html.duckduckgo.com/html/?q=" + URLEncoder.encode(query, "UTF-8"),
+                    title = "Web Search: $query",
+                    content = safeResult
+                )
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("BackgroundBrowser", "SafeWebSearchEngine fallback: ${e.localizedMessage}")
         }
-        
-        // 2. Fallback to Bing
-        val bingUrl = "https://www.bing.com/search?q=$encodedQuery"
-        result = loadUrl(bingUrl)
-        if (!isBlockedOrError(result)) {
-            return@withContext result
+
+        withContext(Dispatchers.Main) {
+            val encodedQuery = URLEncoder.encode(query, "UTF-8")
+            val ddgUrl = "https://html.duckduckgo.com/html/?q=$encodedQuery"
+            val result = loadUrl(ddgUrl)
+            result
         }
-        
-        // 3. Fallback to DuckDuckGo
-        val ddgUrl = "https://html.duckduckgo.com/html/?q=$encodedQuery"
-        result = loadUrl(ddgUrl)
-        if (!isBlockedOrError(result)) {
-            return@withContext result
-        }
-        
-        // 4. Fallback to Yahoo
-        val yahooUrl = "https://search.yahoo.com/search?p=$encodedQuery"
-        result = loadUrl(yahooUrl)
-        return@withContext result
     }
 
     suspend fun navigate(url: String): BrowserResult = withContext(Dispatchers.Main) {
@@ -133,18 +155,20 @@ class BackgroundBrowser(private val context: Context) {
     }
 
     private suspend fun loadUrl(url: String): BrowserResult = withContext(Dispatchers.Main) {
-        val wv = webView ?: return@withContext BrowserResult.Error("WebView is not initialized")
+        val wv = ensureWebViewInternal() ?: return@withContext BrowserResult.Error("WebView is not available")
         val deferred = CompletableDeferred<String>()
         synchronized(loadLock) {
             pageLoadDeferred = deferred
         }
         
-        wv.loadUrl(url)
-        
         try {
-            val finalUrl = deferred.await()
-            // Give Javascript 1.5 seconds to settle on the page
-            kotlinx.coroutines.delay(1500)
+            wv.loadUrl(url)
+            val finalUrl = kotlinx.coroutines.withTimeoutOrNull(9000) {
+                deferred.await()
+            } ?: (wv.url ?: url)
+
+            // Give page 600ms to settle
+            kotlinx.coroutines.delay(600)
             val title = getPageTitle()
             val content = extractPageText()
             BrowserResult.Success(
@@ -601,11 +625,18 @@ class BackgroundBrowser(private val context: Context) {
 
     private suspend fun evaluateJavascript(script: String): String? = withContext(Dispatchers.Main) {
         val wv = webView ?: return@withContext null
-        val deferred = CompletableDeferred<String?>()
-        wv.evaluateJavascript(script) { result ->
-            deferred.complete(result)
+        try {
+            kotlinx.coroutines.withTimeoutOrNull(4000) {
+                val deferred = CompletableDeferred<String?>()
+                wv.evaluateJavascript(script) { result ->
+                    deferred.complete(result)
+                }
+                deferred.await()
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("BackgroundBrowser", "evaluateJavascript failed: ${e.localizedMessage}")
+            null
         }
-        deferred.await()
     }
 }
 

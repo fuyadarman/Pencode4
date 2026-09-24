@@ -31,10 +31,10 @@ object AgentToolRegistryEngine {
         • global_search(query: string) -> Fast grep/search across all files in the project.
 
         [CODE CHUNK & BLOCK MANIPULATION]
-        • delete_code_chunk(path: string, codeChunk: string, deleteAllOccurrences?: boolean) -> Deletes a code block from a file without leaving corrupt syntax or blank lines.
-        • copy_code_chunk(sourcePath: string, targetPath: string, codeChunk: string, targetAnchor?: string, insertAt?: 'start'|'end'|'before'|'after'|'replace') -> Copies a code block into another file.
-        • move_code_chunk(sourcePath: string, targetPath: string, codeChunk: string, targetAnchor?: string, insertAt?: string) -> Moves a code block from source file to target file.
-        • transfer_code_chunk(sourcePath: string, targetPath: string, codeChunk: string, targetAnchor?: string, insertAt?: string, isMove?: boolean) -> Generalized code chunk transfer/copy/move.
+        • move_code_chunk(sourcePath: string, targetPath: string, codeChunk?: string, startLine?: int, endLine?: int, targetAnchor?: string, insertAt?: 'start'|'end'|'before'|'after'|'replace') -> Atomically cuts/moves code block or line range from one file into another file. Aliases: move_code_block, move_chunk.
+        • copy_code_chunk(sourcePath: string, targetPath: string, codeChunk?: string, startLine?: int, endLine?: int, targetAnchor?: string, insertAt?: 'start'|'end'|'before'|'after'|'replace') -> Copies code block or line range into another file. Aliases: copy_code_block, copy_chunk.
+        • delete_code_chunk(path: string, codeChunk?: string, startLine?: int, endLine?: int, deleteAllOccurrences?: boolean) -> Deletes code block or line range from a file cleanly. Aliases: delete_code_block, delete_chunk.
+        • transfer_code_chunk(sourcePath: string, targetPath: string, codeChunk?: string, startLine?: int, endLine?: int, targetAnchor?: string, insertAt?: string, isMove?: boolean) -> Generalized code transfer/copy/move.
 
         [WORKSPACE LOGS & ERROR DIAGNOSTICS]
         • read_preview_errors(query?: string, maxLines?: int) -> Specifically extracts ONLY errors, runtime exceptions, and console.error from the Preview tab.
@@ -64,6 +64,7 @@ object AgentToolRegistryEngine {
 
         [WEB BROWSING & UI CLONING]
         • clone_git_repo(url: string, branch?: string) -> Clones all files from a GitHub repository into current workspace.
+        • web_search(query: string) -> Searches the live internet and technical documentation using fast, crash-proof engine.
         • browser_search(query: string) -> Searches the web or navigates to a URL.
         • browser_read() -> Reads the current webpage text.
         • browser_snapshot() -> Takes an indexed snapshot of all interactive elements on the page.

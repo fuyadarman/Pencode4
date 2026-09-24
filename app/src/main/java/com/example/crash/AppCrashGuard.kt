@@ -30,10 +30,14 @@ object AppCrashGuard {
                         thread.name.contains("Chrome_") ||
                         thread.name.contains("ThreadPool") ||
                         thread.name.contains("Async") ||
-                        msg.contains("WebView") ||
+                        msg.contains("WebView", ignoreCase = true) ||
+                        msg.contains("chromium", ignoreCase = true) ||
+                        msg.contains("render", ignoreCase = true) ||
                         msg.contains("DeadObjectException") ||
                         msg.contains("SocketClosed") ||
-                        msg.contains("CancellationException")
+                        msg.contains("CancellationException") ||
+                        msg.contains("evaluateJavascript", ignoreCase = true) ||
+                        msg.contains("NullPointerException") && thread.name.contains("Chrome")
 
                 if (isRecoverable) {
                     Log.w(TAG, "Recovered from non-fatal background thread crash: $msg")

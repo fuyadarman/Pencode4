@@ -84,7 +84,8 @@ object AgentInstructionEngine {
         }
 
         // Code modification / New features
-        if (hasTaggedFiles || p.contains("create") || p.contains("add") || p.contains("build") || p.contains("implement") || p.contains("modify") || p.contains("update") || p.contains("change") || p.contains("write") || p.contains("edit") || p.contains("screen") || p.contains("ui") || p.contains("button") || p.contains("feature") || p.contains("design") || p.contains("code") || p.contains("refactor") || p.contains("make")) {
+        if (hasTaggedFiles || p.contains("create") || p.contains("add") || p.contains("build") || p.contains("implement") || p.contains("modify") || p.contains("update") || p.contains("change") || p.contains("write") || p.contains("edit") || p.contains("screen") || p.contains("ui") || p.contains("button") || p.contains("feature") || p.contains("design") || p.contains("code") || p.contains("refactor") || p.contains("make") ||
+            p.contains("chunk") || p.contains("block") || p.contains("move") || p.contains("copy") || p.contains("delete") || p.contains("transfer") || p.contains("মুভ") || p.contains("কপি") || p.contains("কাট") || p.contains("ব্লক") || p.contains("ডিলিট")) {
             intents.add(PromptIntent.CODE_MODIFICATION_OR_FEATURE)
         }
 
@@ -225,15 +226,16 @@ object AgentInstructionEngine {
             tools.add("'multi_edit_file'(path, chunks:[{search,replace}])")
             tools.add("'delete_file'(path)")
             tools.add("'scan_dir'(path)")
-            tools.add("'delete_code_chunk'(path, codeChunk)")
-            tools.add("'copy_code_chunk'(sourcePath, targetPath, codeChunk, targetAnchor?)")
-            tools.add("'move_code_chunk'(sourcePath, targetPath, codeChunk, targetAnchor?)")
+            tools.add("'move_code_chunk'(sourcePath, targetPath, codeChunk?, startLine?, endLine?, targetAnchor?, insertAt?: 'start'|'end'|'before'|'after'|'replace') [Atomically moves/cuts code block or line range from one file into another. Aliases: 'move_code_block', 'move_chunk']")
+            tools.add("'copy_code_chunk'(sourcePath, targetPath, codeChunk?, startLine?, endLine?, targetAnchor?, insertAt?: 'start'|'end'|'before'|'after'|'replace') [Copies code block or line range from one file into another. Aliases: 'copy_code_block', 'copy_chunk']")
+            tools.add("'delete_code_chunk'(path, codeChunk?, startLine?, endLine?, deleteAllOccurrences?: boolean) [Deletes code block or line range from file. Aliases: 'delete_code_block', 'delete_chunk']")
             tools.add("'generate_image'(prompt, path?)")
             tools.add("'generate_pdf'(title, content, theme?, path?)")
         }
 
         // Web / Internet / Browser inspection & cloning tools
         tools.add("'clone_git_repo'(url, branch?) [Clone GitHub repository files directly into workspace]")
+        tools.add("'web_search'(query) [Fast online search & information retrieval]")
         tools.add("'browser_search'(query)")
         tools.add("'browser_read'()")
         tools.add("'browser_snapshot'()")

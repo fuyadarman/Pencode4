@@ -266,46 +266,40 @@ object ExtraToolHandlers {
                 updateLog(resizeLog.id, if (isSuccess) "success" else "failed", result)
                 result
             }
-            "browser_search" -> {
-                val queryVal = args?.query ?: ""
+            "browser_search", "web_search", "online_search", "search_web", "google_search", "websearch", "internet_search", "search" -> {
+                val queryVal = (args?.query ?: args?.message ?: args?.search ?: args?.url ?: "").trim()
+                val isSearchTitle = tool.contains("web") || tool.contains("search") || tool.contains("google")
                 val searchLog = createLog(
-                    "Browser search/navigate",
+                    if (isSearchTitle) "Searched the web" else "Browser search/navigate",
                     "thinking",
-                    "Searching or loading: $queryVal",
+                    "Searching: $queryVal",
                     "background-browser"
                 )
                 addLog(searchLog)
-                setAgentStatus("Performing browser search/navigation for: $queryVal...")
-
-                var lastUrl = ""
-                var lastTitle = ""
-                var lastExcerpt = ""
+                setAgentStatus("Searching the web for: $queryVal...")
 
                 val result = if (queryVal.isBlank()) {
                     "Error: 'query' argument cannot be empty. Please provide a search term or a URL."
                 } else {
                     val isUrl = queryVal.startsWith("http://") || queryVal.startsWith("https://") || (queryVal.contains(".") && !queryVal.contains(" "))
-                    val browserResult = if (isUrl) {
-                        backgroundBrowser.navigate(queryVal)
+                    if (isUrl) {
+                        when (val browserResult = backgroundBrowser.navigate(queryVal)) {
+                            is BrowserResult.Success -> {
+                                "Successfully loaded page: ${browserResult.url}\nTitle: ${browserResult.title}\n\nContent Summary:\n${browserResult.content}"
+                            }
+                            is BrowserResult.Error -> {
+                                "Error performing browser action: ${browserResult.message}"
+                            }
+                        }
                     } else {
-                        backgroundBrowser.searchBrave(queryVal)
-                    }
-                    when (browserResult) {
-                        is BrowserResult.Success -> {
-                            lastUrl = browserResult.url
-                            lastTitle = browserResult.title
-                            lastExcerpt = browserResult.content.take(180)
-                            "Successfully loaded page: ${browserResult.url}\nTitle: ${browserResult.title}\n\nContent Summary:\n${browserResult.content}"
-                        }
-                        is BrowserResult.Error -> {
-                            "Error performing browser action: ${browserResult.message}"
-                        }
+                        // High-speed, crash-proof search via SafeWebSearchEngine
+                        com.example.browser.SafeWebSearchEngine.performWebSearch(queryVal)
                     }
                 }
 
                 val isSuccess = !result.startsWith("Error")
-                val logDetails = if (isSuccess) {
-                    "Query: $queryVal\nNavigated to: $lastUrl\nTitle: $lastTitle\n\n$result"
+                val logDetails = if (isSuccess && !result.startsWith("Query:")) {
+                    "Query: $queryVal\n\n$result"
                 } else result
                 updateLog(searchLog.id, if (isSuccess) "success" else "failed", logDetails)
                 result
@@ -509,41 +503,73 @@ object ExtraToolHandlers {
                 updateLog(moveLog.id, if (result.startsWith("Successfully")) "success" else "failed", result)
                 result
             }
-            "transfer_code_chunk", "copy_code_chunk", "move_code_chunk", "copy_code_block", "move_code_block" -> {
-                val isMoveCall = tool == "move_code_chunk" || tool == "move_code_block" || args?.isMove == true
-                val sourcePath = if (!args?.sourcePath.isNullOrBlank()) args.sourcePath else if (!args?.oldPath.isNullOrBlank()) args.oldPath else args?.path ?: ""
-                val targetPath = if (!args?.targetPath.isNullOrBlank()) args.targetPath else if (!args?.newPath.isNullOrBlank()) args.newPath else args?.destinationPath ?: ""
-                val chunk = if (!args?.codeChunk.isNullOrBlank()) args.codeChunk else if (!args?.sourceBlock.isNullOrBlank()) args.sourceBlock else args?.search ?: ""
+            "transfer_code_chunk", "copy_code_chunk", "move_code_chunk", "copy_code_block", "move_code_block",
+            "copy_chunk", "move_chunk", "transfer_chunk", "copy_block", "move_block", "transfer_block", "transfer_code_block", "cut_code_chunk", "cut_code_block" -> {
+                val isMoveCall = tool.contains("move") || tool.contains("cut") || args?.isMove == true
+                val sourcePath = if (!args?.sourcePath.isNullOrBlank()) args.sourcePath 
+                    else if (!args?.sourceFile.isNullOrBlank()) args.sourceFile
+                    else if (!args?.fromPath.isNullOrBlank()) args.fromPath
+                    else if (!args?.oldPath.isNullOrBlank()) args.oldPath 
+                    else args?.path ?: ""
+                val targetPath = if (!args?.targetPath.isNullOrBlank()) args.targetPath 
+                    else if (!args?.targetFile.isNullOrBlank()) args.targetFile
+                    else if (!args?.toPath.isNullOrBlank()) args.toPath
+                    else if (!args?.newPath.isNullOrBlank()) args.newPath 
+                    else args?.destinationPath ?: ""
+                val chunk = if (!args?.codeChunk.isNullOrBlank()) args.codeChunk 
+                    else if (!args?.codeBlock.isNullOrBlank()) args.codeBlock
+                    else if (!args?.chunk.isNullOrBlank()) args.chunk
+                    else if (!args?.block.isNullOrBlank()) args.block
+                    else if (!args?.code.isNullOrBlank()) args.code
+                    else if (!args?.content.isNullOrBlank()) args.content
+                    else if (!args?.sourceBlock.isNullOrBlank()) args.sourceBlock 
+                    else args?.search ?: ""
 
+                val actionName = if (isMoveCall) "Moved code block" else "Copied code block"
                 val transferLog = createLog(
-                    if (isMoveCall) "Moved code block" else "Copied code block",
+                    actionName,
                     "thinking",
                     "${if (isMoveCall) "Moving" else "Copying"} code block from '$sourcePath' to '$targetPath'",
                     null
                 )
                 addLog(transferLog)
 
-                val result = when (val res = com.example.agent.CodeChunkTransferEngine.transferCodeChunk(
+                val result = when (val res = com.example.agent.CodeBlockOperationsEngine.transferBlock(
                     sourcePath = sourcePath,
                     targetPath = targetPath,
-                    codeChunk = chunk,
-                    targetAnchor = args?.targetAnchor,
-                    insertAt = args?.insertAt,
+                    codeChunk = chunk.ifBlank { null },
+                    startLine = args?.startLine,
+                    endLine = args?.endLine,
+                    targetAnchor = if (!args?.targetAnchor.isNullOrBlank()) args.targetAnchor else args?.anchor ?: args?.destinationSearch,
+                    insertAt = if (!args?.insertAt.isNullOrBlank()) args.insertAt else args?.position,
                     isMove = isMoveCall,
+                    createTargetIfMissing = true,
                     project = project,
                     repository = repository,
                     normalizePath = normalizePath
                 )) {
-                    is com.example.agent.CodeChunkTransferEngine.TransferResult.Success -> res.message
-                    is com.example.agent.CodeChunkTransferEngine.TransferResult.Failure -> res.errorMessage
+                    is com.example.agent.CodeBlockOperationsEngine.OperationResult.Success -> res.message
+                    is com.example.agent.CodeBlockOperationsEngine.OperationResult.Failure -> res.errorMessage
                 }
 
                 updateLog(transferLog.id, if (result.startsWith("Successfully")) "success" else "failed", result)
                 result
             }
-            "delete_code_chunk", "delete_code_block", "remove_code_chunk", "remove_code_block" -> {
-                val filePath = if (!args?.path.isNullOrBlank()) args.path else if (!args?.targetFile.isNullOrBlank()) args.targetFile else args?.sourcePath ?: ""
-                val chunk = if (!args?.codeChunk.isNullOrBlank()) args.codeChunk else if (!args?.sourceBlock.isNullOrBlank()) args.sourceBlock else args?.search ?: ""
+            "delete_code_chunk", "delete_code_block", "remove_code_chunk", "remove_code_block",
+            "delete_chunk", "delete_block", "remove_chunk", "remove_block" -> {
+                val filePath = if (!args?.path.isNullOrBlank()) args.path 
+                    else if (!args?.filePath.isNullOrBlank()) args.filePath
+                    else if (!args?.targetFile.isNullOrBlank()) args.targetFile 
+                    else if (!args?.file.isNullOrBlank()) args.file
+                    else args?.sourcePath ?: ""
+                val chunk = if (!args?.codeChunk.isNullOrBlank()) args.codeChunk 
+                    else if (!args?.codeBlock.isNullOrBlank()) args.codeBlock
+                    else if (!args?.chunk.isNullOrBlank()) args.chunk
+                    else if (!args?.block.isNullOrBlank()) args.block
+                    else if (!args?.code.isNullOrBlank()) args.code
+                    else if (!args?.content.isNullOrBlank()) args.content
+                    else if (!args?.sourceBlock.isNullOrBlank()) args.sourceBlock 
+                    else args?.search ?: ""
                 val deleteAll = args?.deleteAllOccurrences ?: false
 
                 val deleteLog = createLog(
@@ -554,16 +580,18 @@ object ExtraToolHandlers {
                 )
                 addLog(deleteLog)
 
-                val result = when (val res = com.example.agent.CodeChunkDeleteEngine.deleteCodeChunk(
+                val result = when (val res = com.example.agent.CodeBlockOperationsEngine.deleteBlock(
                     filePath = filePath,
-                    codeChunk = chunk,
+                    codeChunk = chunk.ifBlank { null },
+                    startLine = args?.startLine,
+                    endLine = args?.endLine,
                     deleteAllOccurrences = deleteAll,
                     project = project,
                     repository = repository,
                     normalizePath = normalizePath
                 )) {
-                    is com.example.agent.CodeChunkDeleteEngine.DeleteResult.Success -> res.message
-                    is com.example.agent.CodeChunkDeleteEngine.DeleteResult.Failure -> res.errorMessage
+                    is com.example.agent.CodeBlockOperationsEngine.OperationResult.Success -> res.message
+                    is com.example.agent.CodeBlockOperationsEngine.OperationResult.Failure -> res.errorMessage
                 }
 
                 updateLog(deleteLog.id, if (result.startsWith("Successfully")) "success" else "failed", result)
