@@ -53,11 +53,10 @@ object OpenCodeLoopGuardEngine {
      */
     fun shouldAutoCompleteFromThought(
         thought: String?,
-        hasModifiedFiles: Boolean
+        hasModifiedFiles: Boolean,
+        userPrompt: String = ""
     ): Boolean {
-        if (!hasModifiedFiles || thought.isNullOrBlank()) return false
-        val lower = thought.lowercase()
-        return COMPLETION_PHRASES.any { lower.contains(it) }
+        return ThoughtExecutionResilienceGuard.isGenuineTaskCompletion(thought, hasModifiedFiles, userPrompt)
     }
 
     sealed class RepetitionResult {

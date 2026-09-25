@@ -3932,42 +3932,37 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 loopCompleted = true
                                 break
                             }
-                        } else if (com.example.agent.OpenCodeLoopGuardEngine.shouldAutoCompleteFromThought(thoughtText, hasModifiedFiles)) {
-                            handleComplete(thoughtText.ifBlank { "Task completed successfully!" })
-                            loopCompleted = true
-                            break
                         } else if (toolCalls.isEmpty() || realActionTools.isEmpty()) {
-                            val thoughtDecision = com.example.agent.AgentThoughtLoopGuard.evaluateTurn(
+                            val decision = com.example.agent.ThoughtExecutionResilienceGuard.evaluateThinkingTurn(
                                 consecutiveThoughtCount = consecutiveThinkOnlyCount,
-                                lastThought = lastThought,
                                 currentThought = thoughtText,
+                                lastThought = lastThought,
                                 userPrompt = userPrompt,
-                                hasModifiedFiles = hasModifiedFiles,
-                                hasReadFiles = readFilesThisSession.isNotEmpty()
+                                hasModifiedFiles = hasModifiedFiles
                             )
-                            when (thoughtDecision) {
-                                is com.example.agent.AgentThoughtLoopGuard.ThoughtDecision.BreakAndComplete -> {
-                                    val interceptLog = createAiLog(
-                                        title = "Thought Loop Circuit Breaker",
+                            when (decision) {
+                                is com.example.agent.ThoughtExecutionResilienceGuard.GuardDecision.CompleteNaturally -> {
+                                    val completeLog = createAiLog(
+                                        title = "Task Completed",
                                         status = "success",
-                                        details = thoughtDecision.reason
+                                        details = decision.reason
                                     )
-                                    _aiActionLogs.value = _aiActionLogs.value + interceptLog
-                                    handleComplete(thoughtDecision.finalResponse)
+                                    _aiActionLogs.value = _aiActionLogs.value + completeLog
+                                    handleComplete(decision.userResponse)
                                     loopCompleted = true
                                     break
                                 }
-                                is com.example.agent.AgentThoughtLoopGuard.ThoughtDecision.NudgeAction -> {
-                                    history.add(Content(role = "user", parts = listOf(Part(text = thoughtDecision.guidance))))
+                                is com.example.agent.ThoughtExecutionResilienceGuard.GuardDecision.NudgeToExecuteTool -> {
+                                    history.add(Content(role = "user", parts = listOf(Part(text = decision.instruction))))
                                     val nudgeLog = createAiLog(
                                         title = "Action Execution Directive",
                                         status = "thinking",
-                                        details = "Instructing model to execute tool calls (Attempt ${thoughtDecision.attempt})..."
+                                        details = "Instructing model to execute tool calls (Attempt ${decision.attempt})..."
                                     )
                                     _aiActionLogs.value = _aiActionLogs.value + nudgeLog
                                 }
-                                com.example.agent.AgentThoughtLoopGuard.ThoughtDecision.ProceedNormal -> {
-                                    // Proceed to execute tool calls
+                                com.example.agent.ThoughtExecutionResilienceGuard.GuardDecision.ProceedNormal -> {
+                                    // Proceed normal
                                 }
                             }
                         }
