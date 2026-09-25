@@ -36,9 +36,10 @@ object AgentHistoryBuilder {
                     moshi = moshi
                 )
 
+                val pastFormatted = ActivePromptFocusGuard.formatHistoricalPastRequest(previousUserPrompt)
                 history.add(Content(
                     role = "user",
-                    parts = listOf(Part(text = "$sessionLedger\n\n[IMMEDIATE PREVIOUS REQUEST]\n$previousUserPrompt"))
+                    parts = listOf(Part(text = "$sessionLedger\n\n$pastFormatted"))
                 ))
 
                 val fileOperations = mutableListOf<String>()
@@ -117,8 +118,9 @@ object AgentHistoryBuilder {
                 remainingText = remainingText.substring(match.range.last + 1)
                 match = regex.find(remainingText)
             }
-            if (remainingText.isNotBlank() || textParts.isEmpty()) {
-                textParts.add(Part(text = remainingText))
+            val formattedPrompt = ActivePromptFocusGuard.formatActiveUserPrompt(remainingText)
+            if (formattedPrompt.isNotBlank() || textParts.isEmpty()) {
+                textParts.add(Part(text = formattedPrompt))
             }
 
             history.add(Content(

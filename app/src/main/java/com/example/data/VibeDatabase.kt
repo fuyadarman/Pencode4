@@ -47,7 +47,7 @@ interface VibeDao {
     suspend fun deleteAllFilesForProject(projectName: String)
 
     // Chats
-    @Query("SELECT * FROM chat_messages WHERE projectName = :projectName ORDER BY timestamp ASC")
+    @Query("SELECT * FROM chat_messages WHERE projectName = :projectName ORDER BY timestamp ASC, id ASC")
     suspend fun getChatsForProject(projectName: String): List<ChatMessageEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

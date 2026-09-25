@@ -168,6 +168,7 @@ object AgentInstructionEngine {
         sb.append("FRAMEWORK: ").append(activeTemplateInfo).append("\n\n")
 
         // 3. Lean Core Directives (Optimized for KV Cache & low token footprint)
+        sb.append(ActivePromptFocusGuard.buildActivePromptDirective(userPrompt)).append("\n\n")
         sb.append("=== CORE DIRECTIVES ===\n")
         sb.append("1. HIGHEST PRIORITY - LATEST CURRENT PROMPT ONLY: Focus STRICTLY and 100% on the latest user request. Do NOT repeat or get distracted by previous tasks or old queries in conversation history. Every action and tool call MUST directly serve the latest user prompt.\n")
         sb.append("2. TIMELINE & CONTINUITY: Follow the chronological timeline of tool actions, thought reasoning, and responses recorded in this session. Never redo already completed work.\n")

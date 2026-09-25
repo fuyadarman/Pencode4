@@ -22,6 +22,8 @@ object CodeChunkerAndPruner {
 
         for (i in optimized.indices.reversed()) {
             val content = optimized[i]
+            val distanceFromEnd = optimized.size - 1 - i
+            val isOlderTurn = distanceFromEnd > 4
 
             if (content.role == "user") {
                 val updatedParts = content.parts.map { part ->
@@ -29,7 +31,7 @@ object CodeChunkerAndPruner {
 
                     when {
                         text.contains("System/Tool Output for") -> {
-                            pruneToolOutputText(text, seenReadFilePaths)
+                            pruneToolOutputText(text, seenReadFilePaths, isOlderTurn)
                         }
                         text.contains("[IMAGE_BASE64:") -> {
                             val cleanText = text.replace("""\[IMAGE_BASE64: data:.*?;base64,.*?\]""".toRegex(), "[Attached Image]")
@@ -40,12 +42,13 @@ object CodeChunkerAndPruner {
                 }
                 optimized[i] = content.copy(parts = updatedParts)
             } else if (content.role == "model") {
+                val maxModelChars = if (isOlderTurn) 1200 else MAX_MODEL_OUTPUT_CHARS
                 val updatedParts = content.parts.map { part ->
                     val text = part.text ?: return@map part
-                    if (text.length > MAX_MODEL_OUTPUT_CHARS) {
-                        val head = text.take(1000)
-                        val tail = text.takeLast(1000)
-                        part.copy(text = "$head\n\n[... Omitted middle thought/response content (${text.length - 2000} chars) to keep context slim ...]\n\n$tail")
+                    if (text.length > maxModelChars) {
+                        val head = text.take(if (isOlderTurn) 500 else 1000)
+                        val tail = text.takeLast(if (isOlderTurn) 500 else 1000)
+                        part.copy(text = "$head\n\n[... Omitted middle thought/response content (${text.length - (head.length + tail.length)} chars) to keep context slim ...]\n\n$tail")
                     } else {
                         part
                     }
@@ -57,7 +60,7 @@ object CodeChunkerAndPruner {
         return optimized
     }
 
-    private fun pruneToolOutputText(text: String, seenReadFilePaths: MutableSet<String>): Part {
+    private fun pruneToolOutputText(text: String, seenReadFilePaths: MutableSet<String>, isOlderTurn: Boolean = false): Part {
         val isReadFile = text.contains("System/Tool Output for 'read_file'") || text.contains("System/Tool Output for 'read_file_range'")
 
         if (isReadFile) {
@@ -76,15 +79,23 @@ object CodeChunkerAndPruner {
                         return Part(text = "System/Tool Output for '$toolName' (File: $filePath):\n[Older duplicate content omitted to optimize context tokens. See latest read below for current content.]")
                     } else {
                         seenReadFilePaths.add(filePath)
-                        if (text.length > MAX_FILE_READ_CHARS) {
-                            val chunkedText = chunkLargeFileRead(text)
+                        val maxChars = if (isOlderTurn) 1500 else MAX_FILE_READ_CHARS
+                        if (text.length > maxChars) {
+                            val chunkedText = if (isOlderTurn) {
+                                val head = text.take(600)
+                                val tail = text.takeLast(600)
+                                "$head\n\n[... Older turn file content truncated to save tokens ...]\n\n$tail"
+                            } else {
+                                chunkLargeFileRead(text)
+                            }
                             return Part(text = chunkedText)
                         }
                     }
                 }
             }
         } else {
-            if (text.length > MAX_COMMAND_OUTPUT_CHARS) {
+            val maxCmdChars = if (isOlderTurn) 1000 else MAX_COMMAND_OUTPUT_CHARS
+            if (text.length > maxCmdChars) {
                 val chunkedText = chunkVerboseCommandOutput(text)
                 return Part(text = chunkedText)
             }

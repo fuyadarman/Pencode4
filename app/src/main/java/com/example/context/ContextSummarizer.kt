@@ -9,7 +9,7 @@ import com.example.api.Part
  */
 object ContextSummarizer {
 
-    private const val MAX_RECENT_TURNS_TO_KEEP = 8
+    private const val MAX_RECENT_TURNS_TO_KEEP = 12
     private const val ESTIMATED_CHAR_PER_TOKEN = 4
 
     /**

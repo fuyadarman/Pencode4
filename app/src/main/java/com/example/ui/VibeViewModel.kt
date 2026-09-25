@@ -3615,7 +3615,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             } else ""
 
             val fileTreeStr = generateFileTree(_projectFiles.value)
-            val currentPromptText = currentPromptEntity?.content ?: ""
+            val currentPromptText = if (finalPrompt.isNotBlank()) finalPrompt else currentPromptEntity?.content ?: ""
             val recalled = com.example.agent.harness.SemanticMemoryStore.retrieveRelevantMemories(
                 query = currentPromptText,
                 projectName = project.name,
@@ -3792,8 +3792,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                         remainingSteps = remainingSteps
                     )
 
+                    val promptFocusDirective = com.example.agent.ActivePromptFocusGuard.buildActivePromptDirective(currentPromptText)
                     val dynamicSystemInstruction = """
                         $systemInstruction
+                        
+                        $promptFocusDirective
                         
                         $pacingNotice
                     """.trimIndent()
