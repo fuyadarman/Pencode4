@@ -9,7 +9,7 @@ import com.example.api.Part
  */
 object ContextSummarizer {
 
-    private const val MAX_RECENT_TURNS_TO_KEEP = 12
+    private const val MAX_RECENT_TURNS_TO_KEEP = 14
     private const val ESTIMATED_CHAR_PER_TOKEN = 4
 
     /**
@@ -34,7 +34,7 @@ object ContextSummarizer {
         }
 
         val estimatedTokens = estimateTokenCount(history)
-        if (estimatedTokens < maxTokenThreshold && history.size < 16) {
+        if (estimatedTokens < maxTokenThreshold && history.size < 20) {
             return history
         }
 

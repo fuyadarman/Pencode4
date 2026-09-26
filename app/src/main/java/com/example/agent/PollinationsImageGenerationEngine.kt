@@ -38,24 +38,48 @@ object PollinationsImageGenerationEngine {
         val defaultFileName = if (isLogo) "assets/logo.png" else "assets/image.png"
         val filePath = normalizePath(targetPath?.ifBlank { defaultFileName } ?: defaultFileName)
 
-        try {
-            val encodedPrompt = URLEncoder.encode(enhancedPrompt, "UTF-8")
-            val randomSeed = (1..9999999).random()
-            val url = "https://image.pollinations.ai/prompt/$encodedPrompt?width=$width&height=$height&seed=$randomSeed&model=$model&nologo=true"
+        val candidateModels = listOf(model, "turbo", "unity", "")
+        var lastError = "Unknown error"
+        var successfulBytes: ByteArray? = null
+        var usedModel = model
 
-            val request = Request.Builder()
-                .url(url)
-                .get()
-                .build()
+        for (candidate in candidateModels) {
+            try {
+                val encodedPrompt = URLEncoder.encode(enhancedPrompt, "UTF-8")
+                val randomSeed = (1..9999999).random()
+                val targetW = if (candidate == "turbo" || candidate.isEmpty()) minOf(width, 768) else width
+                val targetH = if (candidate == "turbo" || candidate.isEmpty()) minOf(height, 768) else height
+                val modelParam = if (candidate.isNotBlank()) "&model=$candidate" else ""
+                val url = "https://image.pollinations.ai/prompt/$encodedPrompt?width=$targetW&height=$targetH&seed=$randomSeed$modelParam&nologo=true"
 
-            val response = httpClient.newCall(request).execute()
-            if (!response.isSuccessful) {
-                return@withContext "Error: Failed to fetch image from Pollinations (HTTP ${response.code})."
+                val request = Request.Builder()
+                    .url(url)
+                    .header("User-Agent", "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36")
+                    .get()
+                    .build()
+
+                val response = httpClient.newCall(request).execute()
+                if (response.isSuccessful) {
+                    val bytes = response.body?.bytes()
+                    if (bytes != null && bytes.isNotEmpty()) {
+                        successfulBytes = bytes
+                        usedModel = if (candidate.isNotBlank()) candidate else "default"
+                        break
+                    }
+                } else {
+                    lastError = "Pollinations HTTP ${response.code}"
+                }
+            } catch (e: Exception) {
+                lastError = e.localizedMessage ?: e.javaClass.simpleName
             }
+        }
 
-            val bytes = response.body?.bytes()
-                ?: return@withContext "Error: Pollinations image response body was empty."
+        val bytes = successfulBytes
+        if (bytes == null) {
+            return@withContext "Error: Failed to fetch image from Pollinations ($lastError). All fallback models were exhausted."
+        }
 
+        try {
             val mimeType = when (filePath.substringAfterLast(".", "").lowercase()) {
                 "png" -> "image/png"
                 "jpg", "jpeg" -> "image/jpeg"
@@ -68,9 +92,9 @@ object PollinationsImageGenerationEngine {
             val base64Content = "data:$mimeType;base64," + android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
             repository.saveFile(projectName, filePath, base64Content)
 
-            "Successfully generated and saved ${if (isLogo) "logo" else "image"} to '$filePath' ($width x $height, model: $model)."
+            "Successfully generated and saved ${if (isLogo) "logo" else "image"} to '$filePath' (model: $usedModel)."
         } catch (e: Exception) {
-            "Error generating image with Pollinations: ${e.localizedMessage ?: e.javaClass.simpleName}"
+            "Error saving generated image: ${e.localizedMessage ?: e.javaClass.simpleName}"
         }
     }
 }
