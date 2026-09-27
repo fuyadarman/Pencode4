@@ -58,6 +58,10 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import com.example.ui.agent.AgentActivityFeed
 import com.example.ui.agent.ModernAgentChatBar
 import com.example.ui.chat.ProfessionalChatBar
+import com.example.ui.util.SafeClipboardHelper
+import com.example.ui.util.safeLongPressCopy
+import com.example.ui.components.ConsoleErrorFixButtons
+import com.example.ui.components.BuildErrorFixButton
 import com.example.ui.settings.SelfLearningSettingsCard
 import com.example.ui.theme.stitchPressFeedback
 import com.example.ui.settings.RestoreLimitSettingsCard
@@ -530,78 +534,20 @@ fun WorkspaceScreen(
                                 onWebError = onWebError,
                                 onClearErrors = onClearErrors,
                                 onInspectorElementSelected = { identifier, outerHTML ->
-                                    val fileName = "index.html"
-                                    val htmlContent = files.find { it.path == fileName }?.content ?: ""
-                                    
-                                    val regex = Regex("[\\s\"']")
-                                    val normalizedHtml = htmlContent.replace(regex, "")
-                                    val normalizedOuter = outerHTML.replace(regex, "")
-                                    
-                                    var startLine = -1
-                                    var endLine = -1
-                                    
-                                    val exactIndex = htmlContent.indexOf(outerHTML)
-                                    if (exactIndex != -1) {
-                                        startLine = htmlContent.substring(0, exactIndex).count { it == '\n' } + 1
-                                        endLine = startLine + outerHTML.count { it == '\n' }
-                                    } else {
-                                        val matchIndex = normalizedHtml.indexOf(normalizedOuter)
-                                        if (matchIndex != -1) {
-                                            var originalStart = 0
-                                            var normalizedCount = 0
-                                            while (originalStart < htmlContent.length && normalizedCount < matchIndex) {
-                                                if (!htmlContent[originalStart].toString().matches(regex)) {
-                                                    normalizedCount++
-                                                }
-                                                originalStart++
-                                            }
-                                            startLine = htmlContent.substring(0, originalStart).count { it == '\n' } + 1
-                                            
-                                            var originalEnd = originalStart
-                                            var endCount = 0
-                                            while (originalEnd < htmlContent.length && endCount < normalizedOuter.length) {
-                                                if (!htmlContent[originalEnd].toString().matches(regex)) {
-                                                    endCount++
-                                                }
-                                                originalEnd++
-                                            }
-                                            endLine = htmlContent.substring(0, originalEnd).count { it == '\n' } + 1
-                                        } else {
-                                            // Try partial match for start line
-                                            val partialOuter = if (normalizedOuter.length > 30) normalizedOuter.substring(0, 30) else normalizedOuter
-                                            val partialIndex = normalizedHtml.indexOf(partialOuter)
-                                            if (partialIndex != -1) {
-                                                var originalStart = 0
-                                                var normalizedCount = 0
-                                                while (originalStart < htmlContent.length && normalizedCount < partialIndex) {
-                                                    if (!htmlContent[originalStart].toString().matches(regex)) {
-                                                        normalizedCount++
-                                                    }
-                                                    originalStart++
-                                                }
-                                                startLine = htmlContent.substring(0, originalStart).count { it == '\n' } + 1
-                                                endLine = startLine
-                                            }
-                                        }
-                                    }
-
-                                    val name = if (startLine != -1 && endLine != -1) {
-                                        if (startLine == endLine) "@$fileName (line $startLine)" else "@$fileName (lines $startLine-$endLine)"
-                                    } else {
-                                        "@$fileName"
-                                    }
-                                    
-                                    val file = com.example.ui.AttachedFile(
-                                        uri = android.net.Uri.EMPTY,
-                                        name = name,
-                                        mimeType = "text/html",
-                                        isImage = false,
-                                        contentAsText = "User clicked on this element ($identifier) in the preview:\n```html\n$outerHTML\n```\nModify this part as requested."
+                                    val file = com.example.ui.preview.WebPreviewElementInspector.resolveElementAttachment(
+                                        files = files,
+                                        identifier = identifier,
+                                        outerHTML = outerHTML
                                     )
                                     onAddAttachedFile(file)
+                                    if (chatInputText.isBlank()) {
+                                        onUpdateChatInputText("Please modify or style the selected element `$identifier`:")
+                                    }
                                     onTabSelected(WorkspaceTab.CHAT)
                                 },
-                                webPreviewRefreshTrigger = webPreviewRefreshTrigger
+                                webPreviewRefreshTrigger = webPreviewRefreshTrigger,
+                                detectedWebErrors = detectedWebErrors,
+                                onFixErrors = onFixErrors
                             )
                         }
                         WorkspaceTab.TERMINAL -> {
@@ -636,7 +582,9 @@ fun WorkspaceScreen(
                                 onSaveBranch = onSaveGithubBranch,
                                 onTriggerBuild = {
                                     onPushGitRepo(githubRepo, githubToken, githubBranch, true) { _ -> }
-                                }
+                                },
+                                detectedAndroidBuildErrors = detectedAndroidBuildErrors,
+                                onFixBuildErrors = onFixAndroidBuildErrors
                             )
                         }
                     }
@@ -2291,6 +2239,7 @@ fun ChatBubble(
     val align = if (isUser) Alignment.End else Alignment.Start
     val bg = if (isUser) Color(0xFF21262D) else Color(0xFF161B22)
     val border = if (isUser) Color(0xFF30363D) else Color(0xFF21262D)
+    val context = androidx.compose.ui.platform.LocalContext.current
     val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
 
     val (userDisplayText, mentionChips) = remember(message.content) {
@@ -2333,22 +2282,29 @@ fun ChatBubble(
                 }
             }
 
-            androidx.compose.foundation.text.selection.SelectionContainer {
-                Card(
-                    shape = RoundedCornerShape(
-                        topStart = 18.dp,
-                        topEnd = 18.dp,
-                        bottomStart = if (isUser) 18.dp else 6.dp,
-                        bottomEnd = if (isUser) 6.dp else 18.dp
-                    ),
-                    colors = CardDefaults.cardColors(containerColor = bg),
-                    border = BorderStroke(1.dp, border),
-                    modifier = Modifier.widthIn(max = 600.dp)
+            val chatMessageContentToCopy = if (isUser) userDisplayText else message.content
+            Card(
+                shape = RoundedCornerShape(
+                    topStart = 18.dp,
+                    topEnd = 18.dp,
+                    bottomStart = if (isUser) 18.dp else 6.dp,
+                    bottomEnd = if (isUser) 6.dp else 18.dp
+                ),
+                colors = CardDefaults.cardColors(containerColor = bg),
+                border = BorderStroke(1.dp, border),
+                modifier = Modifier
+                    .widthIn(max = 600.dp)
+                    .safeLongPressCopy(
+                        textToCopy = { chatMessageContentToCopy },
+                        label = "Chat Message",
+                        feedbackMessage = "Message copied to clipboard"
+                    )
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Box(
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        // Background watermark: DEVELOPED BY MUSTASIM FUYAD
+                    // Background watermark: DEVELOPED BY MUSTASIM FUYAD
+                    androidx.compose.foundation.text.selection.DisableSelection {
                         Text(
                             text = "DEVELOPED BY MUSTASIM FUYAD",
                             fontSize = 18.sp,
@@ -2361,6 +2317,7 @@ fun ChatBubble(
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                             maxLines = 2
                         )
+                    }
 
                         Column(
                             modifier = Modifier.padding(14.dp),
@@ -2423,7 +2380,6 @@ fun ChatBubble(
                         }
                     }
                 }
-            }
 
             if (isUser) {
                 if (isCurrentlyActiveThinking) {
@@ -2472,25 +2428,32 @@ fun ChatBubble(
             }
 
             // Message Actions
-            Row(
-                modifier = Modifier.padding(top = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (isUser && !isEditing) {
-                    MessageActionButton(Icons.Default.Edit, "Edit") { isEditing = true }
-                    MessageActionButton(Icons.Default.Refresh, "Regenerate") { onRegenerate(message) }
-                }
-                
-                MessageActionButton(Icons.Default.ContentCopy, "Copy") {
-                    clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(if (isUser) userDisplayText else message.content))
-                }
-                
-                MessageActionButton(Icons.Default.Delete, "Delete", tint = Color(0xFFEE5253).copy(alpha = 0.7f)) {
-                    onDeleteMessage(message)
-                }
-            }
+    Row(
+        modifier = Modifier.padding(top = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (isUser && !isEditing) {
+            MessageActionButton(Icons.Default.Edit, "Edit") { isEditing = true }
+            MessageActionButton(Icons.Default.Refresh, "Regenerate") { onRegenerate(message) }
         }
+        
+        MessageActionButton(Icons.Default.ContentCopy, "Copy") {
+            val textToCopy = if (isUser) userDisplayText else message.content
+            SafeClipboardHelper.copyToClipboard(
+                context = context,
+                text = textToCopy,
+                label = "Chat Message",
+                showToast = true,
+                toastMessage = "Message copied to clipboard"
+            )
+        }
+        
+        MessageActionButton(Icons.Default.Delete, "Delete", tint = Color(0xFFEE5253).copy(alpha = 0.7f)) {
+            onDeleteMessage(message)
+        }
+    }
+}
 }
 
 @Composable
@@ -2594,8 +2557,13 @@ fun CodeTabContent(
                 ) {
                     Surface(
                         onClick = {
-                            clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(editorContent))
-                            android.widget.Toast.makeText(context, "Copied to clipboard", android.widget.Toast.LENGTH_SHORT).show()
+                            SafeClipboardHelper.copyToClipboard(
+                                context = context,
+                                text = editorContent,
+                                label = activeFile?.path ?: "Code Editor",
+                                showToast = true,
+                                toastMessage = "Copied to clipboard"
+                            )
                         },
                         shape = RoundedCornerShape(6.dp),
                         color = Color(0xFF21262D),
@@ -2954,12 +2922,7 @@ fun CodeTabContent(
     }
 }
 
-class WebAppInspectorInterface(private val onElementSelected: (String, String) -> Unit) {
-    @android.webkit.JavascriptInterface
-    fun onElementClicked(identifier: String, outerHTML: String) {
-        onElementSelected(identifier, outerHTML)
-    }
-}
+typealias WebAppInspectorInterface = com.example.ui.preview.WebPreviewElementInspector.InspectorBridge
 
 fun getInlinedHtml(files: List<ProjectFileEntity>): String {
     val htmlFile = files.find { it.path == "index.html" } ?: return ""
@@ -2991,57 +2954,7 @@ fun getInlinedHtml(files: List<ProjectFileEntity>): String {
 }
 
 fun preprocessHtmlForBabel(html: String): String {
-    var content = html
-
-    // 1. Inject Babel setup to register 'react-classic' preset with classic runtime
-    val babelCdnRegex = Regex("""(<script\s+[^>]*src=["'][^"']*babel\.min\.js["'][^>]*>\s*</script>)""", RegexOption.IGNORE_CASE)
-    if (babelCdnRegex.containsMatchIn(content)) {
-        content = babelCdnRegex.replace(content) { matchResult ->
-            matchResult.value + "\n<script>\n" +
-                    "if (window.Babel) {\n" +
-                    "  Babel.registerPreset('react-classic', {\n" +
-                    "    presets: [\n" +
-                    "      [Babel.availablePresets['react'], { runtime: 'classic' }]\n" +
-                    "    ]\n" +
-                    "  });\n" +
-                    "}\n" +
-                    "</script>"
-        }
-    } else {
-        val headRegex = Regex("""(<head>)""", RegexOption.IGNORE_CASE)
-        if (headRegex.containsMatchIn(content)) {
-            content = headRegex.replace(content) { matchResult ->
-                matchResult.value + "\n<script>\n" +
-                        "window.addEventListener('DOMContentLoaded', () => {\n" +
-                        "  if (window.Babel) {\n" +
-                        "    Babel.registerPreset('react-classic', {\n" +
-                        "      presets: [\n" +
-                        "        [Babel.availablePresets['react'], { runtime: 'classic' }]\n" +
-                        "      ]\n" +
-                        "    });\n" +
-                        "  }\n" +
-                        "});\n" +
-                        "</script>"
-            }
-        }
-    }
-
-    // 2. Replace 'react' preset with 'react-classic' in data-presets attribute
-    val dataPresetsRegex = Regex("""data-presets\s*=\s*["']([^"']*)\breact\b([^"']*)["']""", RegexOption.IGNORE_CASE)
-    content = dataPresetsRegex.replace(content) { matchResult ->
-        val before = matchResult.groups[1]?.value ?: ""
-        val after = matchResult.groups[2]?.value ?: ""
-        "data-presets=\"${before}react-classic${after}\""
-    }
-
-    // 3. Keep data-type="module" additions to avoid 'Cannot use import statement outside a module'
-    val babelScriptRegex = Regex("""<script\s+type\s*=\s*["']text/babel["'](?![^>]*data-type\s*=)([^>]*)>""", RegexOption.IGNORE_CASE)
-    content = babelScriptRegex.replace(content) { matchResult ->
-        val attrs = matchResult.groups[1]?.value ?: ""
-        "<script type=\"text/babel\" data-type=\"module\"$attrs>"
-    }
-
-    return content
+    return com.example.ui.preview.BabelCompatibilityEngine.sanitizeAndConfigureBabel(html)
 }
 
 fun uploadToPasteEe(htmlContent: String, onSuccess: (String) -> Unit, onError: (String) -> Unit) {
@@ -3120,7 +3033,9 @@ fun PreviewTabContent(
     onWebError: (message: String, sourceId: String, lineNumber: Int) -> Unit,
     onClearErrors: () -> Unit = {},
     onInspectorElementSelected: (identifier: String, html: String) -> Unit = { _, _ -> },
-    webPreviewRefreshTrigger: Int = 0
+    webPreviewRefreshTrigger: Int = 0,
+    detectedWebErrors: List<WebConsoleError> = emptyList(),
+    onFixErrors: () -> Unit = {}
 ) {
     val htmlFile = remember(files) { 
         files.find { it.path.equals("index.html", ignoreCase = true) || it.path.endsWith("/index.html", ignoreCase = true) } 
@@ -3260,7 +3175,7 @@ fun PreviewTabContent(
     }
 
     LaunchedEffect(isInspectorModeActive, webViewRef) {
-        webViewRef?.evaluateJavascript("window.isInspectorModeActive = $isInspectorModeActive;", null)
+        com.example.ui.preview.WebPreviewElementInspector.setInspectorActive(webViewRef, isInspectorModeActive)
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -3409,7 +3324,14 @@ fun PreviewTabContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Surface(
-                        onClick = { isInspectorModeActive = !isInspectorModeActive },
+                        onClick = {
+                            isInspectorModeActive = !isInspectorModeActive
+                            android.widget.Toast.makeText(
+                                context,
+                                if (isInspectorModeActive) "Element Inspector Active: Tap any element" else "Element Inspector Disabled",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        },
                         shape = RoundedCornerShape(6.dp),
                         color = if (isInspectorModeActive) Color(0xFF1F6FEB) else Color(0xFF21262D),
                         border = BorderStroke(1.dp, if (isInspectorModeActive) Color(0xFF388BFD) else Color(0xFF30363D))
@@ -3419,10 +3341,10 @@ fun PreviewTabContent(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = "Toggle Inspector",
+                                imageVector = Icons.Default.FilterCenterFocus,
+                                contentDescription = "Inspect Elements",
                                 tint = if (isInspectorModeActive) Color.White else Color(0xFFC9D1D9),
-                                modifier = Modifier.size(15.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                     }
@@ -3513,6 +3435,51 @@ fun PreviewTabContent(
                                 modifier = Modifier.size(15.dp)
                             )
                         }
+                    }
+                }
+            }
+        }
+
+        if (isInspectorModeActive) {
+            Surface(
+                color = Color(0xFF1F6FEB),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.FilterCenterFocus,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = "Inspector Active: Tap any element in preview",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White
+                        )
+                    }
+                    IconButton(
+                        onClick = { isInspectorModeActive = false },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Cancel Inspector",
+                            tint = Color.White,
+                            modifier = Modifier.size(14.dp)
+                        )
                     }
                 }
             }
@@ -3669,39 +3636,8 @@ fun PreviewTabContent(
                                             if (url != null && !com.example.ui.preview.WebPreviewLifecycleManager.isInternalVirtualUrl(url)) {
                                                 urlInputText = url
                                             }
-                                        val js = """
-                                            window.isInspectorModeActive = false;
-                                            if (!window.inspectorInitialized) {
-                                                window.inspectorInitialized = true;
-                                                document.addEventListener('click', function(e) {
-                                                    if (window.isInspectorModeActive) {
-                                                        e.preventDefault();
-                                                        e.stopPropagation();
-                                                        var el = e.target;
-                                                        var tag = el.tagName.toLowerCase();
-                                                        var id = el.id ? '#' + el.id : '';
-                                                        var className = el.className ? '.' + el.className.split(' ').join('.') : '';
-                                                        var identifier = tag + id + className;
-                                                        window.AndroidInspector.onElementClicked(identifier, el.outerHTML);
-                                                    }
-                                                }, true);
-                                                document.addEventListener('mouseover', function(e) {
-                                                    if (window.isInspectorModeActive) {
-                                                        e.target.dataset.oldOutline = e.target.style.outline;
-                                                        e.target.style.outline = '2px solid #38BDF8';
-                                                        e.target.style.cursor = 'crosshair';
-                                                    }
-                                                }, true);
-                                                document.addEventListener('mouseout', function(e) {
-                                                    if (window.isInspectorModeActive) {
-                                                        e.target.style.outline = e.target.dataset.oldOutline || '';
-                                                        e.target.style.cursor = '';
-                                                    }
-                                                }, true);
-                                            }
-                                        """.trimIndent()
-                                        view?.evaluateJavascript(js, null)
-                                    }
+                                            com.example.ui.preview.WebPreviewElementInspector.injectInspectorScript(view, isInspectorModeActive)
+                                        }
 
                                     override fun shouldInterceptRequest(
                                         view: WebView?,
@@ -3830,6 +3766,7 @@ fun PreviewTabContent(
                                     }
                                 }
                                 addJavascriptInterface(WebAppInspectorInterface { identifier, outerHTML ->
+                                    isInspectorModeActive = false
                                     currentOnElementSelected(identifier, outerHTML)
                                 }, "AndroidInspector")
                                 
@@ -3924,19 +3861,49 @@ fun PreviewTabContent(
                                 fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
                             )
                         }
-                        Surface(
-                            onClick = onClearLogs,
-                            shape = RoundedCornerShape(4.dp),
-                            color = Color(0xFF21262D),
-                            border = BorderStroke(1.dp, Color(0xFF30363D))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                "Clear",
-                                color = Color(0xFFF85149),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            val errorLogs = remember(consoleLogs) { consoleLogs.filter { it.level.equals("error", ignoreCase = true) } }
+                            val totalErrorCount = maxOf(detectedWebErrors.size, errorLogs.size)
+                            val hasErrors = totalErrorCount > 0
+                            val errorSummary = remember(detectedWebErrors, errorLogs) {
+                                if (detectedWebErrors.isNotEmpty()) {
+                                    detectedWebErrors.joinToString("\n\n") { "Error: ${it.message}\nFile: ${it.cleanFilePath.ifBlank { it.sourceId }}:${it.lineNumber}" }
+                                } else {
+                                    errorLogs.joinToString("\n\n") { "Error: ${it.message}\nSource: ${it.sourceId}:${it.lineNumber}" }
+                                }
+                            }
+
+                            ConsoleErrorFixButtons(
+                                hasErrors = hasErrors,
+                                errorCount = totalErrorCount,
+                                errorSummary = errorSummary,
+                                onFix = {
+                                    if (detectedWebErrors.isNotEmpty()) {
+                                        onFixErrors()
+                                    } else if (errorLogs.isNotEmpty()) {
+                                        errorLogs.forEach { onWebError(it.message, it.sourceId, it.lineNumber) }
+                                        onFixErrors()
+                                    }
+                                }
                             )
+
+                            Surface(
+                                onClick = onClearLogs,
+                                shape = RoundedCornerShape(4.dp),
+                                color = Color(0xFF21262D),
+                                border = BorderStroke(1.dp, Color(0xFF30363D))
+                            ) {
+                                Text(
+                                    "Clear",
+                                    color = Color(0xFFF85149),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                )
+                            }
                         }
                     }
                     HorizontalDivider(color = Color(0xFF30363D), thickness = 1.dp)
@@ -3955,27 +3922,70 @@ fun PreviewTabContent(
                             }
                         } else {
                             items(consoleLogs) { log ->
-                                val (badgeBg, badgeText) = when (log.level) {
+                                val (badgeBg, badgeText) = when (log.level.lowercase()) {
                                     "error" -> Color(0x33F85149) to Color(0xFFF85149)
                                     "warning" -> Color(0x33D29922) to Color(0xFFD29922)
                                     else -> Color(0x333FB950) to Color(0xFF3FB950)
                                 }
-                                Column(modifier = Modifier.padding(vertical = 2.dp)) {
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        Surface(
-                                            color = badgeBg,
-                                            shape = RoundedCornerShape(4.dp)
+                                val fullLogText = "${log.level.uppercase()}: ${log.message}${if (log.sourceId.isNotBlank()) " (${log.sourceId}:${log.lineNumber})" else ""}"
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .safeLongPressCopy(
+                                            textToCopy = { fullLogText },
+                                            label = "Console Log",
+                                            feedbackMessage = "Copied log to clipboard"
+                                        )
+                                        .padding(vertical = 2.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.weight(1f, fill = false)
                                         ) {
+                                            Surface(
+                                                color = badgeBg,
+                                                shape = RoundedCornerShape(4.dp)
+                                            ) {
+                                                Text(
+                                                    log.level.uppercase(),
+                                                    color = badgeText,
+                                                    fontSize = 9.sp,
+                                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                                )
+                                            }
                                             Text(
-                                                log.level.uppercase(),
-                                                color = badgeText,
-                                                fontSize = 9.sp,
-                                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                                                fontWeight = FontWeight.Bold,
-                                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                                log.message,
+                                                color = Color(0xFFE6EDF3),
+                                                fontSize = 11.sp,
+                                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
                                             )
                                         }
-                                        Text(log.message, color = Color(0xFFE6EDF3), fontSize = 11.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+
+                                        Icon(
+                                            imageVector = Icons.Default.ContentCopy,
+                                            contentDescription = "Copy Log",
+                                            tint = Color(0xFF6E7681),
+                                            modifier = Modifier
+                                                .size(14.dp)
+                                                .clickable {
+                                                    SafeClipboardHelper.copyToClipboard(
+                                                        context = context,
+                                                        text = fullLogText,
+                                                        label = "Console Log",
+                                                        showToast = true,
+                                                        toastMessage = "Copied log to clipboard"
+                                                    )
+                                                }
+                                        )
                                     }
                                     if (log.sourceId.isNotEmpty()) {
                                         Row(
@@ -4003,6 +4013,7 @@ fun TerminalTabContent(
     onSendCommand: (String) -> Unit,
     onClear: () -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var commandInput by remember { mutableStateOf("") }
     val scrollState = rememberScrollState()
 
@@ -4043,29 +4054,70 @@ fun TerminalTabContent(
                     )
                 }
 
-                Surface(
-                    onClick = onClear,
-                    shape = RoundedCornerShape(6.dp),
-                    color = Color(0xFF21262D),
-                    border = BorderStroke(1.dp, Color(0xFF30363D))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    if (terminalOutput.isNotBlank()) {
+                        Surface(
+                            onClick = {
+                                SafeClipboardHelper.copyToClipboard(
+                                    context = context,
+                                    text = terminalOutput,
+                                    label = "Terminal Output",
+                                    showToast = true,
+                                    toastMessage = "Terminal output copied to clipboard"
+                                )
+                            },
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFF21262D),
+                            border = BorderStroke(1.dp, Color(0xFF30363D))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ContentCopy,
+                                    contentDescription = "Copy Terminal Output",
+                                    tint = Color(0xFF8B949E),
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Text(
+                                    text = "Copy",
+                                    color = Color(0xFF8B949E),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+
+                    Surface(
+                        onClick = onClear,
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color(0xFF21262D),
+                        border = BorderStroke(1.dp, Color(0xFF30363D))
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.DeleteSweep,
-                            contentDescription = "Clear Terminal",
-                            tint = Color(0xFF8B949E),
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Text(
-                            text = "Clear",
-                            color = Color(0xFF8B949E),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.DeleteSweep,
+                                contentDescription = "Clear Terminal",
+                                tint = Color(0xFF8B949E),
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Text(
+                                text = "Clear",
+                                color = Color(0xFF8B949E),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
                 }
             }
@@ -4076,6 +4128,11 @@ fun TerminalTabContent(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
+                .safeLongPressCopy(
+                    textToCopy = { terminalOutput },
+                    label = "Terminal Output",
+                    feedbackMessage = "Copied terminal output to clipboard"
+                )
                 .padding(14.dp)
                 .verticalScroll(scrollState)
         ) {
@@ -4196,8 +4253,11 @@ fun AndroidBuildTabContent(
     onSaveRepo: (String) -> Unit,
     onSaveToken: (String) -> Unit,
     onSaveBranch: (String) -> Unit,
-    onTriggerBuild: () -> Unit
+    onTriggerBuild: () -> Unit,
+    detectedAndroidBuildErrors: List<AndroidBuildError> = emptyList(),
+    onFixBuildErrors: () -> Unit = {}
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var isEditingConfig by remember { mutableStateOf(githubRepo.isBlank() || githubToken.isBlank()) }
     var tempRepo by remember { mutableStateOf(githubRepo) }
     var tempToken by remember { mutableStateOf(githubToken) }
@@ -4746,7 +4806,9 @@ fun AndroidBuildTabContent(
                 }
             }
 
-            if (buildError != null) {
+            val hasBuildError = buildError != null || detectedAndroidBuildErrors.isNotEmpty()
+            val effectiveErrorMessage = buildError ?: detectedAndroidBuildErrors.firstOrNull()?.message ?: "Build failed"
+            if (hasBuildError) {
                 // Error Card
                 Card(
                     shape = RoundedCornerShape(12.dp),
@@ -4757,18 +4819,22 @@ fun AndroidBuildTabContent(
                     Row(
                         modifier = Modifier.padding(12.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.Top
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
                             imageVector = Icons.Default.Cancel,
                             contentDescription = "Error",
                             tint = Color(0xFFEE5253),
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(18.dp)
                         )
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text("Build Error Detected", color = Color(0xFFEE5253), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            Text(buildError, color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
+                            Text(effectiveErrorMessage, color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
                         }
+                        BuildErrorFixButton(
+                            errorMessage = effectiveErrorMessage,
+                            onFix = onFixBuildErrors
+                        )
                     }
                 }
             }
@@ -4992,6 +5058,31 @@ fun AndroidBuildTabContent(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text("Execution Logs", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            if (buildLogs.isNotBlank()) {
+                                Surface(
+                                    onClick = {
+                                        SafeClipboardHelper.copyToClipboard(
+                                            context = context,
+                                            text = buildLogs,
+                                            label = "Build Logs",
+                                            showToast = true,
+                                            toastMessage = "Copied build logs to clipboard"
+                                        )
+                                    },
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = Color(0xFF161B22),
+                                    border = BorderStroke(1.dp, Color(0xFF30363D))
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy Logs", tint = Color(0xFF8B949E), modifier = Modifier.size(11.dp))
+                                        Text("Copy", color = Color(0xFF8B949E), fontSize = 10.sp)
+                                    }
+                                }
+                            }
                         }
                         Divider(color = Color(0xFF1E2230))
 
@@ -4999,6 +5090,11 @@ fun AndroidBuildTabContent(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxWidth()
+                                .safeLongPressCopy(
+                                    textToCopy = { buildLogs },
+                                    label = "Build Logs",
+                                    feedbackMessage = "Copied build logs to clipboard"
+                                )
                                 .padding(8.dp)
                                 .verticalScroll(logsScrollState)
                         ) {

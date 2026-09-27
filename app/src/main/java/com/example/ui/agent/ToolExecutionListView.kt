@@ -905,9 +905,7 @@ fun ToolExecutionIndicatorRow(
                                     fontSize = 10.sp,
                                     color = Color(0xFF58A6FF),
                                     modifier = Modifier.clickable {
-                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        clipboard.setPrimaryClip(ClipData.newPlainText(payload.inputTitle, payload.inputContent))
-                                        Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
+                                        com.example.ui.util.SafeClipboardHelper.copyToClipboard(context, payload.inputContent, payload.inputTitle)
                                     }
                                 )
                             }
@@ -948,9 +946,7 @@ fun ToolExecutionIndicatorRow(
                                     fontSize = 10.sp,
                                     color = Color(0xFF58A6FF),
                                     modifier = Modifier.clickable {
-                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        clipboard.setPrimaryClip(ClipData.newPlainText(payload.outputTitle, payload.outputContent))
-                                        Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
+                                        com.example.ui.util.SafeClipboardHelper.copyToClipboard(context, payload.outputContent, payload.outputTitle)
                                     }
                                 )
                             }

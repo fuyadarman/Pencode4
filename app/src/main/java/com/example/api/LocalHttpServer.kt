@@ -252,57 +252,7 @@ object LocalHttpServer {
     }
 
     private fun preprocessHtmlForBabel(html: String): String {
-        var content = html
-
-        // 1. Inject Babel setup to register 'react-classic' preset with classic runtime
-        val babelCdnRegex = Regex("""(<script\s+[^>]*src=["'][^"']*babel\.min\.js["'][^>]*>\s*</script>)""", RegexOption.IGNORE_CASE)
-        if (babelCdnRegex.containsMatchIn(content)) {
-            content = babelCdnRegex.replace(content) { matchResult ->
-                matchResult.value + "\n<script>\n" +
-                        "if (window.Babel) {\n" +
-                        "  Babel.registerPreset('react-classic', {\n" +
-                        "    presets: [\n" +
-                        "      [Babel.availablePresets['react'], { runtime: 'classic' }]\n" +
-                        "    ]\n" +
-                        "  });\n" +
-                        "}\n" +
-                        "</script>"
-            }
-        } else {
-            val headRegex = Regex("""(<head>)""", RegexOption.IGNORE_CASE)
-            if (headRegex.containsMatchIn(content)) {
-                content = headRegex.replace(content) { matchResult ->
-                    matchResult.value + "\n<script>\n" +
-                            "window.addEventListener('DOMContentLoaded', () => {\n" +
-                            "  if (window.Babel) {\n" +
-                            "    Babel.registerPreset('react-classic', {\n" +
-                            "      presets: [\n" +
-                            "        [Babel.availablePresets['react'], { runtime: 'classic' }]\n" +
-                            "      ]\n" +
-                            "    });\n" +
-                            "  }\n" +
-                            "});\n" +
-                            "</script>"
-                }
-            }
-        }
-
-        // 2. Replace 'react' preset with 'react-classic' in data-presets attribute
-        val dataPresetsRegex = Regex("""data-presets\s*=\s*["']([^"']*)\breact\b([^"']*)["']""", RegexOption.IGNORE_CASE)
-        content = dataPresetsRegex.replace(content) { matchResult ->
-            val before = matchResult.groups[1]?.value ?: ""
-            val after = matchResult.groups[2]?.value ?: ""
-            "data-presets=\"${before}react-classic${after}\""
-        }
-
-        // 3. Keep data-type="module" additions to avoid 'Cannot use import statement outside a module'
-        val babelScriptRegex = Regex("""<script\s+type\s*=\s*["']text/babel["'](?![^>]*data-type\s*=)([^>]*)>""", RegexOption.IGNORE_CASE)
-        content = babelScriptRegex.replace(content) { matchResult ->
-            val attrs = matchResult.groups[1]?.value ?: ""
-            "<script type=\"text/babel\" data-type=\"module\"$attrs>"
-        }
-
-        return content
+        return com.example.ui.preview.BabelCompatibilityEngine.sanitizeAndConfigureBabel(html)
     }
 
     private fun sendError(output: OutputStream, code: Int, message: String) {

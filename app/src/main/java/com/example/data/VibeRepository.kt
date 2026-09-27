@@ -1976,7 +1976,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 <body class="text-white min-h-screen flex items-center justify-center">
     <div id="root"></div>
 
-    <script type="text/babel" data-presets="react,stage-3">
+    <script type="text/babel" data-presets="env,react">
         const { useState } = React;
 
         function App() {

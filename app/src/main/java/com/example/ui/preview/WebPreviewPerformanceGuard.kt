@@ -94,54 +94,7 @@ object WebPreviewPerformanceGuard {
     }
 
     private fun preprocessHtmlForBabelCore(html: String): String {
-        var content = html
-
-        val babelCdnRegex = Regex("""(<script\s+[^>]*src=["'][^"']*babel\.min\.js["'][^>]*>\s*</script>)""", RegexOption.IGNORE_CASE)
-        if (babelCdnRegex.containsMatchIn(content)) {
-            content = babelCdnRegex.replace(content) { matchResult ->
-                matchResult.value + "\n<script>\n" +
-                        "if (window.Babel) {\n" +
-                        "  Babel.registerPreset('react-classic', {\n" +
-                        "    presets: [\n" +
-                        "      [Babel.availablePresets['react'], { runtime: 'classic' }]\n" +
-                        "    ]\n" +
-                        "  });\n" +
-                        "}\n" +
-                        "</script>"
-            }
-        } else {
-            val headRegex = Regex("""(<head>)""", RegexOption.IGNORE_CASE)
-            if (headRegex.containsMatchIn(content)) {
-                content = headRegex.replace(content) { matchResult ->
-                    matchResult.value + "\n<script>\n" +
-                            "window.addEventListener('DOMContentLoaded', () => {\n" +
-                            "  if (window.Babel) {\n" +
-                            "    Babel.registerPreset('react-classic', {\n" +
-                            "      presets: [\n" +
-                            "        [Babel.availablePresets['react'], { runtime: 'classic' }]\n" +
-                            "      ]\n" +
-                            "    });\n" +
-                            "  }\n" +
-                            "});\n" +
-                            "</script>"
-                }
-            }
-        }
-
-        val dataPresetsRegex = Regex("""data-presets\s*=\s*["']([^"']*)\breact\b([^"']*)["']""", RegexOption.IGNORE_CASE)
-        content = dataPresetsRegex.replace(content) { matchResult ->
-            val before = matchResult.groups[1]?.value ?: ""
-            val after = matchResult.groups[2]?.value ?: ""
-            "data-presets=\"${before}react-classic${after}\""
-        }
-
-        val babelScriptRegex = Regex("""<script\s+type\s*=\s*["']text/babel["'](?![^>]*data-type\s*=)([^>]*)>""", RegexOption.IGNORE_CASE)
-        content = babelScriptRegex.replace(content) { matchResult ->
-            val attrs = matchResult.groups[1]?.value ?: ""
-            "<script type=\"text/babel\" data-type=\"module\"$attrs>"
-        }
-
-        return content
+        return BabelCompatibilityEngine.sanitizeAndConfigureBabel(html)
     }
 
     /**

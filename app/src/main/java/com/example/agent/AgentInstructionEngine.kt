@@ -180,7 +180,7 @@ object AgentInstructionEngine {
         sb.append("8. DIAGNOSTICS: Use 'read_preview_errors' for preview bugs and 'read_build_errors' for build failures.\n")
         sb.append("9. TOOL CATALOG: If any tool command is omitted or you need full documentation, invoke 'list_all_tools' to see all available tools and usage.\n")
         sb.append("10. COGNITIVE REASONING & PLANNING DEPTH:\n").append(ReasoningEffortEngine.getCodingDirective(reasoningEffort)).append("\n")
-        sb.append("11. BUILD & PUSH: You can press the Build tab Build button to push code to GitHub and trigger compilation by invoking 'trigger_build'.\n")
+        sb.append("11. PROJECT BUILD: You can trigger project compilation and packaging by invoking 'trigger_build'. ONLY use this for React Vite, Android App, Chrome Extension, and Flutter App. WARNING: Do NOT use 'trigger_build' for Vanilla JS, Vanilla Three.js, React CDN, or static web apps (they run live in Preview without building).\n")
         sb.append("12. GITHUB CLONE: When user asks to clone a GitHub repository or gives a repository URL/link/name, immediately invoke 'clone_git_repo'(url = <repo_url_or_owner_slash_repo>). Do not ask manual steps or refuse.\n")
 
         // 4. Skills Module (Only if skills are active)
@@ -214,7 +214,7 @@ object AgentInstructionEngine {
         tools.add("'read_build_errors'(query?: string, maxLines?: number) [Read ONLY Build tab compilation & GitHub Action errors]")
         tools.add("'read_console_logs'(filter?, query?, maxLines?)")
         tools.add("'read_build_logs'(filter?, query?, maxLines?)")
-        tools.add("'trigger_build'(message?) [Press Build button & push code to GitHub]")
+        tools.add("'trigger_build'(message?) [Trigger project build: React Vite, Android App, Chrome Extension, Flutter App ONLY. Waits for build. WARNING: Do NOT use for Vanilla JS/React CDN]")
 
         // Code / File tools
         if (intents.contains(PromptIntent.CODE_MODIFICATION_OR_FEATURE) || intents.contains(PromptIntent.DEBUG_AND_ERROR_FIXING) || intents.contains(PromptIntent.GENERAL_AGENT_TASK) || intents.contains(PromptIntent.SEARCH_AND_EXPLORATION)) {

@@ -572,25 +572,32 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun fixSelectedAndroidBuildErrors() {
         val selected = _detectedAndroidBuildErrors.value.filter { it.isSelected }
-        if (selected.isEmpty()) return
+        val genericError = _buildError.value
+        if (selected.isEmpty() && genericError.isNullOrBlank()) return
         
         val project = _currentProject.value ?: return
-        
-        for (it in selected) {
-            attemptedAndroidErrorKeys.add("${it.filePath}:${it.lineNumber}:${it.message}")
-        }
 
         viewModelScope.launch {
             val errorReportBuilder = StringBuilder()
-            for (it in selected) {
-                val snippet = getCodeSnippetForError(project.name, it.filePath, it.lineNumber)
-                errorReportBuilder.append("- Failed Step: \"${it.stepName}\"\n  Error: \"${it.message}\"\n  File: \"${it.filePath}\" at line ${it.lineNumber}$snippet\n  Details: ${it.logsSnippet}\n")
+            if (selected.isNotEmpty()) {
+                for (it in selected) {
+                    attemptedAndroidErrorKeys.add("${it.filePath}:${it.lineNumber}:${it.message}")
+                    val snippet = getCodeSnippetForError(project.name, it.filePath, it.lineNumber)
+                    errorReportBuilder.append("- Failed Step: \"${it.stepName}\"\n  Error: \"${it.message}\"\n  File: \"${it.filePath}\" at line ${it.lineNumber}$snippet\n  Details: ${it.logsSnippet}\n")
+                }
+            } else if (!genericError.isNullOrBlank()) {
+                val logs = _buildLogs.value.takeLast(1200)
+                errorReportBuilder.append("- Build Error: \"$genericError\"\n")
+                if (logs.isNotBlank()) {
+                    errorReportBuilder.append("  Logs Snippet:\n```\n$logs\n```\n")
+                }
             }
             
             val errorReport = errorReportBuilder.toString()
             
             com.example.agent.AgentBuildControllerEngine.markRunHandled()
             _detectedAndroidBuildErrors.value = emptyList()
+            _buildError.value = null
             
             // Switch tab to Chat to show the ongoing fixing conversation
             _currentTab.value = WorkspaceTab.CHAT
@@ -4238,25 +4245,35 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                             }
                             "trigger_build", "build_and_push", "push_and_build", "run_build_pipeline" -> {
                                 val logEntry = createAiLog(
-                                    title = "Triggered Build & Push",
+                                    title = "Triggered Project Build",
                                     status = "thinking",
-                                    details = "Build tab workflow"
+                                    details = "Initiating build process and awaiting completion..."
                                 )
                                 _aiActionLogs.value = _aiActionLogs.value + logEntry
 
                                 val msg = args?.message ?: args?.description ?: args?.prompt
-                                val result = com.example.agent.AgentBuildControllerEngine.executeAiTriggerBuild(
+                                startPollingBuild()
+
+                                val result = com.example.agent.AgentBuildExecutionEngine.executeAndAwaitBuild(
                                     projectName = project.name,
+                                    templateKey = project.templateKey,
                                     githubRepo = _githubRepo.value,
                                     githubToken = _githubToken.value,
                                     githubBranch = _githubBranch.value,
                                     commitMessage = msg,
-                                    onPush = { projName, repo, token, branch, force, cb ->
-                                        pushGitRepo(projName, repo, token, branch, force, cb)
+                                    onPush = { projName, repo, token, branch, force, progressCb ->
+                                        repository.pushToGitHub(projName, repo, token, branch, force) { prog ->
+                                            _gitProgress.value = prog
+                                            progressCb(prog)
+                                        }
+                                    },
+                                    onStatusUpdate = { status, details ->
+                                        updateAiLog(logEntry.id, status, details)
                                     }
                                 )
 
-                                updateAiLog(logEntry.id, if (result.startsWith("Error")) "error" else "success", result)
+                                val isSuccess = !result.startsWith("Error") && !result.startsWith("Warning") && !result.startsWith("Build failed") && !result.startsWith("Build trigger failed")
+                                updateAiLog(logEntry.id, if (isSuccess) "success" else if (result.startsWith("Warning")) "warn" else "error", result)
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool':\n$result"))))
                             }

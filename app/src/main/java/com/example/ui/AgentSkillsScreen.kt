@@ -755,10 +755,13 @@ fun SkillFileInspectorDialog(
 
                         IconButton(
                             onClick = {
-                                val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                val clip = android.content.ClipData.newPlainText("Skill Prompt", contentText)
-                                clipboard.setPrimaryClip(clip)
-                                android.widget.Toast.makeText(context, "Skill prompt copied!", android.widget.Toast.LENGTH_SHORT).show()
+                                com.example.ui.util.SafeClipboardHelper.copyToClipboard(
+                                    context = context,
+                                    text = contentText,
+                                    label = "Skill Prompt",
+                                    showToast = true,
+                                    toastMessage = "Skill prompt copied!"
+                                )
                             },
                             modifier = Modifier.size(32.dp)
                         ) {
