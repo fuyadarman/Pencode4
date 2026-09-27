@@ -230,11 +230,11 @@ fun ProfessionalChatBar(
                         // Dedicated MCP Button
                         Surface(
                             onClick = onOpenSelectMcpDialog,
-                            shape = RoundedCornerShape(14.dp),
-                            color = if (selectedMcpServerIds.isNotEmpty()) Color(0xFF818CF8).copy(alpha = 0.18f) else Color(0xFF2B2D31),
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFF21262D),
                             border = BorderStroke(
                                 1.dp,
-                                if (selectedMcpServerIds.isNotEmpty()) Color(0xFF818CF8) else Color(0xFF383A40)
+                                if (selectedMcpServerIds.isNotEmpty()) Color(0xFF2F81F7) else Color(0xFF30363D)
                             )
                         ) {
                             Row(
@@ -245,32 +245,26 @@ fun ProfessionalChatBar(
                                 Icon(
                                     imageVector = Icons.Default.Hub,
                                     contentDescription = "MCP Servers",
-                                    tint = if (selectedMcpServerIds.isNotEmpty()) Color(0xFF818CF8) else Color(0xFF94A3B8),
-                                    modifier = Modifier.size(14.dp)
+                                    tint = if (selectedMcpServerIds.isNotEmpty()) Color(0xFF2F81F7) else Color(0xFF8B949E),
+                                    modifier = Modifier.size(13.dp)
                                 )
                                 Text(
                                     text = if (selectedMcpServerIds.isNotEmpty()) "MCP (${selectedMcpServerIds.size})" else "MCP",
                                     fontSize = 11.5.sp,
                                     fontWeight = FontWeight.Medium,
-                                    color = if (selectedMcpServerIds.isNotEmpty()) Color(0xFF818CF8) else Color(0xFF94A3B8)
+                                    color = if (selectedMcpServerIds.isNotEmpty()) Color(0xFFF0F6FC) else Color(0xFFE6EDF3)
                                 )
                             }
                         }
 
                         // Dedicated Thinking Effort Pill Button (Opens list selection dialog)
-                        val effortColor = when (currentReasoningEffort) {
-                            ReasoningEffort.SMALL -> Color(0xFF38BDF8)
-                            ReasoningEffort.NORMAL -> Color(0xFF34D399)
-                            ReasoningEffort.MEDIUM -> Color(0xFFFBBF24)
-                            ReasoningEffort.MAX -> Color(0xFFA855F7)
-                        }
                         Surface(
                             onClick = {
                                 showReasoningEffortDialog = true
                             },
-                            shape = RoundedCornerShape(14.dp),
-                            color = effortColor.copy(alpha = 0.16f),
-                            border = BorderStroke(1.dp, effortColor.copy(alpha = 0.6f))
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFF21262D),
+                            border = BorderStroke(1.dp, Color(0xFF30363D))
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -280,19 +274,19 @@ fun ProfessionalChatBar(
                                 Icon(
                                     imageVector = Icons.Default.Psychology,
                                     contentDescription = "Thinking Effort",
-                                    tint = effortColor,
-                                    modifier = Modifier.size(14.dp)
+                                    tint = Color(0xFF8B949E),
+                                    modifier = Modifier.size(13.dp)
                                 )
                                 Text(
                                     text = currentReasoningEffort.name.lowercase().replaceFirstChar { it.uppercase() },
                                     fontSize = 11.5.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = effortColor
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color(0xFFE6EDF3)
                                 )
                                 Icon(
                                     imageVector = Icons.Default.KeyboardArrowDown,
                                     contentDescription = "Choose effort",
-                                    tint = effortColor.copy(alpha = 0.8f),
+                                    tint = Color(0xFF8B949E),
                                     modifier = Modifier.size(13.dp)
                                 )
                             }

@@ -2,6 +2,7 @@ package com.example.ui.agent
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -32,18 +33,11 @@ fun ReasoningEffortSelector(
 ) {
     var expanded by remember { mutableStateOf(false) }
 
-    val accentColor = when (currentEffort) {
-        ReasoningEffort.SMALL -> Color(0xFF34D399) // Mint / Emerald
-        ReasoningEffort.NORMAL -> Color(0xFF60A5FA) // Blue (Default)
-        ReasoningEffort.MEDIUM -> Color(0xFFA78BFA) // Purple
-        ReasoningEffort.MAX -> Color(0xFFF87171) // Coral Red
-    }
-
     Box(modifier = modifier) {
         Surface(
             shape = RoundedCornerShape(6.dp),
-            color = accentColor.copy(alpha = 0.14f),
-            border = BorderStroke(1.dp, accentColor.copy(alpha = 0.45f)),
+            color = Color(0xFF21262D),
+            border = BorderStroke(1.dp, Color(0xFF30363D)),
             modifier = Modifier.clickable { expanded = true }
         ) {
             Row(
@@ -54,14 +48,14 @@ fun ReasoningEffortSelector(
                 Icon(
                     imageVector = Icons.Default.Psychology,
                     contentDescription = "Reasoning Effort",
-                    tint = accentColor,
+                    tint = Color(0xFF8B949E),
                     modifier = Modifier.size(13.dp)
                 )
                 Text(
                     text = currentEffort.label,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = accentColor
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFFE6EDF3)
                 )
             }
         }
@@ -71,6 +65,7 @@ fun ReasoningEffortSelector(
             onDismissRequest = { expanded = false },
             modifier = Modifier
                 .background(Color(0xFF161B22))
+                .border(1.dp, Color(0xFF30363D), RoundedCornerShape(8.dp))
                 .widthIn(min = 220.dp, max = 280.dp)
         ) {
             Text(
@@ -83,12 +78,6 @@ fun ReasoningEffortSelector(
 
             ReasoningEffort.entries.forEach { effort ->
                 val isSelected = effort == currentEffort
-                val itemColor = when (effort) {
-                    ReasoningEffort.SMALL -> Color(0xFF34D399)
-                    ReasoningEffort.NORMAL -> Color(0xFF60A5FA)
-                    ReasoningEffort.MEDIUM -> Color(0xFFA78BFA)
-                    ReasoningEffort.MAX -> Color(0xFFF87171)
-                }
 
                 DropdownMenuItem(
                     onClick = {
@@ -108,37 +97,37 @@ fun ReasoningEffortSelector(
                                 ) {
                                     Box(
                                         modifier = Modifier
-                                            .size(8.dp)
+                                            .size(7.dp)
                                             .clip(CircleShape)
-                                            .background(itemColor)
+                                            .background(if (isSelected) Color(0xFF2F81F7) else Color(0xFF484F58))
                                     )
                                     Text(
                                         text = effort.label + if (effort == ReasoningEffort.NORMAL) " (Default)" else "",
                                         fontSize = 13.sp,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                        color = if (isSelected) Color.White else Color(0xFFC9D1D9)
+                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                                        color = if (isSelected) Color(0xFFF0F6FC) else Color(0xFF8B949E)
                                     )
                                 }
                                 if (isSelected) {
                                     Icon(
                                         imageVector = Icons.Default.Check,
                                         contentDescription = "Selected",
-                                        tint = itemColor,
+                                        tint = Color(0xFF2F81F7),
                                         modifier = Modifier.size(15.dp)
                                     )
                                 }
                             }
                             Text(
                                 text = effort.description,
-                                fontSize = 10.sp,
-                                color = Color(0xFF8B949E),
+                                fontSize = 10.5.sp,
+                                color = Color(0xFF6E7681),
                                 lineHeight = 13.sp,
-                                modifier = Modifier.padding(start = 14.dp, top = 2.dp)
+                                modifier = Modifier.padding(start = 13.dp, top = 2.dp)
                             )
                         }
                     },
                     modifier = Modifier.background(
-                        if (isSelected) itemColor.copy(alpha = 0.10f) else Color.Transparent
+                        if (isSelected) Color(0xFF21262D) else Color.Transparent
                     )
                 )
             }

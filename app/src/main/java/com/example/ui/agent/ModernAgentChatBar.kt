@@ -173,10 +173,10 @@ fun ModernAgentChatBar(
                     // MCP Selection Button inside chatbar
                     Surface(
                         shape = RoundedCornerShape(6.dp),
-                        color = if (selectedMcpServerIds.isNotEmpty()) Color(0xFF6366F1).copy(alpha = 0.2f) else Color(0xFF21262D),
+                        color = Color(0xFF21262D),
                         border = BorderStroke(
                             1.dp,
-                            if (selectedMcpServerIds.isNotEmpty()) Color(0xFF6366F1).copy(alpha = 0.6f) else Color(0xFF30363D)
+                            if (selectedMcpServerIds.isNotEmpty()) Color(0xFF2F81F7) else Color(0xFF30363D)
                         ),
                         modifier = Modifier.clickable(onClick = onOpenSelectMcpDialog)
                     ) {
@@ -188,14 +188,14 @@ fun ModernAgentChatBar(
                             Icon(
                                 imageVector = Icons.Default.Hub,
                                 contentDescription = "MCP",
-                                tint = if (selectedMcpServerIds.isNotEmpty()) Color(0xFF818CF8) else Color(0xFF8D96A0),
+                                tint = if (selectedMcpServerIds.isNotEmpty()) Color(0xFF2F81F7) else Color(0xFF8B949E),
                                 modifier = Modifier.size(13.dp)
                             )
                             Text(
                                 text = if (selectedMcpServerIds.isNotEmpty()) "MCP (${selectedMcpServerIds.size})" else "MCP",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (selectedMcpServerIds.isNotEmpty()) Color(0xFF818CF8) else Color(0xFF8D96A0)
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = if (selectedMcpServerIds.isNotEmpty()) Color(0xFFF0F6FC) else Color(0xFFE6EDF3)
                             )
                         }
                     }
@@ -211,8 +211,8 @@ fun ModernAgentChatBar(
                 if (isThinking) {
                     Button(
                         onClick = onStopAI,
-                        colors = ButtonDefaults.buttonColors(containerColor = StitchTheme.RadiantRose),
-                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDA3633)),
+                        shape = RoundedCornerShape(8.dp),
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                     ) {
                         Row(
@@ -230,13 +230,17 @@ fun ModernAgentChatBar(
                 } else {
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
-                            .clip(RoundedCornerShape(10.dp))
+                            .size(34.dp)
+                            .clip(RoundedCornerShape(8.dp))
                             .then(
                                 if (canSend) {
-                                    Modifier.background(StitchTheme.AuroraGradient)
+                                    Modifier
+                                        .background(Color(0xFF238636))
+                                        .border(BorderStroke(1.dp, Color(0xFF2EA043).copy(alpha = 0.6f)), RoundedCornerShape(8.dp))
                                 } else {
-                                    Modifier.background(StitchTheme.SurfaceCard)
+                                    Modifier
+                                        .background(Color(0xFF21262D))
+                                        .border(BorderStroke(1.dp, Color(0xFF30363D)), RoundedCornerShape(8.dp))
                                 }
                             )
                             .then(

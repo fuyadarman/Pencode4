@@ -306,8 +306,8 @@ fun WorkspaceScreen(
                 actions = {
                     Surface(
                         onClick = { showAgentSkillsDialog = true },
-                        shape = RoundedCornerShape(8.dp),
-                        color = Color(0xFF161B22),
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color(0xFF21262D),
                         border = BorderStroke(1.dp, Color(0xFF30363D)),
                         modifier = Modifier.padding(end = 4.dp)
                     ) {
@@ -319,21 +319,21 @@ fun WorkspaceScreen(
                             Icon(
                                 imageVector = Icons.Default.Extension,
                                 contentDescription = "Skills",
-                                tint = Color(0xFF58A6FF),
-                                modifier = Modifier.size(14.dp)
+                                tint = Color(0xFF8B949E),
+                                modifier = Modifier.size(13.dp)
                             )
                             Text(
                                 text = "Skills",
-                                fontSize = 11.sp,
+                                fontSize = 11.5.sp,
                                 fontWeight = FontWeight.Medium,
-                                color = Color(0xFFC9D1D9)
+                                color = Color(0xFFE6EDF3)
                             )
                         }
                     }
                     Surface(
                         onClick = { showMcpDialog = true },
-                        shape = RoundedCornerShape(8.dp),
-                        color = Color(0xFF161B22),
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color(0xFF21262D),
                         border = BorderStroke(1.dp, Color(0xFF30363D)),
                         modifier = Modifier.padding(end = 4.dp)
                     ) {
@@ -345,14 +345,14 @@ fun WorkspaceScreen(
                             Icon(
                                 imageVector = Icons.Default.Hub,
                                 contentDescription = "MCP",
-                                tint = Color(0xFFA371F7),
-                                modifier = Modifier.size(14.dp)
+                                tint = Color(0xFF8B949E),
+                                modifier = Modifier.size(13.dp)
                             )
                             Text(
                                 text = "MCP",
-                                fontSize = 11.sp,
+                                fontSize = 11.5.sp,
                                 fontWeight = FontWeight.Medium,
-                                color = Color(0xFFC9D1D9)
+                                color = Color(0xFFE6EDF3)
                             )
                         }
                     }

@@ -39,57 +39,57 @@ import androidx.compose.ui.unit.sp
  * - Dopamine Feedback Loops (luminous gradients, glowing pill badges, smooth depth)
  */
 object StitchTheme {
-    // Canvas & Surfaces
-    val CanvasDark = Color(0xFF0F1117)
-    val SurfaceDark = Color(0xFF161822)
-    val SurfaceElevated = Color(0xFF1E2130)
-    val SurfaceGlass = Color(0xFF1E2130).copy(alpha = 0.92f)
-    val SurfaceCard = Color(0xFF181B26)
+    // Canvas & Surfaces - Clean Unified Slate Dark Palette
+    val CanvasDark = Color(0xFF0D1117)
+    val SurfaceDark = Color(0xFF161B22)
+    val SurfaceElevated = Color(0xFF21262D)
+    val SurfaceGlass = Color(0xFF161B22).copy(alpha = 0.95f)
+    val SurfaceCard = Color(0xFF161B22)
 
-    // Professional Clean Accents (Cursor / VS Code / JetBrains dark style)
-    val PrimaryViolet = Color(0xFF2563EB)
-    val PrimaryIndigo = Color(0xFF3B82F6)
-    val ElectricCyan = Color(0xFF0284C7)
-    val VibrantSky = Color(0xFF38BDF8)
-    val EmeraldSuccess = Color(0xFF22C55E)
-    val NeonLime = Color(0xFF16A34A)
-    val SunsetAmber = Color(0xFFF59E0B)
-    val RadiantRose = Color(0xFFEF4444)
+    // Unified Clean Single Accent (GitHub / Linear Developer Blue & Solid Green)
+    val PrimaryViolet = Color(0xFF2F81F7)
+    val PrimaryIndigo = Color(0xFF2F81F7)
+    val ElectricCyan = Color(0xFF2F81F7)
+    val VibrantSky = Color(0xFF58A6FF)
+    val EmeraldSuccess = Color(0xFF238636)
+    val NeonLime = Color(0xFF238636)
+    val SunsetAmber = Color(0xFFD29922)
+    val RadiantRose = Color(0xFFDA3633)
 
     // Borders & Clean Separators
-    val BorderSubtle = Color(0xFF262B3D)
-    val BorderGlow = Color(0xFF3B82F6).copy(alpha = 0.25f)
-    val BorderGlass = Color(0xFF2D3348)
+    val BorderSubtle = Color(0xFF30363D)
+    val BorderGlow = Color(0xFF30363D)
+    val BorderGlass = Color(0xFF30363D)
 
     // Text Hierarchy
-    val TextMain = Color(0xFFF1F5F9)
-    val TextSub = Color(0xFF94A3B8)
-    val TextTertiary = Color(0xFF64748B)
+    val TextMain = Color(0xFFF0F6FC)
+    val TextSub = Color(0xFF8B949E)
+    val TextTertiary = Color(0xFF6E7681)
 
-    // Professional Solid & Subdued Gradients
+    // Solid Professional Flat Tones
     val AuroraGradient = Brush.horizontalGradient(
-        listOf(Color(0xFF2563EB), Color(0xFF1D4ED8))
+        listOf(Color(0xFF238636), Color(0xFF238636))
     )
 
     val EmeraldGradient = Brush.horizontalGradient(
-        listOf(Color(0xFF16A34A), Color(0xFF15803D))
+        listOf(Color(0xFF238636), Color(0xFF238636))
     )
 
     val FlameGradient = Brush.horizontalGradient(
-        listOf(Color(0xFFDC2626), Color(0xFFB91C1C))
+        listOf(Color(0xFFDA3633), Color(0xFFDA3633))
     )
 
     val GlassGradient = Brush.verticalGradient(
         listOf(
-            Color(0xFF1E2333),
-            Color(0xFF161A26)
+            Color(0xFF161B22),
+            Color(0xFF161B22)
         )
     )
 
     val CardMeshBrush = Brush.linearGradient(
         listOf(
-            Color(0xFF1A1E2C),
-            Color(0xFF141722)
+            Color(0xFF161B22),
+            Color(0xFF161B22)
         )
     )
 }
@@ -132,8 +132,7 @@ fun Modifier.stitchPressFeedback(
 }
 
 /**
- * Psychological High-Affordance Button with luminous gradient,
- * rounded pill contour, and spring feedback.
+ * Unified Modern Primary Action Button with solid clean look and tactile feedback.
  */
 @Composable
 fun StitchPrimaryButton(
@@ -143,8 +142,8 @@ fun StitchPrimaryButton(
     icon: ImageVector? = null,
     gradient: Brush = StitchTheme.AuroraGradient,
     enabled: Boolean = true,
-    height: Dp = 44.dp,
-    shape: Shape = RoundedCornerShape(10.dp)
+    height: Dp = 40.dp,
+    shape: Shape = RoundedCornerShape(8.dp)
 ) {
     val alpha = if (enabled) 1.0f else 0.45f
 
@@ -153,6 +152,7 @@ fun StitchPrimaryButton(
             .height(height)
             .clip(shape)
             .background(gradient)
+            .border(BorderStroke(1.dp, Color(0xFF2EA043).copy(alpha = 0.6f)), shape)
             .then(
                 if (enabled) {
                     Modifier.stitchPressFeedback(scaleDown = 0.97f, onClick = onClick)
@@ -171,23 +171,23 @@ fun StitchPrimaryButton(
                     imageVector = icon,
                     contentDescription = null,
                     tint = Color.White.copy(alpha = alpha),
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(15.dp)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(6.dp))
             }
             Text(
                 text = text,
                 color = Color.White.copy(alpha = alpha),
-                fontSize = 13.5.sp,
+                fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
-                letterSpacing = 0.2.sp
+                letterSpacing = 0.1.sp
             )
         }
     }
 }
 
 /**
- * Clean Secondary IDE Button.
+ * Unified Clean Secondary IDE Button.
  */
 @Composable
 fun StitchSecondaryButton(
@@ -197,8 +197,8 @@ fun StitchSecondaryButton(
     icon: ImageVector? = null,
     textColor: Color = StitchTheme.TextMain,
     borderColor: Color = StitchTheme.BorderGlass,
-    height: Dp = 42.dp,
-    shape: Shape = RoundedCornerShape(10.dp)
+    height: Dp = 40.dp,
+    shape: Shape = RoundedCornerShape(8.dp)
 ) {
     Box(
         modifier = modifier
@@ -234,7 +234,7 @@ fun StitchSecondaryButton(
 }
 
 /**
- * Clean Header & Floating Icon Button.
+ * Unified Header & Toolbar Icon Button.
  */
 @Composable
 fun StitchIconButton(
@@ -244,8 +244,8 @@ fun StitchIconButton(
     contentDescription: String? = null,
     tint: Color = StitchTheme.TextMain,
     background: Color = StitchTheme.SurfaceElevated,
-    size: Dp = 38.dp,
-    iconSize: Dp = 18.dp,
+    size: Dp = 36.dp,
+    iconSize: Dp = 17.dp,
     shape: Shape = RoundedCornerShape(8.dp)
 ) {
     Box(

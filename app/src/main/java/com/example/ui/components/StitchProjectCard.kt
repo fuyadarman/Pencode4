@@ -52,28 +52,19 @@ fun StitchProjectCard(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(12.dp))
             .border(
-                BorderStroke(
-                    1.dp,
-                    Brush.horizontalGradient(
-                        listOf(
-                            StitchTheme.BorderSubtle,
-                            templateColor.copy(alpha = 0.35f),
-                            StitchTheme.BorderSubtle
-                        )
-                    )
-                ),
-                RoundedCornerShape(20.dp)
+                BorderStroke(1.dp, StitchTheme.BorderSubtle),
+                RoundedCornerShape(12.dp)
             )
-            .stitchPressFeedback(scaleDown = 0.97f, onClick = onClick),
+            .stitchPressFeedback(scaleDown = 0.98f, onClick = onClick),
         color = StitchTheme.SurfaceCard,
-        tonalElevation = 4.dp
+        tonalElevation = 2.dp
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(18.dp)
+                .padding(16.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -82,26 +73,26 @@ fun StitchProjectCard(
             ) {
                 // Framework Pill
                 Surface(
-                    shape = CircleShape,
-                    color = templateColor.copy(alpha = 0.15f),
-                    border = BorderStroke(1.dp, templateColor.copy(alpha = 0.4f))
+                    shape = RoundedCornerShape(6.dp),
+                    color = StitchTheme.SurfaceElevated,
+                    border = BorderStroke(1.dp, StitchTheme.BorderSubtle)
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
                             modifier = Modifier
                                 .size(6.dp)
                                 .clip(CircleShape)
-                                .background(templateColor)
+                                .background(Color(0xFF2F81F7))
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = templateName,
-                            color = templateColor,
+                            color = StitchTheme.TextSub,
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 }

@@ -243,6 +243,11 @@ fun HomeScreen(
                         }
                     }
                 }
+
+                // Legal Footer: Privacy Policy & Terms and Conditions
+                LegalLinksFooter(
+                    modifier = Modifier.padding(vertical = 4.dp)
+                )
             }
         }
     }
@@ -261,27 +266,28 @@ fun HomeScreen(
     if (projectToDelete != null) {
         AlertDialog(
             onDismissRequest = { projectToDelete = null },
-            title = { Text("Delete Project", color = Color.White, fontWeight = FontWeight.Bold) },
-            text = { Text("Are you sure you want to delete '${projectToDelete}'? This action is permanent and will delete all project history and files.", color = Color(0xFF80809B)) },
+            title = { Text("Delete Project", color = Color(0xFFF0F6FC), fontWeight = FontWeight.Bold, fontSize = 18.sp) },
+            text = { Text("Are you sure you want to delete '${projectToDelete}'? This action is permanent and will delete all project history and files.", color = Color(0xFF8B949E), fontSize = 13.sp) },
             confirmButton = {
                 Button(
                     onClick = {
                         onDeleteProject(projectToDelete!!)
                         projectToDelete = null
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEE5253))
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDA3633)),
+                    shape = RoundedCornerShape(8.dp)
                 ) {
-                    Text("Delete", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text("Delete", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { projectToDelete = null }) {
-                    Text("Cancel", color = Color.Gray)
+                    Text("Cancel", color = Color(0xFF8B949E), fontSize = 13.sp)
                 }
             },
-            containerColor = Color(0xFF12131A),
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier.border(BorderStroke(1.dp, Color(0xFF222533)), RoundedCornerShape(16.dp))
+            containerColor = Color(0xFF161B22),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.border(BorderStroke(1.dp, Color(0xFF30363D)), RoundedCornerShape(12.dp))
         )
     }
 
@@ -317,26 +323,10 @@ fun ProjectCard(
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
-    val templateColor = when {
-        project.templateKey?.contains("react", ignoreCase = true) == true -> com.example.ui.theme.StitchTheme.ElectricCyan
-        project.templateKey?.contains("three", ignoreCase = true) == true -> com.example.ui.theme.StitchTheme.PrimaryViolet
-        project.templateKey?.contains("android", ignoreCase = true) == true -> com.example.ui.theme.StitchTheme.EmeraldSuccess
-        else -> com.example.ui.theme.StitchTheme.SunsetAmber
-    }
-
     Surface(
-        shape = RoundedCornerShape(18.dp),
-        color = com.example.ui.theme.StitchTheme.SurfaceCard,
-        border = BorderStroke(
-            1.dp,
-            Brush.horizontalGradient(
-                listOf(
-                    com.example.ui.theme.StitchTheme.BorderSubtle,
-                    templateColor.copy(alpha = 0.35f),
-                    com.example.ui.theme.StitchTheme.BorderSubtle
-                )
-            )
-        ),
+        shape = RoundedCornerShape(12.dp),
+        color = Color(0xFF161B22),
+        border = BorderStroke(1.dp, Color(0xFF30363D)),
         modifier = Modifier
             .fillMaxWidth()
             .stitchPressFeedback(scaleDown = 0.98f, onClick = onClick)
@@ -344,34 +334,28 @@ fun ProjectCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(14.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
                 modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
                     modifier = Modifier
-                        .size(46.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(
-                            Brush.linearGradient(
-                                colors = listOf(
-                                    templateColor.copy(alpha = 0.85f),
-                                    com.example.ui.theme.StitchTheme.PrimaryViolet
-                                )
-                            )
-                        ),
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFF21262D))
+                        .border(BorderStroke(1.dp, Color(0xFF30363D)), RoundedCornerShape(8.dp)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.Terminal,
                         contentDescription = "Project Code",
-                        tint = Color.White,
-                        modifier = Modifier.size(22.dp)
+                        tint = Color(0xFF2F81F7),
+                        modifier = Modifier.size(20.dp)
                     )
                 }
 
@@ -384,20 +368,20 @@ fun ProjectCard(
                     ) {
                         Text(
                             text = project.name,
-                            fontSize = 15.5.sp,
+                            fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFFF1F5F9)
+                            color = Color(0xFFF0F6FC)
                         )
                         Surface(
-                            shape = CircleShape,
-                            color = templateColor.copy(alpha = 0.15f),
-                            border = BorderStroke(1.dp, templateColor.copy(alpha = 0.35f))
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFF21262D),
+                            border = BorderStroke(1.dp, Color(0xFF30363D))
                         ) {
                             Text(
                                 text = if (!project.templateKey.isNullOrBlank()) project.templateKey.uppercase() else "APP",
                                 fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = templateColor,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF8B949E),
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
@@ -406,7 +390,7 @@ fun ProjectCard(
                         Text(
                             text = project.description,
                             fontSize = 12.sp,
-                            color = Color(0xFF94A3B8),
+                            color = Color(0xFF8B949E),
                             maxLines = 1
                         )
                     }
@@ -418,16 +402,16 @@ fun ProjectCard(
                     Icon(
                         imageVector = Icons.Default.Edit,
                         contentDescription = "Edit Project",
-                        tint = Color(0xFF94A3B8),
-                        modifier = Modifier.size(18.dp)
+                        tint = Color(0xFF8B949E),
+                        modifier = Modifier.size(17.dp)
                     )
                 }
                 IconButton(onClick = onDelete) {
                     Icon(
                         imageVector = Icons.Default.Delete,
                         contentDescription = "Delete Project",
-                        tint = Color(0xFFEF4444),
-                        modifier = Modifier.size(18.dp)
+                        tint = Color(0xFF8B949E),
+                        modifier = Modifier.size(17.dp)
                     )
                 }
             }
@@ -459,9 +443,9 @@ fun EditProjectDialog(
             contentAlignment = Alignment.Center
         ) {
             Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = Color(0xFF12131A),
-                border = BorderStroke(1.dp, Color(0xFF222533)),
+                shape = RoundedCornerShape(12.dp),
+                color = Color(0xFF161B22),
+                border = BorderStroke(1.dp, Color(0xFF30363D)),
                 modifier = Modifier
                     .fillMaxWidth()
                     .widthIn(max = 500.dp)
@@ -474,9 +458,9 @@ fun EditProjectDialog(
                 ) {
                     Text(
                         text = "Edit Workspace",
-                        fontSize = 18.sp,
+                        fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = Color(0xFFF0F6FC)
                     )
 
                     OutlinedTextField(
@@ -484,12 +468,14 @@ fun EditProjectDialog(
                         onValueChange = { name = it },
                         label = { Text("Workspace Name") },
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFF6366F1),
-                            unfocusedBorderColor = Color(0xFF222533),
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White
+                            focusedBorderColor = Color(0xFF2F81F7),
+                            unfocusedBorderColor = Color(0xFF30363D),
+                            focusedTextColor = Color(0xFFF0F6FC),
+                            unfocusedTextColor = Color(0xFFF0F6FC),
+                            focusedLabelColor = Color(0xFF2F81F7),
+                            unfocusedLabelColor = Color(0xFF8B949E)
                         ),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
@@ -499,12 +485,14 @@ fun EditProjectDialog(
                         onValueChange = { description = it },
                         label = { Text("Short Description") },
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFF6366F1),
-                            unfocusedBorderColor = Color(0xFF222533),
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White
+                            focusedBorderColor = Color(0xFF2F81F7),
+                            unfocusedBorderColor = Color(0xFF30363D),
+                            focusedTextColor = Color(0xFFF0F6FC),
+                            unfocusedTextColor = Color(0xFFF0F6FC),
+                            focusedLabelColor = Color(0xFF2F81F7),
+                            unfocusedLabelColor = Color(0xFF8B949E)
                         ),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 2,
                         maxLines = 3
@@ -516,7 +504,7 @@ fun EditProjectDialog(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         TextButton(onClick = onDismiss) {
-                            Text("Cancel", color = Color(0xFF80809B))
+                            Text("Cancel", color = Color(0xFF8B949E), fontSize = 13.sp)
                         }
                         Spacer(modifier = Modifier.width(8.dp))
                         Button(
@@ -526,12 +514,12 @@ fun EditProjectDialog(
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFF6366F1)
+                                containerColor = Color(0xFF238636)
                             ),
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(8.dp),
                             enabled = name.isNotBlank()
                         ) {
-                            Text("Save Changes", color = Color.White, fontWeight = FontWeight.Bold)
+                            Text("Save Changes", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                         }
                     }
                 }
@@ -582,9 +570,9 @@ fun CreateProjectDialog(
             contentAlignment = Alignment.Center
         ) {
             Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = Color(0xFF12131A),
-                border = BorderStroke(1.dp, Color(0xFF222533)),
+                shape = RoundedCornerShape(12.dp),
+                color = Color(0xFF161B22),
+                border = BorderStroke(1.dp, Color(0xFF30363D)),
                 modifier = Modifier
                     .fillMaxWidth()
                     .widthIn(max = 520.dp)
@@ -597,9 +585,9 @@ fun CreateProjectDialog(
                 ) {
                     Text(
                         text = "New Workspace",
-                        fontSize = 19.sp,
+                        fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White,
+                        color = Color(0xFFF0F6FC),
                         modifier = Modifier.padding(bottom = 12.dp)
                     )
 
@@ -616,13 +604,14 @@ fun CreateProjectDialog(
                             onValueChange = { name = it },
                             label = { Text("Workspace Name") },
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedBorderColor = Color(0xFF00FFCC),
-                                unfocusedBorderColor = Color(0xFF222533),
-                                focusedLabelColor = Color(0xFF00FFCC),
-                                unfocusedLabelColor = Color(0xFF80809B)
+                                focusedTextColor = Color(0xFFF0F6FC),
+                                unfocusedTextColor = Color(0xFFF0F6FC),
+                                focusedBorderColor = Color(0xFF2F81F7),
+                                unfocusedBorderColor = Color(0xFF30363D),
+                                focusedLabelColor = Color(0xFF2F81F7),
+                                unfocusedLabelColor = Color(0xFF8B949E)
                             ),
+                            shape = RoundedCornerShape(8.dp),
                             modifier = Modifier.fillMaxWidth()
                         )
 
@@ -632,34 +621,42 @@ fun CreateProjectDialog(
                             onValueChange = { description = it },
                             label = { Text("Short Description") },
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedBorderColor = Color(0xFF00FFCC),
-                                unfocusedBorderColor = Color(0xFF222533),
-                                focusedLabelColor = Color(0xFF00FFCC),
-                                unfocusedLabelColor = Color(0xFF80809B)
+                                focusedTextColor = Color(0xFFF0F6FC),
+                                unfocusedTextColor = Color(0xFFF0F6FC),
+                                focusedBorderColor = Color(0xFF2F81F7),
+                                unfocusedBorderColor = Color(0xFF30363D),
+                                focusedLabelColor = Color(0xFF2F81F7),
+                                unfocusedLabelColor = Color(0xFF8B949E)
                             ),
+                            shape = RoundedCornerShape(8.dp),
                             modifier = Modifier.fillMaxWidth()
                         )
 
                         Text(
                             text = "Select Starter Template",
-                            fontSize = 13.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF80809B)
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF8B949E)
                         )
 
                         // Import from Device Button
                         OutlinedButton(
                             onClick = { filePickerLauncher.launch("*/*") },
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF38BDF8)),
-                            border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.4f))
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = Color(0xFF21262D),
+                                contentColor = Color(0xFFF0F6FC)
+                            ),
+                            border = BorderStroke(1.dp, Color(0xFF30363D))
                         ) {
-                            Icon(Icons.Default.UploadFile, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.UploadFile, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color(0xFF8B949E))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(if (selectedUris.isEmpty()) "Import from Device" else "${selectedUris.size} files selected")
+                            Text(
+                                if (selectedUris.isEmpty()) "Import from Device" else "${selectedUris.size} files selected",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
                         }
 
                         if (selectedUris.isNotEmpty()) {
@@ -679,16 +676,16 @@ fun CreateProjectDialog(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clip(RoundedCornerShape(12.dp))
+                                        .clip(RoundedCornerShape(8.dp))
                                         .background(
-                                            if (selectedTemplate == template.key) Color(0xFF1E2130)
-                                            else Color(0xFF161822)
+                                            if (selectedTemplate == template.key) Color(0xFF21262D)
+                                            else Color(0xFF161B22)
                                         )
                                         .border(
                                             1.dp,
-                                            if (selectedTemplate == template.key) Color(0xFF6C5CE7)
-                                            else Color(0xFF222533),
-                                            RoundedCornerShape(12.dp)
+                                            if (selectedTemplate == template.key) Color(0xFF2F81F7)
+                                            else Color(0xFF30363D),
+                                            RoundedCornerShape(8.dp)
                                         )
                                         .clickable { selectedTemplate = template.key }
                                         .padding(12.dp),
@@ -699,22 +696,22 @@ fun CreateProjectDialog(
                                         selected = selectedTemplate == template.key,
                                         onClick = { selectedTemplate = template.key },
                                         colors = RadioButtonDefaults.colors(
-                                            selectedColor = Color(0xFF6C5CE7),
-                                            unselectedColor = Color(0xFF3B4056)
+                                            selectedColor = Color(0xFF2F81F7),
+                                            unselectedColor = Color(0xFF484F58)
                                         )
                                     )
                                     TemplateIcon(key = template.key)
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             text = template.title,
-                                            color = Color.White,
+                                            color = Color(0xFFF0F6FC),
                                             fontSize = 14.sp,
-                                            fontWeight = FontWeight.Bold
+                                            fontWeight = FontWeight.SemiBold
                                         )
                                         Text(
                                             text = template.description,
-                                            color = Color(0xFF80809B),
-                                            fontSize = 11.sp
+                                            color = Color(0xFF8B949E),
+                                            fontSize = 11.5.sp
                                         )
                                     }
                                 }
@@ -730,9 +727,9 @@ fun CreateProjectDialog(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         TextButton(onClick = onDismiss) {
-                            Text("Cancel", color = Color(0xFF80809B))
+                            Text("Cancel", color = Color(0xFF8B949E), fontSize = 13.sp)
                         }
-                        Spacer(modifier = Modifier.width(16.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
                         Button(
                             onClick = {
                                 if (name.isNotBlank()) {
@@ -740,13 +737,13 @@ fun CreateProjectDialog(
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFF6C5CE7),
+                                containerColor = Color(0xFF238636),
                                 contentColor = Color.White
                             ),
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(8.dp),
                             enabled = name.isNotBlank()
                         ) {
-                            Text("Launch", fontWeight = FontWeight.Bold)
+                            Text("Create Workspace", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                         }
                     }
                 }
@@ -788,9 +785,9 @@ fun CloneProjectDialog(
             contentAlignment = Alignment.Center
         ) {
             Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = Color(0xFF0D0E15),
-                border = BorderStroke(1.dp, Color(0xFF1E2230)),
+                shape = RoundedCornerShape(12.dp),
+                color = Color(0xFF161B22),
+                border = BorderStroke(1.dp, Color(0xFF30363D)),
                 modifier = Modifier
                     .fillMaxWidth()
                     .widthIn(max = 520.dp)
@@ -803,14 +800,14 @@ fun CloneProjectDialog(
                 ) {
                     Text(
                         text = "Clone GitHub Repository",
-                        fontSize = 19.sp,
+                        fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = Color(0xFFF0F6FC)
                     )
 
                     Text(
-                        text = "Specify repository details to clone and overwrite or load files into your localized memory.",
-                        color = Color(0xFF80809B),
+                        text = "Specify repository details to clone and load files directly into your workspace.",
+                        color = Color(0xFF8B949E),
                         fontSize = 12.sp,
                         lineHeight = 16.sp,
                         modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
@@ -829,15 +826,15 @@ fun CloneProjectDialog(
                             label = { Text("Workspace Name") },
                             placeholder = { Text("e.g. My Website") },
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedBorderColor = Color(0xFF00FFCC),
-                                unfocusedBorderColor = Color(0xFF222533),
-                                focusedLabelColor = Color(0xFF00FFCC),
-                                unfocusedLabelColor = Color(0xFF80809B)
+                                focusedTextColor = Color(0xFFF0F6FC),
+                                unfocusedTextColor = Color(0xFFF0F6FC),
+                                focusedBorderColor = Color(0xFF2F81F7),
+                                unfocusedBorderColor = Color(0xFF30363D),
+                                focusedLabelColor = Color(0xFF2F81F7),
+                                unfocusedLabelColor = Color(0xFF8B949E)
                             ),
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
+                            shape = RoundedCornerShape(8.dp)
                         )
 
                         OutlinedTextField(
@@ -858,15 +855,15 @@ fun CloneProjectDialog(
                             label = { Text("Repository (owner/repo or URL)") },
                             placeholder = { Text("e.g. octocat/Hello-World") },
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedBorderColor = Color(0xFF00FFCC),
-                                unfocusedBorderColor = Color(0xFF222533),
-                                focusedLabelColor = Color(0xFF00FFCC),
-                                unfocusedLabelColor = Color(0xFF80809B)
+                                focusedTextColor = Color(0xFFF0F6FC),
+                                unfocusedTextColor = Color(0xFFF0F6FC),
+                                focusedBorderColor = Color(0xFF2F81F7),
+                                unfocusedBorderColor = Color(0xFF30363D),
+                                focusedLabelColor = Color(0xFF2F81F7),
+                                unfocusedLabelColor = Color(0xFF8B949E)
                             ),
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
+                            shape = RoundedCornerShape(8.dp)
                         )
 
                         OutlinedTextField(
@@ -875,15 +872,15 @@ fun CloneProjectDialog(
                             label = { Text("GitHub Access Token (Optional)") },
                             placeholder = { Text("ghp_xxxxxxxxxxxx") },
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedBorderColor = Color(0xFF00FFCC),
-                                unfocusedBorderColor = Color(0xFF222533),
-                                focusedLabelColor = Color(0xFF00FFCC),
-                                unfocusedLabelColor = Color(0xFF80809B)
+                                focusedTextColor = Color(0xFFF0F6FC),
+                                unfocusedTextColor = Color(0xFFF0F6FC),
+                                focusedBorderColor = Color(0xFF2F81F7),
+                                unfocusedBorderColor = Color(0xFF30363D),
+                                focusedLabelColor = Color(0xFF2F81F7),
+                                unfocusedLabelColor = Color(0xFF8B949E)
                             ),
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
+                            shape = RoundedCornerShape(8.dp)
                         )
 
                         OutlinedTextField(
@@ -892,22 +889,23 @@ fun CloneProjectDialog(
                             label = { Text("Branch (Optional)") },
                             placeholder = { Text("Leave empty for default branch") },
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedBorderColor = Color(0xFF00FFCC),
-                                unfocusedBorderColor = Color(0xFF222533),
-                                focusedLabelColor = Color(0xFF00FFCC),
-                                unfocusedLabelColor = Color(0xFF80809B)
+                                focusedTextColor = Color(0xFFF0F6FC),
+                                unfocusedTextColor = Color(0xFFF0F6FC),
+                                focusedBorderColor = Color(0xFF2F81F7),
+                                unfocusedBorderColor = Color(0xFF30363D),
+                                focusedLabelColor = Color(0xFF2F81F7),
+                                unfocusedLabelColor = Color(0xFF8B949E)
                             ),
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
+                            shape = RoundedCornerShape(8.dp)
                         )
 
                         if (gitProgress.isNotEmpty()) {
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .background(Color(0xFF1E293B), RoundedCornerShape(12.dp))
+                                    .background(Color(0xFF21262D), RoundedCornerShape(8.dp))
+                                    .border(BorderStroke(1.dp, Color(0xFF30363D)), RoundedCornerShape(8.dp))
                                     .padding(12.dp),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -916,13 +914,13 @@ fun CloneProjectDialog(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     CircularProgressIndicator(
-                                        color = Color(0xFF00FFCC),
-                                        modifier = Modifier.size(20.dp),
+                                        color = Color(0xFF2F81F7),
+                                        modifier = Modifier.size(18.dp),
                                         strokeWidth = 2.dp
                                     )
                                     Text(
                                         text = gitProgress,
-                                        color = Color.White,
+                                        color = Color(0xFFF0F6FC),
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Medium
                                     )
@@ -942,9 +940,9 @@ fun CloneProjectDialog(
                             onClick = onDismiss,
                             enabled = gitProgress.isEmpty() || gitProgress.contains("complete", ignoreCase = true) || gitProgress.contains("failed", ignoreCase = true)
                         ) {
-                            Text("Cancel", color = Color(0xFF80809B))
+                            Text("Cancel", color = Color(0xFF8B949E), fontSize = 13.sp)
                         }
-                        Spacer(modifier = Modifier.width(16.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
                         Button(
                             onClick = {
                                 if (name.isNotBlank() && repo.isNotBlank()) {
@@ -952,13 +950,13 @@ fun CloneProjectDialog(
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFF00FFCC),
-                                contentColor = Color.Black
+                                containerColor = Color(0xFF238636),
+                                contentColor = Color.White
                             ),
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(8.dp),
                             enabled = name.isNotBlank() && repo.isNotBlank() && (gitProgress.isEmpty() || gitProgress.contains("complete", ignoreCase = true) || gitProgress.contains("failed", ignoreCase = true))
                         ) {
-                            Text("Clone", fontWeight = FontWeight.Bold)
+                            Text("Clone Repository", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                         }
                     }
                 }

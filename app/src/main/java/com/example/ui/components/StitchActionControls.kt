@@ -28,8 +28,7 @@ import com.example.ui.theme.StitchTheme
 import com.example.ui.theme.stitchPressFeedback
 
 /**
- * Psychological Radiant Floating Action Button.
- * Inspires instant action with radiant glowing gradient and spring press response.
+ * Modern Clean Action Button / FAB.
  */
 @Composable
 fun StitchFab(
@@ -38,28 +37,28 @@ fun StitchFab(
     icon: ImageVector = Icons.Default.Add,
     contentDescription: String? = "Create",
     gradient: Brush = StitchTheme.AuroraGradient,
-    size: Dp = 56.dp
+    size: Dp = 52.dp
 ) {
     Box(
         modifier = modifier
             .size(size)
-            .shadow(16.dp, CircleShape, spotColor = StitchTheme.PrimaryIndigo)
-            .clip(CircleShape)
-            .background(gradient)
-            .stitchPressFeedback(scaleDown = 0.90f, onClick = onClick),
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color(0xFF238636))
+            .border(BorderStroke(1.dp, Color(0xFF2EA043).copy(alpha = 0.6f)), RoundedCornerShape(12.dp))
+            .stitchPressFeedback(scaleDown = 0.92f, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,
             tint = Color.White,
-            modifier = Modifier.size(26.dp)
+            modifier = Modifier.size(24.dp)
         )
     }
 }
 
 /**
- * Psychological Pill Tab Group for workspace view switching (e.g. Chat, Code, Preview).
+ * Unified Tab Pill Group for workspace view switching (e.g. Chat, Code, Preview).
  */
 @Composable
 fun StitchTabPillGroup(
@@ -70,44 +69,44 @@ fun StitchTabPillGroup(
 ) {
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(StitchTheme.SurfaceDark)
-            .border(BorderStroke(1.dp, StitchTheme.BorderSubtle), RoundedCornerShape(20.dp))
-            .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color(0xFF161B22))
+            .border(BorderStroke(1.dp, Color(0xFF30363D)), RoundedCornerShape(8.dp))
+            .padding(2.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         tabs.forEachIndexed { index, title ->
             val isSelected = selectedIndex == index
             val bgColor by animateColorAsState(
-                targetValue = if (isSelected) StitchTheme.SurfaceElevated else Color.Transparent,
+                targetValue = if (isSelected) Color(0xFF21262D) else Color.Transparent,
                 label = "tab_pill_bg"
             )
             val textColor by animateColorAsState(
-                targetValue = if (isSelected) StitchTheme.ElectricCyan else StitchTheme.TextSub,
+                targetValue = if (isSelected) Color(0xFFF0F6FC) else Color(0xFF8B949E),
                 label = "tab_pill_text"
             )
 
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(6.dp))
                     .background(bgColor)
                     .then(
                         if (isSelected) {
                             Modifier.border(
-                                BorderStroke(1.dp, StitchTheme.BorderGlass),
-                                RoundedCornerShape(16.dp)
+                                BorderStroke(1.dp, Color(0xFF30363D)),
+                                RoundedCornerShape(6.dp)
                             )
                         } else Modifier
                     )
-                    .stitchPressFeedback(scaleDown = 0.94f) { onTabSelected(index) }
-                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                    .stitchPressFeedback(scaleDown = 0.96f) { onTabSelected(index) }
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = title,
                     color = textColor,
                     fontSize = 12.sp,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium
                 )
             }
         }

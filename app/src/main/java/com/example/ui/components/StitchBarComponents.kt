@@ -43,14 +43,13 @@ fun StitchBottomNavBar(
             .fillMaxWidth()
             .navigationBarsPadding()
             .padding(horizontal = 16.dp, vertical = 8.dp)
-            .shadow(elevation = 16.dp, shape = RoundedCornerShape(26.dp))
-            .clip(RoundedCornerShape(26.dp))
+            .clip(RoundedCornerShape(14.dp))
             .border(
-                BorderStroke(1.dp, StitchTheme.BorderGlass),
-                RoundedCornerShape(26.dp)
+                BorderStroke(1.dp, StitchTheme.BorderSubtle),
+                RoundedCornerShape(14.dp)
             ),
-        color = StitchTheme.SurfaceDark.copy(alpha = 0.95f),
-        tonalElevation = 8.dp
+        color = Color(0xFF161B22),
+        tonalElevation = 4.dp
     ) {
         Row(
             modifier = Modifier
@@ -62,12 +61,12 @@ fun StitchBottomNavBar(
             tabs.forEachIndexed { index, (title, icon) ->
                 val isSelected = selectedIndex == index
                 val tabBackground by animateColorAsState(
-                    targetValue = if (isSelected) StitchTheme.PrimaryViolet.copy(alpha = 0.25f) else Color.Transparent,
+                    targetValue = if (isSelected) Color(0xFF21262D) else Color.Transparent,
                     animationSpec = spring(stiffness = 400f),
                     label = "tab_bg"
                 )
                 val iconTint by animateColorAsState(
-                    targetValue = if (isSelected) StitchTheme.ElectricCyan else StitchTheme.TextSub,
+                    targetValue = if (isSelected) Color(0xFFF0F6FC) else Color(0xFF8B949E),
                     label = "tab_icon"
                 )
                 val borderWidth by animateDpAsState(
@@ -77,17 +76,17 @@ fun StitchBottomNavBar(
 
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(18.dp))
+                        .clip(RoundedCornerShape(10.dp))
                         .background(tabBackground)
                         .then(
                             if (isSelected) {
                                 Modifier.border(
-                                    BorderStroke(borderWidth, StitchTheme.ElectricCyan.copy(alpha = 0.4f)),
-                                    RoundedCornerShape(18.dp)
+                                    BorderStroke(borderWidth, Color(0xFF30363D)),
+                                    RoundedCornerShape(10.dp)
                                 )
                             } else Modifier
                         )
-                        .stitchPressFeedback(scaleDown = 0.92f) { onTabSelected(index) }
+                        .stitchPressFeedback(scaleDown = 0.94f) { onTabSelected(index) }
                         .padding(horizontal = 14.dp, vertical = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -96,15 +95,15 @@ fun StitchBottomNavBar(
                             imageVector = icon,
                             contentDescription = title,
                             tint = iconTint,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                         if (isSelected) {
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = title,
-                                color = StitchTheme.TextMain,
+                                color = Color(0xFFF0F6FC),
                                 fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.SemiBold
                             )
                         }
                     }
