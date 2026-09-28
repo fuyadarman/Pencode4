@@ -40,6 +40,8 @@ class MainActivity : ComponentActivity() {
         try {
             com.example.crash.AppCrashGuard.install(applicationContext)
             android.webkit.WebView.enableSlowWholeDocumentDraw()
+            com.example.admob.AdMobManager.initialize(applicationContext)
+            com.example.admob.AdMobManager.showAppOpenAdIfAvailable(this)
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -307,6 +309,7 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onTabSelected = { tab ->
                                     viewModel.changeTab(tab)
+                                    com.example.admob.AdMobManager.onTabSwitched(this@MainActivity, tab.name)
                                 },
                                 onBack = {
                                     viewModel.exitProject()
@@ -334,6 +337,7 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onSendPrompt = { prompt, attachments ->
                                     viewModel.sendPrompt(prompt, attachments)
+                                    com.example.admob.AdMobManager.onPromptSent(this@MainActivity)
                                 },
                                 onImportFiles = { uris ->
                                     viewModel.importFilesFromDevice(uris)

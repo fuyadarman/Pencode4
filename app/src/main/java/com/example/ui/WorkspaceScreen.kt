@@ -4004,6 +4004,9 @@ fun PreviewTabContent(
                 }
             }
         }
+
+        // AdMob Banner Ad at the bottom of Preview tab
+        com.example.admob.AdMobBanner()
     }
 }
 
@@ -4227,6 +4230,9 @@ fun TerminalTabContent(
                 }
             }
         }
+
+        // AdMob Banner Ad at the bottom of Terminal
+        com.example.admob.AdMobBanner()
     }
 }
 
@@ -5110,6 +5116,9 @@ fun AndroidBuildTabContent(
                 }
             }
         }
+
+        // AdMob Banner Ad at the bottom of Build tab
+        com.example.admob.AdMobBanner()
     }
 }
 
