@@ -2482,12 +2482,16 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     val interruptionReason: StateFlow<String> = _interruptionReason.asStateFlow()
 
     fun isContinuationKeyword(prompt: String): Boolean {
-        val p = prompt.lowercase().trim()
-        return p == "continue" || p == "cont" || p == "continue task" || p == "continue please" ||
-                p == "chalate thako" || p == "caliye jao" || p == "কাজ চালিয়ে যান" || p == "চালিয়ে যাও"
+        return com.example.agent.TaskInterruptionResumeManager.isExplicitResumePrompt(prompt)
     }
 
     suspend fun buildIntelligentContinuationPrompt(project: ProjectEntity): String {
+        val projectDir = repository.getProjectDir(project.name)
+        val checkpoint = com.example.agent.TaskCheckpointEngine.loadCheckpoint(project.name, projectDir)
+        if (checkpoint != null && checkpoint.status != "completed" && checkpoint.goal.isNotBlank()) {
+            return com.example.agent.TaskCheckpointEngine.buildResumptionPrompt(checkpoint)
+        }
+
         val allChats = repository.getChatsForProject(project.name)
         val lastRealUserMessage = allChats.reversed().firstOrNull { 
             it.role == "user" && !isContinuationKeyword(it.content) && !it.content.startsWith("[TASK CONTINUATION")
@@ -2564,6 +2568,8 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         
         val project = _currentProject.value
         if (project != null) {
+            val projectDir = repository.getProjectDir(project.name)
+            com.example.agent.TaskCheckpointEngine.recordInterruption(project.name, projectDir, repository, _interruptionReason.value)
             projectActionLogsMap[project.name] = updatedLogs
             projectTodoListMap[project.name] = _todoList.value
             projectEditHistoryMap[project.name] = _editHistory.value
@@ -3488,12 +3494,23 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             autoSaveActiveFile()
             _detectedWebErrors.value = emptyList()
             var finalPrompt = userPrompt
-            if (isContinuationKeyword(userPrompt.trim())) {
+            val projectDir = repository.getProjectDir(project.name)
+            val currentCheckpoint = com.example.agent.TaskCheckpointEngine.loadCheckpoint(project.name, projectDir)
+            val isExplicitContinuation = isContinuationKeyword(userPrompt.trim())
+            val isSideQuestion = !isExplicitContinuation && com.example.agent.TaskInterruptionResumeManager.isSideQuestionDuringTask(userPrompt, currentCheckpoint)
+
+            if (isExplicitContinuation) {
                 _isInterrupted.value = false
                 _interruptionReason.value = ""
                 finalPrompt = buildIntelligentContinuationPrompt(project)
+                com.example.agent.TaskCheckpointEngine.startOrUpdateTask(project.name, projectDir, repository, finalPrompt, isContinuation = true)
+            } else if (isSideQuestion && currentCheckpoint != null) {
+                com.example.agent.TaskCheckpointEngine.pauseTaskForQuestion(project.name, projectDir, repository, userPrompt)
+                _isInterrupted.value = true
+                _interruptionReason.value = com.example.agent.TaskInterruptionResumeManager.buildPausedTaskNotice(currentCheckpoint)
             } else {
                 _isInterrupted.value = false
+                com.example.agent.TaskCheckpointEngine.startOrUpdateTask(project.name, projectDir, repository, userPrompt, isContinuation = false)
             }
             attachments.forEach { file ->
                 if (file.isImage && file.contentAsBase64 != null) {
@@ -3531,12 +3548,14 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             runningProjectName = project.name
             _aiActionLogs.value = emptyList()
             projectActionLogsMap[project.name] = emptyList()
-            _todoList.value = emptyList()
-            projectTodoListMap[project.name] = emptyList()
+            if (!isSideQuestion) {
+                _todoList.value = emptyList()
+                projectTodoListMap[project.name] = emptyList()
+            }
             _showGithubPushPrompt.value = false
             _isThinking.value = true
-            _agentStatus.value = "AI is thinking..."
-            projectAgentStatusMap[project.name] = "AI is thinking..."
+            _agentStatus.value = if (isSideQuestion) "Answering question (Task paused)..." else "AI is thinking..."
+            projectAgentStatusMap[project.name] = _agentStatus.value
             val editsAtPromptStart = _editHistory.value.size
 
             // Re-enable conversation history with highly optimized, token-bounded session memory ledger
@@ -3733,6 +3752,12 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             var lastDiagnosedError: String? = null
 
             val handleComplete: suspend (String) -> Unit = { finishMsg: String ->
+                com.example.agent.TaskCheckpointEngine.recordComplete(
+                    projectName = project.name,
+                    projectDir = projectDir,
+                    repository = repository,
+                    summary = finishMsg
+                )
                 if (lastDiagnosedError != null && filesModifiedThisPrompt) {
                     com.example.agent.HybridSelfLearningEngine.autoLearnFromFix(
                         context = getApplication(),
@@ -3799,13 +3824,17 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                         remainingSteps = remainingSteps
                     )
 
+                    val sideQuestionGuidance = if (isSideQuestion && currentCheckpoint != null) {
+                        "\n\n" + com.example.agent.TaskInterruptionResumeManager.buildSideQuestionGuidance(currentCheckpoint)
+                    } else ""
+
                     val promptFocusDirective = com.example.agent.ActivePromptFocusGuard.buildActivePromptDirective(currentPromptText)
                     val dynamicSystemInstruction = """
                         $systemInstruction
                         
                         $promptFocusDirective
                         
-                        $pacingNotice
+                        $pacingNotice$sideQuestionGuidance
                     """.trimIndent()
 
                     val stepStartTime = System.currentTimeMillis()
@@ -4158,6 +4187,16 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     )
                                 }
 
+                                com.example.agent.TaskCheckpointEngine.recordOperation(
+                                    projectName = project.name,
+                                    projectDir = projectDir,
+                                    repository = repository,
+                                    tool = tool,
+                                    targetFile = mutationRes.filePath,
+                                    isSuccess = mutationRes.isSuccess,
+                                    summary = if (mutationRes.isSuccess) (mutationRes.detailsPayload ?: mutationRes.filePath) else mutationRes.resultText
+                                )
+
                                 val effectiveTitle = if (mutationRes.isSuccess) "${mutationRes.logTitle}: ${mutationRes.filePath}" else "File operation: $tool"
                                 updateAiLog(
                                     mutationLog.id,
@@ -4274,6 +4313,15 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 
                                 val isSuccess = !result.startsWith("Error") && !result.startsWith("Warning") && !result.startsWith("Build failed") && !result.startsWith("Build trigger failed")
                                 updateAiLog(logEntry.id, if (isSuccess) "success" else if (result.startsWith("Warning")) "warn" else "error", result)
+                                com.example.agent.TaskCheckpointEngine.recordOperation(
+                                    projectName = project.name,
+                                    projectDir = projectDir,
+                                    repository = repository,
+                                    tool = tool,
+                                    targetFile = null,
+                                    isSuccess = isSuccess,
+                                    summary = result
+                                )
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool':\n$result"))))
                             }
@@ -4634,6 +4682,12 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                     Log.d("VibeViewModel", "AI agent loop cancelled")
                     _isInterrupted.value = true
                     _interruptionReason.value = "AI task cancelled by user."
+                    com.example.agent.TaskCheckpointEngine.recordInterruption(
+                        projectName = project.name,
+                        projectDir = projectDir,
+                        repository = repository,
+                        reason = _interruptionReason.value
+                    )
                     loopCompleted = true
                     throw e
                 } catch (e: Exception) {
@@ -4646,6 +4700,12 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                     _aiActionLogs.value = _aiActionLogs.value + failLog
                     _isInterrupted.value = true
                     _interruptionReason.value = "Connection or API response failure: ${e.localizedMessage ?: "Unknown error"}"
+                    com.example.agent.TaskCheckpointEngine.recordInterruption(
+                        projectName = project.name,
+                        projectDir = projectDir,
+                        repository = repository,
+                        reason = _interruptionReason.value
+                    )
                     loopCompleted = true
                 }
                 

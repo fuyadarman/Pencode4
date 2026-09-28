@@ -24,27 +24,31 @@ class ContextOptimizationManager {
         // Stage 1: Smart File Chunking & Tool Output Pruning
         val prunedHistory = CodeChunkerAndPruner.pruneAndChunkContents(history)
 
-        // Stage 2: Rolling History Summarization & Memory Compression
-        val compressedHistory = ContextSummarizer.compressHistory(prunedHistory, maxTokenThreshold)
+        // Stage 2: Automatic Context Compaction & Summarization (Preserving recent 2.5k tokens)
+        val compactedHistory = if (ContextCompactionEngine.shouldCompact(prunedHistory)) {
+            ContextCompactionEngine.compactHistory(prunedHistory)
+        } else {
+            ContextSummarizer.compressHistory(prunedHistory, maxTokenThreshold)
+        }
 
         // Stage 3: Optional Symbol Context Augmentation (RAG Indexing)
         if (!activeTaskQuery.isNullOrBlank()) {
             val symbolBlock = symbolIndexer.buildSymbolContextBlock(activeTaskQuery)
-            if (symbolBlock.isNotBlank() && compressedHistory.isNotEmpty()) {
-                val lastContent = compressedHistory.last()
+            if (symbolBlock.isNotBlank() && compactedHistory.isNotEmpty()) {
+                val lastContent = compactedHistory.last()
                 if (lastContent.role == "user" && lastContent.parts.isNotEmpty()) {
                     val updatedText = (lastContent.parts.first().text ?: "") + "\n" + symbolBlock
                     val updatedParts = lastContent.parts.toMutableList()
                     updatedParts[0] = updatedParts[0].copy(text = updatedText)
 
-                    val updatedHistory = compressedHistory.toMutableList()
+                    val updatedHistory = compactedHistory.toMutableList()
                     updatedHistory[updatedHistory.lastIndex] = lastContent.copy(parts = updatedParts)
                     return updatedHistory
                 }
             }
         }
 
-        return compressedHistory
+        return compactedHistory
     }
 
     /**
