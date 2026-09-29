@@ -63,6 +63,10 @@ object AdMobManager {
     fun initialize(context: Context) {
         if (isInitialized.compareAndSet(false, true)) {
             try {
+                val reqConfig = com.google.android.gms.ads.RequestConfiguration.Builder()
+                    .setTestDeviceIds(listOf(AdRequest.DEVICE_ID_EMULATOR))
+                    .build()
+                MobileAds.setRequestConfiguration(reqConfig)
                 MobileAds.initialize(context) { status ->
                     Log.d(TAG, "MobileAds initialization complete: $status")
                     loadRewardedAd(context.applicationContext)

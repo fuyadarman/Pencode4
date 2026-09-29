@@ -1839,8 +1839,11 @@ fun ChatTabContent(
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
+                        val workspaceContextTokens = remember(files, chatInputText) {
+                            com.example.agent.VectorMemoryController.calculateWorkspaceTokens(files, chatInputText, "")
+                        }
                         Text(
-                            text = "${chatInputText.length / 4} tokens",
+                            text = "${workspaceContextTokens} tokens",
                             color = Color(0xFF64748B),
                             fontSize = 10.sp,
                             maxLines = 1,

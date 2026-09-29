@@ -3758,12 +3758,20 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                     repository = repository,
                     summary = finishMsg
                 )
-                if (lastDiagnosedError != null && filesModifiedThisPrompt) {
+                if (filesModifiedThisPrompt) {
+                    val issueSummary = lastDiagnosedError ?: userPrompt.take(150)
                     com.example.agent.HybridSelfLearningEngine.autoLearnFromFix(
                         context = getApplication(),
-                        issueSummary = lastDiagnosedError!!,
-                        fixSummary = finishMsg,
+                        issueSummary = issueSummary,
+                        fixSummary = finishMsg.take(250),
                         targetComponent = project.name
+                    )
+                    com.example.agent.VectorMemoryController.recordVectorMemory(
+                        projectName = project.name,
+                        topic = "Solution Pattern: ${project.name}",
+                        content = "Task: $issueSummary | Solution: ${finishMsg.take(250)}",
+                        tags = listOf(project.name.lowercase(), "auto_learned", "solution"),
+                        context = getApplication()
                     )
                 }
                 com.example.agent.AgentTaskFinalizer.finalizeTask(
@@ -4267,7 +4275,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                             }
                             "learn_pattern", "memorize_pattern", "save_pattern",
                             "synthesize_skill", "create_agent_skill",
-                            "recall_learned_patterns", "query_learned_patterns" -> {
+                            "recall_learned_patterns", "query_learned_patterns",
+                            "delete_learned_pattern", "remove_learned_pattern",
+                            "record_vector_memory", "save_vector_memory", "store_vector_memory", "record_memory",
+                            "query_vector_memory", "search_vector_memory", "retrieve_vector_memory", "search_memory",
+                            "get_vector_memory_status", "memory_status", "check_vector_memory" -> {
                                 com.example.agent.AgentSelfLearningToolHandler.handleTool(
                                     tool = tool,
                                     args = args,

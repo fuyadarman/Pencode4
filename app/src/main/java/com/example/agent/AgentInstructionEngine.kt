@@ -46,8 +46,13 @@ object AgentInstructionEngine {
             return intents
         }
 
-        val isGreetingOrChat = p.matches(Regex("^(hi|hello|hey|hola|kemon|kemn|kemon acho|assalamu alaikum|salam|sup|yo|good morning|good evening|thanks|thank you|dhonnobad)[.!?\\s]*$")) ||
-                (p.length < 35 && (p.contains("explain") || p.contains("what is") || p.contains("how does") || p.contains("ki eta") || p.contains("bujhiye dao") || p.contains("meaning")) && !p.contains("code") && !p.contains("create") && !p.contains("make") && !p.contains("build") && !p.contains("add") && !p.contains("fix"))
+        val hasMemoryKeywords = p.contains("memory") || p.contains("vector") || p.contains("মেমোরি") ||
+                p.contains("ভেক্টর") || p.contains("embedding") || p.contains("semantic") ||
+                p.contains("cosine") || p.contains("self-learning") || p.contains("self learning") ||
+                p.contains("learn_pattern") || p.contains("learned")
+
+        val isGreetingOrChat = (p.matches(Regex("^(hi|hello|hey|hola|kemon|kemn|kemon acho|assalamu alaikum|salam|sup|yo|good morning|good evening|thanks|thank you|dhonnobad)[.!?\\s]*$")) ||
+                (p.length < 35 && (p.contains("explain") || p.contains("what is") || p.contains("how does") || p.contains("ki eta") || p.contains("bujhiye dao") || p.contains("meaning")) && !p.contains("code") && !p.contains("create") && !p.contains("make") && !p.contains("build") && !p.contains("add") && !p.contains("fix"))) && !hasMemoryKeywords
 
         if (isGreetingOrChat && !hasSelectedMcp && !hasTaggedFiles && !hasBrowserUrls) {
             return setOf(PromptIntent.CONVERSATIONAL_OR_EXPLANATION)
@@ -139,6 +144,12 @@ object AgentInstructionEngine {
                 
                 === TOOLS ===
                 - 'ai_think'(message) [Optional: analyze concept], 'complete'(message) [Finish response]
+                - 'record_vector_memory'(topic, content, tags?: [string]) [Saves persistent 256-D semantic vector memory via Cosine Similarity]
+                - 'query_vector_memory'(query, topK?: number) [Performs Cosine Similarity vector search over semantic memory and past history]
+                - 'get_vector_memory_status'() [Inspects active vector memory count, learned rules, and embedder status]
+                - 'learn_pattern'(title, issue, solution, category?: 'bug_fix'|'architecture'|'convention'|'performance', tags?: [string]) [Records or updates persistent learned rule in Hybrid Self-Learning memory]
+                - 'recall_learned_patterns'(query?: string) [Vector search over Hybrid Self-Learning rules & patterns]
+                - 'delete_learned_pattern'(idOrTitle: string) [Removes an obsolete pattern from self-learning memory]
                 
                 === MANDATORY FORMAT ===
                 {"thought":"Your internal reasoning matching the thinking effort above","tool":"complete","arguments":{"message":"Your helpful response"}}
@@ -215,6 +226,13 @@ object AgentInstructionEngine {
         tools.add("'read_console_logs'(filter?, query?, maxLines?)")
         tools.add("'read_build_logs'(filter?, query?, maxLines?)")
         tools.add("'trigger_build'(message?) [Trigger project build: React Vite, Android App, Chrome Extension, Flutter App ONLY. Waits for build. WARNING: Do NOT use for Vanilla JS/React CDN]")
+        tools.add("'record_vector_memory'(topic, content, tags?: [string]) [Saves persistent 256-D semantic vector memory via Cosine Similarity]")
+        tools.add("'query_vector_memory'(query, topK?: number) [Performs Cosine Similarity vector search over semantic memory and past history]")
+        tools.add("'get_vector_memory_status'() [Inspects active vector memory count, learned rules, and embedder status]")
+        tools.add("'learn_pattern'(title, issue, solution, category?: 'bug_fix'|'architecture'|'convention'|'performance', tags?: [string]) [Records or updates persistent learned rule in Hybrid Self-Learning memory]")
+        tools.add("'recall_learned_patterns'(query?: string) [Vector search over Hybrid Self-Learning rules & patterns]")
+        tools.add("'delete_learned_pattern'(idOrTitle: string) [Removes an obsolete pattern from self-learning memory]")
+        tools.add("'synthesize_skill'(name, description, instructions, category?) [Autonomously converts learned pattern into custom Agent Skill]")
 
         // Code / File tools
         if (intents.contains(PromptIntent.CODE_MODIFICATION_OR_FEATURE) || intents.contains(PromptIntent.DEBUG_AND_ERROR_FIXING) || intents.contains(PromptIntent.GENERAL_AGENT_TASK) || intents.contains(PromptIntent.SEARCH_AND_EXPLORATION)) {
