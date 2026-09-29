@@ -129,6 +129,7 @@ fun WorkspaceScreen(
     onSelectFile: (ProjectFileEntity) -> Unit,
     onUpdateEditor: (String) -> Unit,
     onSaveFile: () -> Unit,
+    onSaveFileContent: (String, String) -> Unit = { _, _ -> },
     onCreateFile: (String) -> Unit,
     onDeleteFile: (String) -> Unit,
     onRenameFile: (String, String) -> Unit,
@@ -233,11 +234,13 @@ fun WorkspaceScreen(
     var showRestoreDialog by remember { mutableStateOf(false) }
     var showDocumentStudioDialog by remember { mutableStateOf(false) }
     var showSelfLearningDialog by remember { mutableStateOf(false) }
+    var showImageResizerDialog by remember { mutableStateOf(false) }
+    var imageResizerInitialPath by remember { mutableStateOf<String?>(null) }
 
     androidx.activity.compose.BackHandler {
         if (showExplorer) {
             showExplorer = false
-        } else if (showSettingsDialog || showAgentSkillsDialog || showMcpDialog || showSelectMcpDialog || showPushDialog || showSearchDialog || showRestoreDialog || showCreateFileDialog || showDocumentStudioDialog || showSelfLearningDialog) {
+        } else if (showSettingsDialog || showAgentSkillsDialog || showMcpDialog || showSelectMcpDialog || showPushDialog || showSearchDialog || showRestoreDialog || showCreateFileDialog || showDocumentStudioDialog || showSelfLearningDialog || showImageResizerDialog) {
             showSettingsDialog = false
             showAgentSkillsDialog = false
             showMcpDialog = false
@@ -248,6 +251,7 @@ fun WorkspaceScreen(
             showCreateFileDialog = false
             showDocumentStudioDialog = false
             showSelfLearningDialog = false
+            showImageResizerDialog = false
         } else {
             onBack()
         }
@@ -365,6 +369,14 @@ fun WorkspaceScreen(
                             imageVector = Icons.Default.PictureAsPdf,
                             contentDescription = "Document & PDF Studio",
                             tint = Color(0xFFFF7B72),
+                            modifier = Modifier.size(17.dp)
+                        )
+                    }
+                    IconButton(onClick = { showImageResizerDialog = true }, modifier = Modifier.size(34.dp)) {
+                        Icon(
+                            imageVector = Icons.Default.AspectRatio,
+                            contentDescription = "Image Resizer Studio",
+                            tint = Color(0xFF38BDF8),
                             modifier = Modifier.size(17.dp)
                         )
                     }
@@ -522,7 +534,11 @@ fun WorkspaceScreen(
                                 onSelectFile = onSelectFile,
                                 onUpdateEditor = onUpdateEditor,
                                 onSaveFile = onSaveFile,
-                                onDeleteFile = onDeleteFile
+                                onDeleteFile = onDeleteFile,
+                                onOpenImageResizer = { path ->
+                                    imageResizerInitialPath = path
+                                    showImageResizerDialog = true
+                                }
                             )
                         }
                         WorkspaceTab.PREVIEW -> {
@@ -615,6 +631,22 @@ fun WorkspaceScreen(
             onDocumentGenerated = { generatedResult ->
                 onRefreshProjectFiles()
                 onSendPrompt("I have generated a new document: ${generatedResult.fileName}. Please review or integrate it if needed.", emptyList())
+            }
+        )
+    }
+
+    if (showImageResizerDialog) {
+        com.example.ui.image.ImageResizerDialog(
+            projectName = project.name,
+            files = files,
+            initialFilePath = imageResizerInitialPath,
+            onSaveFile = onSaveFileContent,
+            onDismiss = {
+                showImageResizerDialog = false
+                imageResizerInitialPath = null
+            },
+            onFileUpdated = {
+                onRefreshProjectFiles()
             }
         )
     }
@@ -2487,7 +2519,8 @@ fun CodeTabContent(
     onSelectFile: (ProjectFileEntity) -> Unit,
     onUpdateEditor: (String) -> Unit,
     onSaveFile: () -> Unit,
-    onDeleteFile: (String) -> Unit
+    onDeleteFile: (String) -> Unit,
+    onOpenImageResizer: ((String) -> Unit)? = null
 ) {
     var showDeleteConfirmDialog by remember { mutableStateOf<String?>(null) }
     val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
@@ -2725,6 +2758,29 @@ fun CodeTabContent(
                             color = Color(0xFF8B949E),
                             fontSize = 12.sp
                         )
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Button(
+                            onClick = {
+                                onOpenImageResizer?.invoke(activeFile.path)
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF38BDF8)),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AspectRatio,
+                                contentDescription = "Image Resizer",
+                                tint = Color(0xFF0D1117),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Open in Image Resizer Studio",
+                                color = Color(0xFF0D1117),
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
                 } else if (is3D) {
                     Column(

@@ -117,11 +117,16 @@ object BrowserControllerAgentEngine {
         amount: Int? = 600,
         backgroundBrowser: BackgroundBrowser
     ): String = withContext(Dispatchers.Main) {
+        val cleanSelector = selector?.trim()?.let {
+            if (it.equals("null", ignoreCase = true) || it.equals("undefined", ignoreCase = true) || it.isBlank()) null else it
+        }
         val targetSelector = when {
             elementIndex != null && elementIndex > 0 -> "[data-agent-index='$elementIndex']"
-            !selector.isNullOrBlank() -> selector.trim()
+            cleanSelector != null -> cleanSelector
             else -> ""
         }
+
+        val escapedSelector = JSONObject.quote(targetSelector)
 
         when (action.lowercase().trim()) {
             "click" -> {
@@ -130,69 +135,54 @@ object BrowserControllerAgentEngine {
                 }
                 val js = """
                     (function() {
-                        var el = document.querySelector('$targetSelector');
-                        if (!el) {
-                            try {
-                                var xp = document.evaluate('$targetSelector', document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-                                el = xp.singleNodeValue;
-                            } catch(e) {}
+                        try {
+                            var sel = $escapedSelector;
+                            var el = null;
+                            try { el = document.querySelector(sel); } catch(e) {}
+                            if (!el) {
+                                try {
+                                    var xp = document.evaluate(sel, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                                    el = xp.singleNodeValue;
+                                } catch(e) {}
+                            }
+                            if (!el) {
+                                try { el = document.getElementById(sel); } catch(e) {}
+                            }
+                            if (!el) {
+                                try { el = document.querySelector('[name="' + sel + '"], [aria-label="' + sel + '"]'); } catch(e) {}
+                            }
+                            if (!el) return 'Element not found: ' + sel;
+                            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            el.focus();
+                            el.click();
+                            return 'OK';
+                        } catch(err) {
+                            return 'JS Exception: ' + (err.message || err.toString());
                         }
-                        if (!el) return 'Element not found: $targetSelector';
-                        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        el.focus();
-                        el.click();
-                        return 'OK';
                     })()
                 """.trimIndent()
-                val res = backgroundBrowser.runJavascript(js)
+                val rawRes = backgroundBrowser.runJavascript(js)
+                val res = rawRes.removeSurrounding("\"").trim()
                 if (res.contains("OK")) {
                     kotlinx.coroutines.delay(1200)
                     val title = backgroundBrowser.readPageContent().let { if (it is BrowserResult.Success) it.title else "" }
                     "Successfully clicked '$targetSelector'. Current Page Title: '$title'"
+                } else if (res == "null" || res.isBlank()) {
+                    "Error clicking element '$targetSelector': Page did not respond. Verify the element exists on current webpage."
                 } else {
                     "Error clicking element: $res"
                 }
             }
 
             "type" -> {
-                if (targetSelector.isBlank()) {
-                    return@withContext "Error: Please specify 'selector' or 'elementIndex' to type into."
-                }
-                val inputVal = text ?: ""
-                val escapedVal = JSONObject.quote(inputVal)
-                val clearJs = if (clearBefore) "el.value = '';" else ""
-                val enterJs = if (pressEnter) """
-                    el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
-                    el.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', keyCode: 13, bubbles: true }));
-                    el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', keyCode: 13, bubbles: true }));
-                    if (el.form) { el.form.submit(); }
-                """.trimIndent() else ""
-
-                val js = """
-                    (function() {
-                        var el = document.querySelector('$targetSelector');
-                        if (!el) return 'Element not found: $targetSelector';
-                        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        el.focus();
-                        $clearJs
-                        if ('value' in el) {
-                            el.value = $escapedVal;
-                        } else {
-                            el.innerText = $escapedVal;
-                        }
-                        el.dispatchEvent(new Event('input', { bubbles: true }));
-                        el.dispatchEvent(new Event('change', { bubbles: true }));
-                        $enterJs
-                        return 'OK';
-                    })()
-                """.trimIndent()
-                val res = backgroundBrowser.runJavascript(js)
-                if (res.contains("OK")) {
-                    if (pressEnter) kotlinx.coroutines.delay(1200)
-                    "Successfully typed \"$inputVal\" into '$targetSelector'${if (pressEnter) " and pressed Enter" else ""}."
-                } else {
-                    "Error typing into element: $res"
-                }
+                BrowserActionExecutionEngine.executeTypeAction(
+                    selector = cleanSelector,
+                    elementIndex = elementIndex,
+                    text = text,
+                    clearBefore = clearBefore,
+                    pressEnter = pressEnter,
+                    backgroundBrowser = backgroundBrowser
+                )
             }
 
             "scroll" -> {
@@ -216,11 +206,17 @@ object BrowserControllerAgentEngine {
                 val optionVal = JSONObject.quote(text ?: "")
                 val js = """
                     (function() {
-                        var el = document.querySelector('$targetSelector');
-                        if (!el) return 'Element not found: $targetSelector';
-                        el.value = $optionVal;
-                        el.dispatchEvent(new Event('change', { bubbles: true }));
-                        return 'OK';
+                        try {
+                            var sel = $escapedSelector;
+                            var el = document.querySelector(sel);
+                            if (!el) return 'Element not found: ' + sel;
+                            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            el.value = $optionVal;
+                            el.dispatchEvent(new Event('change', { bubbles: true }));
+                            return 'OK';
+                        } catch(err) {
+                            return 'JS Exception: ' + (err.message || err.toString());
+                        }
                     })()
                 """.trimIndent()
                 val res = backgroundBrowser.runJavascript(js)

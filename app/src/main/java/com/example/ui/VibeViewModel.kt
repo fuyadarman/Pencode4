@@ -4412,7 +4412,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                             "clone_git_repo", "clone_github_repo", "clone_repo", "git_clone",
                             "copy_file", "duplicate_code", "duplicate_file", "clone_web_ui", "scrape_web_ui", "deep_clone_web_ui",
                             "fetch_url", "read_url", "scrape_url", "skill_check", "list_skills", "inspect_skill",
-                            "resize_image", "scale_image", "image_resize", "compress_image",
+                            "resize_image", "scale_image", "image_resize", "compress_image", "crop_image", "get_image_info", "image_info", "optimize_image", "image_crop", "image_compress", "inspect_image",
                             "browser_search", "web_search", "online_search", "search_web", "google_search", "websearch", "internet_search",
                             "browser_click", "browser_read", "create_todo_list", "complete_todo_task",
                             "delete_file", "rename_file", "rename", "move_file", "move",

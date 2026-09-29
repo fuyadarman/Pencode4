@@ -249,6 +249,10 @@ object AgentInstructionEngine {
             tools.add("'copy_code_chunk'(sourcePath, targetPath, codeChunk?, startLine?, endLine?, targetAnchor?, insertAt?: 'start'|'end'|'before'|'after'|'replace') [Copies code block or line range from one file into another. Aliases: 'copy_code_block', 'copy_chunk']")
             tools.add("'delete_code_chunk'(path, codeChunk?, startLine?, endLine?, deleteAllOccurrences?: boolean) [Deletes code block or line range from file. Aliases: 'delete_code_block', 'delete_chunk']")
             tools.add("'generate_image'(prompt, path?)")
+            tools.add("'resize_image'(path, width?, height?, destinationPath?, format?: 'png'|'jpg'|'webp', quality?: 1-100) [Scales, resizes, crops, or compresses project images. Aliases: 'scale_image', 'image_resize']")
+            tools.add("'crop_image'(path, width, height, destinationPath?) [Crops image to exact dimensions without distorting]")
+            tools.add("'compress_image'(path, quality?: int, format?: 'webp'|'jpg'|'png') [Compresses and optimizes image file size]")
+            tools.add("'get_image_info'(path) [Inspects width, height, mime type, and file size of an image asset]")
             tools.add("'generate_pdf'(title, content, theme?, path?)")
         }
 

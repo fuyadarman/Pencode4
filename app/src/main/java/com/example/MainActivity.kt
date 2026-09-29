@@ -323,6 +323,9 @@ class MainActivity : ComponentActivity() {
                                 onSaveFile = {
                                     viewModel.saveActiveFile()
                                 },
+                                onSaveFileContent = { path, content ->
+                                    viewModel.saveFileContent(path, content)
+                                },
                                 onCreateFile = { path ->
                                     viewModel.createNewFile(path)
                                 },

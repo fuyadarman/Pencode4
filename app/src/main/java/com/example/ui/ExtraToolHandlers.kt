@@ -233,36 +233,38 @@ object ExtraToolHandlers {
                 updateLog(askLog.id, "success", "Asked user: $formattedQuestion")
                 "[USER QUESTION PROMPT]: $formattedQuestion\n\n(Agent paused awaiting user input. Once answered, continuation will proceed automatically.)"
             }
-            "resize_image", "scale_image", "image_resize", "compress_image" -> {
-                val sourcePath = normalizePath(args?.path ?: args?.targetFile ?: args?.sourcePath ?: args?.targetImage ?: "")
-                val destPath = if (!args?.destinationPath.isNullOrBlank()) normalizePath(args.destinationPath) else if (!args?.newPath.isNullOrBlank()) normalizePath(args.newPath) else sourcePath
+            "resize_image", "scale_image", "image_resize", "compress_image", "crop_image", "get_image_info", "image_info", "optimize_image", "image_crop" -> {
+                val sourcePath = args?.path ?: args?.targetFile ?: args?.sourcePath ?: args?.targetImage ?: args?.file ?: ""
+                val destPath = args?.destinationPath ?: args?.newPath ?: args?.targetPath
                 val targetWidth = args?.width
                 val targetHeight = args?.height
                 val outputFormatStr = args?.format
+                val qualityVal = args?.amount ?: 90
 
+                val isInfo = tool == "get_image_info" || tool == "image_info"
                 val resizeLog = createLog(
-                    "Resize image",
+                    if (isInfo) "Image info" else if (tool.contains("crop")) "Crop image" else "Resize image",
                     "thinking",
-                    "Resizing $sourcePath to $destPath (${targetWidth ?: "auto"} x ${targetHeight ?: "auto"})",
+                    if (isInfo) "Inspecting $sourcePath" else "Processing $sourcePath (${targetWidth ?: "auto"} x ${targetHeight ?: "auto"})",
                     "image-resize"
                 )
                 addLog(resizeLog)
-                setAgentStatus("Resizing image $sourcePath...")
+                setAgentStatus("Processing image $sourcePath...")
 
-                val result = com.example.agent.ImageResizeEngine.resizeImage(
-                    projectName = project.name,
-                    sourcePath = sourcePath,
-                    destinationPath = destPath,
-                    targetWidth = targetWidth,
-                    targetHeight = targetHeight,
+                val result = com.example.agent.ImageResizerToolsEngine.executeImageTool(
+                    tool = tool,
+                    rawPath = sourcePath,
+                    rawDestPath = destPath,
+                    width = targetWidth,
+                    height = targetHeight,
                     format = outputFormatStr,
-                    maintainAspectRatio = true,
-                    quality = 90,
+                    quality = qualityVal,
+                    projectName = project.name,
                     repository = repository,
                     normalizePath = normalizePath
                 )
 
-                val isSuccess = result.startsWith("Successfully")
+                val isSuccess = !result.startsWith("Error")
                 updateLog(resizeLog.id, if (isSuccess) "success" else "failed", result)
                 result
             }
@@ -949,7 +951,9 @@ object ExtraToolHandlers {
                 result
             }
             "browser_controller", "browser_interact", "browser_action" -> {
-                val act = args?.action ?: if (!args?.text.isNullOrBlank()) "type" else if (args?.elementIndex != null || !args?.selector.isNullOrBlank()) "click" else "scroll"
+                val resolvedText = args?.text ?: args?.content ?: args?.query ?: args?.message ?: args?.search
+                val resolvedSelector = args?.selector ?: args?.targetFile ?: args?.path ?: args?.targetAnchor
+                val act = args?.action ?: if (!resolvedText.isNullOrBlank()) "type" else if (args?.elementIndex != null || !resolvedSelector.isNullOrBlank()) "click" else "scroll"
                 val actLog = createLog(
                     "Browser Controller Action",
                     "thinking",
@@ -961,9 +965,9 @@ object ExtraToolHandlers {
 
                 val result = com.example.browser.BrowserControllerAgentEngine.executeBrowserAction(
                     action = act,
-                    selector = args?.selector,
+                    selector = resolvedSelector,
                     elementIndex = args?.elementIndex,
-                    text = args?.text ?: args?.content,
+                    text = resolvedText,
                     clearBefore = args?.clearBefore ?: true,
                     pressEnter = args?.pressEnter ?: false,
                     direction = args?.direction,
