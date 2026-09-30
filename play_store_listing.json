@@ -1,0 +1,51 @@
+{
+  "listing": {
+    "title": "PenCode - Mobile AI IDE",
+    "title_length": 23,
+    "short_description": "AI code workspace & agentic mobile IDE for building apps, editing & building.",
+    "short_description_length": 78,
+    "full_description": "PenCode is an agentic AI coding workspace and mobile IDE engineered for developers who want to write, edit, debug, and build software directly from Android. Designed as an open, accessible mobile alternative to OpenCode and Claude Code, PenCode brings terminal execution, multi-file code editing, and intelligent agent workflows into one unified development studio.\n\n### ⚡ Key Features\n\n• Autonomous AI Coding Agent: Chat with an intelligent agent powered by Gemini API that plans, creates, edits, and refactors multiple source files with precision diffs.\n• Integrated Multi-Tab Workspace:\n  - Chat Tab: Natural language prompting, system prompt custom instructions, and context attachments.\n  - Code Tab: Fast source code editor with syntax highlighting, line numbers, file explorer tree, and multi-tab editing.\n  - Preview Tab: Live applet and web rendering with real-time console log inspect and reload controls.\n  - Terminal Tab: Interactive shell terminal to run git commands, dependencies, scripts, and manage tasks.\n  - Build Tab: Android build pipeline runner with real-time compilation logs and intelligent error troubleshooting.\n• Model Context Protocol (MCP) Integration: Connect remote tools, databases, and serverless APIs (Supabase, Cloudflare, Vercel, or custom endpoints) to empower your AI agent.\n• Extensible Agent Skills: Manage specialized skills for icons, typography, image generation, database schemas, and unit testing.\n• Local Project Storage: Organize your repositories locally with project switching and configurable restore limits.\n• Adaptive Theme Engine: Seamless Light and Dark modes with high-contrast accessibility.\n\n### 🛠️ How PenCode Works\n\n1. Create or Open a Project: Start a new project or select an existing repository from your local workspace.\n2. Prompt the AI Agent: Describe features, fixes, or logic changes in natural language. PenCode analyzes your files, plans updates, and applies changes across files.\n3. Edit & Refine: Review code changes in the editor with syntax highlighting or edit directly.\n4. Run & Test: Use the integrated Terminal and Preview tabs to execute commands, check console output, and inspect live preview rendering.\n5. Build & Ship: Monitor compile workflows in the Build Tab and export your project.\n\n### 🔒 AI Content Disclosure\n\nPenCode uses generative AI models (Gemini API) to assist with code generation and software development workflows. Outputs are AI-generated and should be reviewed before production deployment.",
+    "full_description_length": 2664
+  },
+  "capability_inventory": [
+    {
+      "capability": "AI Coding Agent with multi-turn chat & tool execution",
+      "evidence": "app/src/main/java/com/example/ui/WorkspaceScreen.kt:ChatTabContent"
+    },
+    {
+      "capability": "Code Editor with syntax highlighting & file tree navigation",
+      "evidence": "app/src/main/java/com/example/ui/WorkspaceScreen.kt:CodeTabContent, app/src/main/java/com/example/ui/SyntaxHighlighter.kt"
+    },
+    {
+      "capability": "Live Preview engine with interactive reload and console logs",
+      "evidence": "app/src/main/java/com/example/ui/WorkspaceScreen.kt:PreviewTabContent"
+    },
+    {
+      "capability": "Interactive Terminal with command execution and task status",
+      "evidence": "app/src/main/java/com/example/ui/WorkspaceScreen.kt:TerminalTabContent"
+    },
+    {
+      "capability": "Android Build pipeline with logs and error diagnostics",
+      "evidence": "app/src/main/java/com/example/ui/WorkspaceScreen.kt:AndroidBuildTabContent"
+    },
+    {
+      "capability": "Model Context Protocol (MCP) server management & dialogs",
+      "evidence": "app/src/main/java/com/example/ui/McpDialogScreen.kt:McpManagementDialog"
+    },
+    {
+      "capability": "Agent Skills customization screen",
+      "evidence": "app/src/main/java/com/example/ui/AgentSkillsScreen.kt"
+    },
+    {
+      "capability": "Adaptive Dark & Light Theme system",
+      "evidence": "app/src/main/java/com/example/ui/theme/AppThemePalette.kt, app/src/main/java/com/example/settings/AppThemeManager.kt"
+    }
+  ],
+  "disclosures_applied": [
+    {
+      "category": "Generative AI features",
+      "disclosure_text": "PenCode uses generative AI models (Gemini API) to assist with code generation and software development workflows. Outputs are AI-generated and should be reviewed before production deployment."
+    }
+  ],
+  "omitted_for_lack_of_evidence": []
+}

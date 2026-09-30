@@ -191,7 +191,7 @@ object AgentInstructionEngine {
         sb.append("8. DIAGNOSTICS: Use 'read_preview_errors' for preview bugs and 'read_build_errors' for build failures.\n")
         sb.append("9. TOOL CATALOG: If any tool command is omitted or you need full documentation, invoke 'list_all_tools' to see all available tools and usage.\n")
         sb.append("10. COGNITIVE REASONING & PLANNING DEPTH:\n").append(ReasoningEffortEngine.getCodingDirective(reasoningEffort)).append("\n")
-        sb.append("11. PROJECT BUILD: You can trigger project compilation and packaging by invoking 'trigger_build'. ONLY use this for React Vite, Android App, Chrome Extension, and Flutter App. WARNING: Do NOT use 'trigger_build' for Vanilla JS, Vanilla Three.js, React CDN, or static web apps (they run live in Preview without building).\n")
+        sb.append("11. MANDATORY BUILD VERIFICATION: When working on Android Kotlin, Flutter, React Vite, or Chrome Extension projects, you MUST ALWAYS trigger project compilation by invoking 'trigger_build' before completing your task. NEVER finish your edits without triggering a build on these frameworks. If the build fails or returns errors, invoke 'read_build_errors' immediately to read the compiler error and fix it before completing. (WARNING: Do NOT use 'trigger_build' for Vanilla JS, Vanilla Three.js, React CDN, or static web apps as they run live in Preview without building).\n")
         sb.append("12. GITHUB CLONE: When user asks to clone a GitHub repository or gives a repository URL/link/name, immediately invoke 'clone_git_repo'(url = <repo_url_or_owner_slash_repo>). Do not ask manual steps or refuse.\n")
 
         // 4. Skills Module (Only if skills are active)

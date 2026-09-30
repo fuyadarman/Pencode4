@@ -2811,6 +2811,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             projectTodoListMap.remove(projectName)
             projectEditHistoryMap.remove(projectName)
             projectAgentStatusMap.remove(projectName)
+            com.example.build.ProjectBuildStateManager.clearProjectBuild(projectName)
             if (_currentProject.value?.name == projectName) {
                 _currentProject.value = null
                 _projectFiles.value = emptyList()
@@ -2827,9 +2828,49 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     fun selectProject(project: ProjectEntity) {
         viewModelScope.launch {
             _isLoadingWorkspace.value = true
+
+            // Save previous project's build state if any
+            val prev = _currentProject.value
+            if (prev != null) {
+                com.example.build.ProjectBuildStateManager.saveSnapshot(
+                    projectName = prev.name,
+                    buildStatus = _buildStatus.value,
+                    buildSteps = _buildSteps.value,
+                    buildLogs = _buildLogs.value,
+                    buildError = _buildError.value,
+                    isPollingBuild = _isPollingBuild.value,
+                    gitHubWorkflows = _gitHubWorkflows.value,
+                    apkDownloadProgress = _apkDownloadProgress.value,
+                    apkDownloadPercentage = _apkDownloadPercentage.value,
+                    localApkPath = _localApkPath.value,
+                    webArtifactInfo = _webArtifactInfo.value,
+                    detectedAndroidBuildErrors = _detectedAndroidBuildErrors.value,
+                    lastFailedRunId = lastAutoFixedRunId
+                )
+            }
+
             _currentProject.value = project
             _currentTab.value = WorkspaceTab.CHAT
             
+            // Restore isolated project-specific build state
+            val snapshot = com.example.build.ProjectBuildStateManager.getSnapshot(project.name)
+            _buildStatus.value = snapshot.buildStatus
+            _buildSteps.value = snapshot.buildSteps
+            _buildLogs.value = snapshot.buildLogs
+            _buildError.value = snapshot.buildError
+            _isPollingBuild.value = snapshot.isPollingBuild
+            _gitHubWorkflows.value = snapshot.gitHubWorkflows
+            _apkDownloadProgress.value = snapshot.apkDownloadProgress
+            _apkDownloadPercentage.value = snapshot.apkDownloadPercentage
+            _localApkPath.value = snapshot.localApkPath
+            _webArtifactInfo.value = snapshot.webArtifactInfo
+            _detectedAndroidBuildErrors.value = snapshot.detectedAndroidBuildErrors
+            if (snapshot.lastFailedRunId != null) {
+                lastAutoFixedRunId = snapshot.lastFailedRunId
+            } else {
+                lastAutoFixedRunId = -1L
+            }
+
             // Restore project-specific GitHub repo and branch
             _githubRepo.value = com.example.agent.ProjectWebDistManager.getProjectGithubRepo(sharedPrefs, project.name)
             _githubBranch.value = com.example.agent.ProjectWebDistManager.getProjectGithubBranch(sharedPrefs, project.name)
@@ -2872,6 +2913,21 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     fun exitProject() {
         val current = _currentProject.value
         if (current != null) {
+            com.example.build.ProjectBuildStateManager.saveSnapshot(
+                projectName = current.name,
+                buildStatus = _buildStatus.value,
+                buildSteps = _buildSteps.value,
+                buildLogs = _buildLogs.value,
+                buildError = _buildError.value,
+                isPollingBuild = _isPollingBuild.value,
+                gitHubWorkflows = _gitHubWorkflows.value,
+                apkDownloadProgress = _apkDownloadProgress.value,
+                apkDownloadPercentage = _apkDownloadPercentage.value,
+                localApkPath = _localApkPath.value,
+                webArtifactInfo = _webArtifactInfo.value,
+                detectedAndroidBuildErrors = _detectedAndroidBuildErrors.value,
+                lastFailedRunId = lastAutoFixedRunId
+            )
             projectActionLogsMap[current.name] = _aiActionLogs.value
             projectTodoListMap[current.name] = _todoList.value
             projectEditHistoryMap[current.name] = _editHistory.value
@@ -2885,6 +2941,17 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         _todoList.value = emptyList()
         _agentStatus.value = ""
         _webArtifactInfo.value = null
+        _buildStatus.value = "Idle"
+        _buildSteps.value = emptyList()
+        _buildLogs.value = ""
+        _buildError.value = null
+        _isPollingBuild.value = false
+        _gitHubWorkflows.value = emptyList()
+        _apkDownloadProgress.value = ""
+        _apkDownloadPercentage.value = null
+        _localApkPath.value = null
+        _detectedAndroidBuildErrors.value = emptyList()
+        lastAutoFixedRunId = -1L
         com.example.api.LocalHttpServer.setWebDistDir(null)
         pollJob?.cancel()
         pollJob = null
