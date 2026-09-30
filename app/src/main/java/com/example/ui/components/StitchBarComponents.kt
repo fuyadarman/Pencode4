@@ -45,10 +45,10 @@ fun StitchBottomNavBar(
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .clip(RoundedCornerShape(14.dp))
             .border(
-                BorderStroke(1.dp, StitchTheme.BorderSubtle),
+                BorderStroke(1.dp, com.example.ui.theme.AppTheme.border),
                 RoundedCornerShape(14.dp)
             ),
-        color = Color(0xFF161B22),
+        color = com.example.ui.theme.AppTheme.bottomBarBg,
         tonalElevation = 4.dp
     ) {
         Row(
@@ -58,15 +58,21 @@ fun StitchBottomNavBar(
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            val selectedBg = com.example.ui.theme.AppTheme.bgSurfaceElevated
+            val activeIconColor = com.example.ui.theme.AppTheme.accentBlue
+            val inactiveIconColor = com.example.ui.theme.AppTheme.textSecondary
+            val borderClr = com.example.ui.theme.AppTheme.border
+            val textClr = com.example.ui.theme.AppTheme.textPrimary
+
             tabs.forEachIndexed { index, (title, icon) ->
                 val isSelected = selectedIndex == index
                 val tabBackground by animateColorAsState(
-                    targetValue = if (isSelected) Color(0xFF21262D) else Color.Transparent,
+                    targetValue = if (isSelected) selectedBg else Color.Transparent,
                     animationSpec = spring(stiffness = 400f),
                     label = "tab_bg"
                 )
                 val iconTint by animateColorAsState(
-                    targetValue = if (isSelected) Color(0xFFF0F6FC) else Color(0xFF8B949E),
+                    targetValue = if (isSelected) activeIconColor else inactiveIconColor,
                     label = "tab_icon"
                 )
                 val borderWidth by animateDpAsState(
@@ -81,7 +87,7 @@ fun StitchBottomNavBar(
                         .then(
                             if (isSelected) {
                                 Modifier.border(
-                                    BorderStroke(borderWidth, Color(0xFF30363D)),
+                                    BorderStroke(borderWidth, borderClr),
                                     RoundedCornerShape(10.dp)
                                 )
                             } else Modifier
@@ -101,7 +107,7 @@ fun StitchBottomNavBar(
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = title,
-                                color = Color(0xFFF0F6FC),
+                                color = textClr,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold
                             )

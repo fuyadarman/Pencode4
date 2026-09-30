@@ -42,14 +42,14 @@ fun SelfLearningSettingsCard(
 
     Card(
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F141C)),
+        colors = CardDefaults.cardColors(containerColor = com.example.ui.theme.AppTheme.bgSurfaceElevated),
         border = BorderStroke(
             1.dp,
             Brush.horizontalGradient(
                 listOf(
                     Color(0xFF8957E5).copy(alpha = 0.5f),
-                    Color(0xFF2F81F7).copy(alpha = 0.3f),
-                    Color(0xFF30363D)
+                    com.example.ui.theme.AppTheme.accentBlue.copy(alpha = 0.3f),
+                    com.example.ui.theme.AppTheme.border
                 )
             )
         ),
@@ -103,7 +103,7 @@ fun SelfLearningSettingsCard(
                         ) {
                             Text(
                                 text = "Hybrid Self-Learning Agent",
-                                color = Color(0xFFF0F6FC),
+                                color = com.example.ui.theme.AppTheme.textPrimary,
                                 fontSize = 14.5.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
@@ -118,7 +118,7 @@ fun SelfLearningSettingsCard(
 
                         Text(
                             text = "Autonomous pattern memory & bug fix retention",
-                            color = Color(0xFF8B949E),
+                            color = com.example.ui.theme.AppTheme.textSecondary,
                             fontSize = 11.5.sp,
                             lineHeight = 15.sp
                         )
@@ -128,7 +128,7 @@ fun SelfLearningSettingsCard(
                 Icon(
                     imageVector = Icons.Default.ChevronRight,
                     contentDescription = "Open",
-                    tint = Color(0xFF8B949E),
+                    tint = com.example.ui.theme.AppTheme.textSecondary,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -137,7 +137,7 @@ fun SelfLearningSettingsCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFF161B22), RoundedCornerShape(8.dp))
+                    .background(com.example.ui.theme.AppTheme.bgSurface, RoundedCornerShape(8.dp))
                     .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween

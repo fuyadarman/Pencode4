@@ -107,7 +107,7 @@ object BrowserControllerAgentEngine {
     }
 
     suspend fun executeBrowserAction(
-        action: String, // "click", "type", "scroll", "select", "submit"
+        action: String, // "click", "type", "scroll", "select", "download", "upload", "submit"
         selector: String? = null,
         elementIndex: Int? = null,
         text: String? = null,
@@ -115,7 +115,12 @@ object BrowserControllerAgentEngine {
         pressEnter: Boolean = false,
         direction: String? = "down",
         amount: Int? = 600,
-        backgroundBrowser: BackgroundBrowser
+        backgroundBrowser: BackgroundBrowser,
+        filePath: String? = null,
+        destinationPath: String? = null,
+        projectName: String? = null,
+        repository: VibeRepository? = null,
+        normalizePath: ((String) -> String)? = null
     ): String = withContext(Dispatchers.Main) {
         val cleanSelector = selector?.trim()?.let {
             if (it.equals("null", ignoreCase = true) || it.equals("undefined", ignoreCase = true) || it.isBlank()) null else it
@@ -224,6 +229,41 @@ object BrowserControllerAgentEngine {
                     "Successfully selected option \"$text\" on '$targetSelector'."
                 } else {
                     "Error selecting option: $res"
+                }
+            }
+
+            "download" -> {
+                if (projectName != null && repository != null && normalizePath != null) {
+                    BrowserTransferEngine.downloadFromBrowser(
+                        urlOrSelector = text?.ifBlank { null } ?: targetSelector.ifBlank { null },
+                        destinationPath = destinationPath,
+                        projectName = projectName,
+                        repository = repository,
+                        backgroundBrowser = backgroundBrowser,
+                        normalizePath = normalizePath
+                    )
+                } else {
+                    "Error: Missing workspace repository context for browser download."
+                }
+            }
+
+            "upload" -> {
+                val targetFile = filePath ?: text
+                if (targetFile.isNullOrBlank()) {
+                    return@withContext "Error: Please specify 'filePath' or 'text' with the project file path to upload."
+                }
+                if (projectName != null && repository != null && normalizePath != null) {
+                    BrowserTransferEngine.uploadToBrowser(
+                        filePath = targetFile,
+                        selector = targetSelector.ifBlank { null },
+                        elementIndex = elementIndex,
+                        projectName = projectName,
+                        repository = repository,
+                        backgroundBrowser = backgroundBrowser,
+                        normalizePath = normalizePath
+                    )
+                } else {
+                    "Error: Missing workspace repository context for browser upload."
                 }
             }
 

@@ -273,7 +273,8 @@ class VibeRepository(private val dao: VibeDao, private val context: Context) {
     suspend fun getFilesForProject(projectName: String): List<ProjectFileEntity> = withContext(Dispatchers.IO) {
         val projectDir = getProjectDir(projectName)
         val dbFiles = dao.getFilesForProject(projectName).filter { 
-            !it.path.startsWith("agent-skills/") && !it.path.startsWith("skills/") && !it.path.startsWith(".skills/") 
+            !it.path.startsWith("agent-skills/") && !it.path.startsWith("skills/") && !it.path.startsWith(".skills/") &&
+            it.path != "task.json" && !it.path.endsWith("/task.json")
         }
         dbFiles.map { entity ->
             val normPath = entity.path.replace("\\", "/")

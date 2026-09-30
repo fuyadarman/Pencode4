@@ -39,12 +39,26 @@ import androidx.compose.ui.unit.sp
  * - Dopamine Feedback Loops (luminous gradients, glowing pill badges, smooth depth)
  */
 object StitchTheme {
-    // Canvas & Surfaces - Clean Unified Slate Dark Palette
-    val CanvasDark = Color(0xFF0D1117)
-    val SurfaceDark = Color(0xFF161B22)
-    val SurfaceElevated = Color(0xFF21262D)
-    val SurfaceGlass = Color(0xFF161B22).copy(alpha = 0.95f)
-    val SurfaceCard = Color(0xFF161B22)
+    // Canvas & Surfaces - Clean Unified Slate Palette with Dynamic Light/Dark
+    val CanvasDark: Color
+        @Composable
+        get() = AppTheme.bgCanvas
+
+    val SurfaceDark: Color
+        @Composable
+        get() = AppTheme.bgSurface
+
+    val SurfaceElevated: Color
+        @Composable
+        get() = AppTheme.bgSurfaceElevated
+
+    val SurfaceGlass: Color
+        @Composable
+        get() = AppTheme.bgSurface.copy(alpha = 0.95f)
+
+    val SurfaceCard: Color
+        @Composable
+        get() = AppTheme.bgCard
 
     // Unified Clean Single Accent (GitHub / Linear Developer Blue & Solid Green)
     val PrimaryViolet = Color(0xFF2F81F7)
@@ -57,14 +71,30 @@ object StitchTheme {
     val RadiantRose = Color(0xFFDA3633)
 
     // Borders & Clean Separators
-    val BorderSubtle = Color(0xFF30363D)
-    val BorderGlow = Color(0xFF30363D)
-    val BorderGlass = Color(0xFF30363D)
+    val BorderSubtle: Color
+        @Composable
+        get() = AppTheme.border
+
+    val BorderGlow: Color
+        @Composable
+        get() = AppTheme.border
+
+    val BorderGlass: Color
+        @Composable
+        get() = AppTheme.border
 
     // Text Hierarchy
-    val TextMain = Color(0xFFF0F6FC)
-    val TextSub = Color(0xFF8B949E)
-    val TextTertiary = Color(0xFF6E7681)
+    val TextMain: Color
+        @Composable
+        get() = AppTheme.textPrimary
+
+    val TextSub: Color
+        @Composable
+        get() = AppTheme.textSecondary
+
+    val TextTertiary: Color
+        @Composable
+        get() = AppTheme.textMuted
 
     // Solid Professional Flat Tones
     val AuroraGradient = Brush.horizontalGradient(

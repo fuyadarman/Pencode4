@@ -68,7 +68,9 @@ object AgentToolRegistryEngine {
         • browser_search(query: string) -> Searches the web or navigates to a URL.
         • browser_read() -> Reads the current webpage text.
         • browser_snapshot() -> Takes an indexed snapshot of all interactive elements on the page.
-        • browser_controller(action: 'click'|'type'|'scroll'|'select', elementIndex?: int, selector?: string, text?: string) -> Interacts with webpage elements.
+        • browser_controller(action: 'click'|'type'|'scroll'|'select'|'download'|'upload', elementIndex?: int, selector?: string, text?: string, filePath?: string, destinationPath?: string) -> Interacts with webpage elements.
+        • browser_download(url?: string, selector?: string, destinationPath?: string) -> Downloads any file, image, PDF, ZIP, or asset from browser into project workspace.
+        • browser_upload(filePath: string, selector?: string, elementIndex?: int) -> Uploads any workspace file into an HTML file input on the current browser page.
         • fetch_url(url: string, targetFile?: string) -> Fetches raw webpage content.
         • clone_web_ui(url: string, targetFilePath?: string) -> Scrapes UI design and extracts tokens.
         • deep_clone_web_ui(url: string, targetFilePath?: string) -> Deep clones complete DOM, styles, and layouts.
@@ -108,6 +110,8 @@ object AgentToolRegistryEngine {
             "'browser_read'()",
             "'browser_snapshot'()",
             "'browser_controller'(action, elementIndex?, selector?, text?)",
+            "'browser_download'(url?, selector?, destinationPath?) [Downloads file from browser into workspace]",
+            "'browser_upload'(filePath, selector?) [Uploads workspace file into browser file input]",
             "'fetch_url'(url, targetFile?)",
             "'clone_web_ui'(url, targetFilePath?)",
             "'deep_clone_web_ui'(url, targetFilePath?)",

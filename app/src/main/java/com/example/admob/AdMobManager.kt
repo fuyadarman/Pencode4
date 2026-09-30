@@ -40,6 +40,13 @@ object AdMobManager {
     const val PROMPTS_PER_REWARDED_AD = 8
     const val TAB_SWITCHES_PER_INTERSTITIAL_AD = 5
 
+    /**
+     * Master switch to enable/disable all AdMob ads across the app.
+     * Temporarily set to false as requested by the user.
+     * When requested to re-enable, toggle this back to true.
+     */
+    var isAdsEnabled: Boolean = false
+
     private val isInitialized = AtomicBoolean(false)
     private var isAppOpenAdShowing = false
     private var appOpenAd: AppOpenAd? = null
@@ -61,6 +68,7 @@ object AdMobManager {
      * Initializes Google Mobile Ads SDK and preloads ads.
      */
     fun initialize(context: Context) {
+        if (!isAdsEnabled) return
         if (isInitialized.compareAndSet(false, true)) {
             try {
                 val reqConfig = com.google.android.gms.ads.RequestConfiguration.Builder()
@@ -82,7 +90,7 @@ object AdMobManager {
      * Loads and displays App Open Ad once per app session launch.
      */
     fun showAppOpenAdIfAvailable(activity: Activity) {
-        if (appOpenShownOnce) return
+        if (!isAdsEnabled || appOpenShownOnce) return
 
         if (appOpenAd != null) {
             showAppOpenAd(activity)
@@ -145,7 +153,7 @@ object AdMobManager {
      * Preloads Rewarded Ad in background.
      */
     fun loadRewardedAd(context: Context) {
-        if (isLoadingRewarded || rewardedAd != null) return
+        if (!isAdsEnabled || isLoadingRewarded || rewardedAd != null) return
         isLoadingRewarded = true
 
         val request = AdRequest.Builder().build()
@@ -174,6 +182,7 @@ object AdMobManager {
      * Tracks prompt count and triggers Rewarded Ad every 8 prompts.
      */
     fun onPromptSent(activity: Activity?, onRewardEarned: (() -> Unit)? = null) {
+        if (!isAdsEnabled) return
         val currentCount = _promptCounter.value + 1
         _promptCounter.value = currentCount
         Log.d(TAG, "Prompt count updated: $currentCount")
@@ -193,7 +202,7 @@ object AdMobManager {
      * Preloads Interstitial Ad in background.
      */
     fun loadInterstitialAd(context: Context) {
-        if (isLoadingInterstitial || interstitialAd != null) return
+        if (!isAdsEnabled || isLoadingInterstitial || interstitialAd != null) return
         isLoadingInterstitial = true
 
         val request = AdRequest.Builder().build()
@@ -222,6 +231,7 @@ object AdMobManager {
      * Counts switches to Build or Preview tabs and triggers Interstitial Ad every 5 times.
      */
     fun onTabSwitched(activity: Activity?, tabName: String) {
+        if (!isAdsEnabled) return
         val isBuildOrPreview = tabName.contains("PREVIEW", ignoreCase = true) ||
                 tabName.contains("BUILD", ignoreCase = true)
 

@@ -4422,6 +4422,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                             "delete_chunk", "delete_block", "remove_chunk", "remove_block",
                             "browser_snapshot", "browser_inspect_interactive", "inspect_interactive", "browser_elements",
                             "browser_controller", "browser_interact", "browser_action",
+                            "browser_download", "download_from_browser", "web_download", "browser_upload", "upload_to_browser", "web_upload",
                             "open_url", "navigate", "browse_url", "get_page_source", "inspect_dom", "inspect_css", "get_computed_styles", "take_screenshot", "click", "type", "scroll", "get_links", "get_images", "get_fonts", "run_javascript", "execute_javascript", "eval_js", "compare_screenshot" -> {
                                 val result = ExtraToolHandlers.handleExtraToolCall(
                                     tool = tool,

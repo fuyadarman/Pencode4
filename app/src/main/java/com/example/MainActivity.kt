@@ -70,11 +70,18 @@ class MainActivity : ComponentActivity() {
 
         enableEdgeToEdge()
         setContent {
-            // Force true dark theme for the sleek professional Cursor/Lovable feel
-            MyApplicationTheme(darkTheme = true, dynamicColor = false) {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            androidx.compose.runtime.LaunchedEffect(Unit) {
+                com.example.settings.AppThemeManager.initialize(context)
+                com.example.settings.CustomInstructionEngine.initialize(context)
+            }
+            val themeMode by com.example.settings.AppThemeManager.themeMode.collectAsState()
+            val isDarkTheme = themeMode == com.example.settings.AppThemeManager.ThemeMode.DARK
+
+            MyApplicationTheme(darkTheme = isDarkTheme, dynamicColor = false) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = Color(0xFF08080C)
+                    color = if (isDarkTheme) Color(0xFF08080C) else Color(0xFFF6F8FA)
                 ) {
                     val viewModel: VibeViewModel = viewModel()
                         mainViewModel = viewModel

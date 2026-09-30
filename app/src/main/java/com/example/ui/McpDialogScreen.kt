@@ -81,8 +81,8 @@ fun McpManagementDialog(
                 .fillMaxWidth(0.96f)
                 .fillMaxHeight(0.90f)
                 .clip(RoundedCornerShape(18.dp))
-                .border(1.dp, Color(0xFF262C40), RoundedCornerShape(18.dp)),
-            color = Color(0xFF0F1117),
+                .border(1.dp, com.example.ui.theme.AppTheme.border, RoundedCornerShape(18.dp)),
+            color = com.example.ui.theme.AppTheme.bgSurface,
             tonalElevation = 8.dp
         ) {
             Column(
@@ -104,14 +104,14 @@ fun McpManagementDialog(
                             modifier = Modifier
                                 .size(38.dp)
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(Color(0xFF6366F1).copy(alpha = 0.16f))
-                                .border(1.dp, Color(0xFF6366F1).copy(alpha = 0.35f), RoundedCornerShape(10.dp)),
+                                .background(com.example.ui.theme.AppTheme.primary.copy(alpha = 0.16f))
+                                .border(1.dp, com.example.ui.theme.AppTheme.primary.copy(alpha = 0.35f), RoundedCornerShape(10.dp)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Extension,
                                 contentDescription = "MCP Integration",
-                                tint = Color(0xFF818CF8),
+                                tint = com.example.ui.theme.AppTheme.primary,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -122,19 +122,19 @@ fun McpManagementDialog(
                                     text = "Model Context Protocol (MCP)",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFF1F5F9),
+                                    color = com.example.ui.theme.AppTheme.textPrimary,
                                     fontSize = 15.sp
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Surface(
-                                    color = Color(0xFF6366F1).copy(alpha = 0.18f),
+                                    color = com.example.ui.theme.AppTheme.primary.copy(alpha = 0.18f),
                                     shape = RoundedCornerShape(4.dp)
                                 ) {
                                     Text(
                                         text = "PRO",
                                         fontSize = 9.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF818CF8),
+                                        color = com.example.ui.theme.AppTheme.primary,
                                         modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
                                     )
                                 }
@@ -143,7 +143,7 @@ fun McpManagementDialog(
                             Text(
                                 text = "Integrate remote database, auth & serverless tools into AI workflows",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFF94A3B8),
+                                color = com.example.ui.theme.AppTheme.textSecondary,
                                 fontSize = 11.sp
                             )
                         }
@@ -156,7 +156,7 @@ fun McpManagementDialog(
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = "Close",
-                            tint = Color(0xFF94A3B8),
+                            tint = com.example.ui.theme.AppTheme.textSecondary,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -168,8 +168,8 @@ fun McpManagementDialog(
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp),
-                    color = Color(0xFF161A26),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF23293D))
+                    color = com.example.ui.theme.AppTheme.bgCanvas,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, com.example.ui.theme.AppTheme.border)
                 ) {
                     Row(
                         modifier = Modifier
@@ -182,13 +182,13 @@ fun McpManagementDialog(
                                 .weight(1f)
                                 .clickable { selectedTab = 0 },
                             shape = RoundedCornerShape(8.dp),
-                            color = if (tab0Active) Color(0xFF262E45) else Color.Transparent
+                            color = if (tab0Active) com.example.ui.theme.AppTheme.bgSurfaceElevated else Color.Transparent
                         ) {
                             Text(
                                 text = "Active in $workspaceName",
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = if (tab0Active) FontWeight.Bold else FontWeight.Medium,
-                                color = if (tab0Active) Color(0xFFF1F5F9) else Color(0xFF94A3B8),
+                                color = if (tab0Active) com.example.ui.theme.AppTheme.textPrimary else com.example.ui.theme.AppTheme.textSecondary,
                                 modifier = Modifier.padding(vertical = 8.dp),
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                                 fontSize = 12.sp
@@ -201,13 +201,13 @@ fun McpManagementDialog(
                                 .weight(1f)
                                 .clickable { selectedTab = 1 },
                             shape = RoundedCornerShape(8.dp),
-                            color = if (tab1Active) Color(0xFF262E45) else Color.Transparent
+                            color = if (tab1Active) com.example.ui.theme.AppTheme.bgSurfaceElevated else Color.Transparent
                         ) {
                             Text(
                                 text = "All MCP Servers (${servers.size})",
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = if (tab1Active) FontWeight.Bold else FontWeight.Medium,
-                                color = if (tab1Active) Color(0xFFF1F5F9) else Color(0xFF94A3B8),
+                                color = if (tab1Active) com.example.ui.theme.AppTheme.textPrimary else com.example.ui.theme.AppTheme.textSecondary,
                                 modifier = Modifier.padding(vertical = 8.dp),
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                                 fontSize = 12.sp
@@ -227,7 +227,7 @@ fun McpManagementDialog(
                     Text(
                         text = if (selectedTab == 0) "Workspace active integrations:" else "Registered MCP endpoints:",
                         style = MaterialTheme.typography.labelMedium,
-                        color = Color(0xFF94A3B8),
+                        color = com.example.ui.theme.AppTheme.textSecondary,
                         fontWeight = FontWeight.Medium,
                         fontSize = 12.sp
                     )
@@ -237,8 +237,8 @@ fun McpManagementDialog(
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
                         shape = RoundedCornerShape(8.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (showAddForm) Color(0xFF262E45) else Color(0xFF6366F1),
-                            contentColor = Color.White
+                            containerColor = if (showAddForm) com.example.ui.theme.AppTheme.bgSurfaceElevated else com.example.ui.theme.AppTheme.primary,
+                            contentColor = if (showAddForm) com.example.ui.theme.AppTheme.textPrimary else Color.White
                         ),
                         modifier = Modifier.height(34.dp)
                     ) {
@@ -288,28 +288,28 @@ fun McpManagementDialog(
                                 modifier = Modifier
                                     .size(52.dp)
                                     .clip(CircleShape)
-                                    .background(Color(0xFF1E2333)),
+                                    .background(com.example.ui.theme.AppTheme.bgSurfaceElevated),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Dns,
                                     contentDescription = null,
                                     modifier = Modifier.size(24.dp),
-                                    tint = Color(0xFF64748B)
+                                    tint = com.example.ui.theme.AppTheme.textSecondary
                                 )
                             }
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
                                 text = if (selectedTab == 0) "No MCP servers enabled for $workspaceName" else "No MCP servers added yet",
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = Color(0xFFCBD5E1),
+                                color = com.example.ui.theme.AppTheme.textPrimary,
                                 fontWeight = FontWeight.SemiBold
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = if (selectedTab == 0) "Switch to 'All MCP Servers' to toggle or click 'Add Remote MCP'" else "Click 'Add Remote MCP' above to register your first endpoint",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFF64748B),
+                                color = com.example.ui.theme.AppTheme.textSecondary,
                                 fontSize = 11.sp,
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
                             )
@@ -357,8 +357,8 @@ fun AddMcpServerCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, Color(0xFF262E45), RoundedCornerShape(12.dp)),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF131724))
+            .border(1.dp, com.example.ui.theme.AppTheme.border, RoundedCornerShape(12.dp)),
+        colors = CardDefaults.cardColors(containerColor = com.example.ui.theme.AppTheme.bgCanvas)
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             Row(
@@ -368,7 +368,7 @@ fun AddMcpServerCard(
                 Icon(
                     imageVector = Icons.Default.AddCircleOutline,
                     contentDescription = null,
-                    tint = Color(0xFF818CF8),
+                    tint = com.example.ui.theme.AppTheme.primary,
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
@@ -376,7 +376,7 @@ fun AddMcpServerCard(
                     text = "Register Remote MCP Server",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFFF1F5F9),
+                    color = com.example.ui.theme.AppTheme.textPrimary,
                     fontSize = 13.sp
                 )
             }
@@ -384,7 +384,7 @@ fun AddMcpServerCard(
             Spacer(modifier = Modifier.height(10.dp))
 
             // Platform Preset selector
-            Text("Select Platform Preset:", style = MaterialTheme.typography.labelSmall, fontSize = 11.sp, color = Color(0xFF94A3B8))
+            Text("Select Platform Preset:", style = MaterialTheme.typography.labelSmall, fontSize = 11.sp, color = com.example.ui.theme.AppTheme.textSecondary)
             Spacer(modifier = Modifier.height(6.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -405,14 +405,14 @@ fun AddMcpServerCard(
                                 }
                             },
                         shape = RoundedCornerShape(6.dp),
-                        color = if (isSelected) Color(0xFF6366F1).copy(alpha = 0.25f) else Color(0xFF1A2030),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, if (isSelected) Color(0xFF6366F1) else Color(0xFF262C40))
+                        color = if (isSelected) com.example.ui.theme.AppTheme.primary.copy(alpha = 0.2f) else com.example.ui.theme.AppTheme.bgSurfaceElevated,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, if (isSelected) com.example.ui.theme.AppTheme.primary else com.example.ui.theme.AppTheme.border)
                     ) {
                         Text(
                             text = plat.displayName,
                             fontSize = 11.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            color = if (isSelected) Color(0xFF818CF8) else Color(0xFF94A3B8),
+                            color = if (isSelected) com.example.ui.theme.AppTheme.primary else com.example.ui.theme.AppTheme.textSecondary,
                             modifier = Modifier.padding(vertical = 6.dp),
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
@@ -439,14 +439,14 @@ fun AddMcpServerCard(
                                 }
                             },
                         shape = RoundedCornerShape(6.dp),
-                        color = if (isSelected) Color(0xFF6366F1).copy(alpha = 0.25f) else Color(0xFF1A2030),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, if (isSelected) Color(0xFF6366F1) else Color(0xFF262C40))
+                        color = if (isSelected) com.example.ui.theme.AppTheme.primary.copy(alpha = 0.2f) else com.example.ui.theme.AppTheme.bgSurfaceElevated,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, if (isSelected) com.example.ui.theme.AppTheme.primary else com.example.ui.theme.AppTheme.border)
                     ) {
                         Text(
                             text = plat.displayName,
                             fontSize = 11.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            color = if (isSelected) Color(0xFF818CF8) else Color(0xFF94A3B8),
+                            color = if (isSelected) com.example.ui.theme.AppTheme.primary else com.example.ui.theme.AppTheme.textSecondary,
                             modifier = Modifier.padding(vertical = 6.dp),
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
@@ -548,8 +548,8 @@ fun McpServerItemCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, Color(0xFF22283A), RoundedCornerShape(12.dp)),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF131722))
+            .border(1.dp, com.example.ui.theme.AppTheme.border, RoundedCornerShape(12.dp)),
+        colors = CardDefaults.cardColors(containerColor = com.example.ui.theme.AppTheme.bgCanvas)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(
@@ -571,7 +571,7 @@ fun McpServerItemCard(
                                 text = server.name,
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFFF1F5F9),
+                                color = com.example.ui.theme.AppTheme.textPrimary,
                                 fontSize = 13.sp
                             )
                             Spacer(modifier = Modifier.width(6.dp))
@@ -593,7 +593,7 @@ fun McpServerItemCard(
                         Text(
                             text = server.url,
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFF64748B),
+                            color = com.example.ui.theme.AppTheme.textSecondary,
                             fontSize = 11.sp,
                             maxLines = 1
                         )
@@ -613,7 +613,7 @@ fun McpServerItemCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(1.dp)
-                    .background(Color(0xFF1E2333))
+                    .background(com.example.ui.theme.AppTheme.border)
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -718,8 +718,8 @@ fun SelectMcpDialog(
                 .fillMaxWidth(0.92f)
                 .fillMaxHeight(0.70f)
                 .clip(RoundedCornerShape(18.dp))
-                .border(1.dp, Color(0xFF262C40), RoundedCornerShape(18.dp)),
-            color = Color(0xFF0F1117),
+                .border(1.dp, com.example.ui.theme.AppTheme.border, RoundedCornerShape(18.dp)),
+            color = com.example.ui.theme.AppTheme.bgSurface,
             tonalElevation = 8.dp
         ) {
             Column(
@@ -741,13 +741,13 @@ fun SelectMcpDialog(
                             modifier = Modifier
                                 .size(34.dp)
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0xFF6366F1).copy(alpha = 0.2f)),
+                                .background(com.example.ui.theme.AppTheme.primary.copy(alpha = 0.2f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Hub,
                                 contentDescription = null,
-                                tint = Color(0xFF818CF8),
+                                tint = com.example.ui.theme.AppTheme.primary,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -756,12 +756,12 @@ fun SelectMcpDialog(
                                 text = "Attach MCP to Prompt",
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                color = com.example.ui.theme.AppTheme.textPrimary
                             )
                             Text(
                                 text = "${selectedServerIds.size} of ${connectedServers.size} servers attached",
                                 fontSize = 11.sp,
-                                color = Color(0xFF94A3B8)
+                                color = com.example.ui.theme.AppTheme.textSecondary
                             )
                         }
                     }
@@ -773,7 +773,7 @@ fun SelectMcpDialog(
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = "Close",
-                            tint = Color(0xFF94A3B8),
+                            tint = com.example.ui.theme.AppTheme.textSecondary,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -791,18 +791,18 @@ fun SelectMcpDialog(
                         modifier = Modifier.weight(1f).height(32.dp),
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                         shape = RoundedCornerShape(6.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF262E45))
+                        border = androidx.compose.foundation.BorderStroke(1.dp, com.example.ui.theme.AppTheme.border)
                     ) {
-                        Text("Select All", fontSize = 11.sp, color = Color(0xFF818CF8))
+                        Text("Select All", fontSize = 11.sp, color = com.example.ui.theme.AppTheme.primary)
                     }
                     OutlinedButton(
                         onClick = onClearAll,
                         modifier = Modifier.weight(1f).height(32.dp),
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                         shape = RoundedCornerShape(6.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF262E45))
+                        border = androidx.compose.foundation.BorderStroke(1.dp, com.example.ui.theme.AppTheme.border)
                     ) {
-                        Text("Clear", fontSize = 11.sp, color = Color(0xFF94A3B8))
+                        Text("Clear", fontSize = 11.sp, color = com.example.ui.theme.AppTheme.textSecondary)
                     }
                     Button(
                         onClick = {
@@ -812,11 +812,11 @@ fun SelectMcpDialog(
                         modifier = Modifier.weight(1.2f).height(32.dp),
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                         shape = RoundedCornerShape(6.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E2436))
+                        colors = ButtonDefaults.buttonColors(containerColor = com.example.ui.theme.AppTheme.bgSurfaceElevated)
                     ) {
-                        Icon(Icons.Default.AddLink, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color(0xFF38BDF8))
+                        Icon(Icons.Default.AddLink, contentDescription = null, modifier = Modifier.size(14.dp), tint = com.example.ui.theme.AppTheme.primary)
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Connect More", fontSize = 11.sp, color = Color(0xFF38BDF8))
+                        Text("Connect More", fontSize = 11.sp, color = com.example.ui.theme.AppTheme.primary)
                     }
                 }
 
@@ -836,18 +836,18 @@ fun SelectMcpDialog(
                             Icon(
                                 imageVector = Icons.Default.CloudOff,
                                 contentDescription = null,
-                                tint = Color(0xFF475569),
+                                tint = com.example.ui.theme.AppTheme.textSecondary,
                                 modifier = Modifier.size(40.dp)
                             )
                             Text(
                                 text = "No Connected MCP Servers",
-                                color = Color(0xFF94A3B8),
+                                color = com.example.ui.theme.AppTheme.textPrimary,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
                                 text = "Connect Cloudflare, Supabase, Vercel, or custom MCP servers to attach tools.",
-                                color = Color(0xFF64748B),
+                                color = com.example.ui.theme.AppTheme.textSecondary,
                                 fontSize = 11.sp,
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                                 modifier = Modifier.padding(horizontal = 24.dp)
@@ -859,9 +859,9 @@ fun SelectMcpDialog(
                                     onOpenManageMcp()
                                 },
                                 shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1))
+                                colors = ButtonDefaults.buttonColors(containerColor = com.example.ui.theme.AppTheme.primary)
                             ) {
-                                Text("Connect MCP Server", fontSize = 12.sp)
+                                Text("Connect MCP Server", fontSize = 12.sp, color = Color.White)
                             }
                         }
                     }
@@ -880,11 +880,11 @@ fun SelectMcpDialog(
                                     .clickable { onToggleSelect(server.id) },
                                 shape = RoundedCornerShape(10.dp),
                                 colors = CardDefaults.cardColors(
-                                    containerColor = if (isSelected) Color(0xFF1E2436) else Color(0xFF131722)
+                                    containerColor = if (isSelected) com.example.ui.theme.AppTheme.bgSurfaceElevated else com.example.ui.theme.AppTheme.bgCanvas
                                 ),
                                 border = androidx.compose.foundation.BorderStroke(
                                     1.dp,
-                                    if (isSelected) Color(0xFF6366F1) else Color(0xFF262E45)
+                                    if (isSelected) com.example.ui.theme.AppTheme.primary else com.example.ui.theme.AppTheme.border
                                 )
                             ) {
                                 Row(
@@ -903,15 +903,15 @@ fun SelectMcpDialog(
                                             checked = isSelected,
                                             onCheckedChange = { onToggleSelect(server.id) },
                                             colors = CheckboxDefaults.colors(
-                                                checkedColor = Color(0xFF6366F1),
-                                                uncheckedColor = Color(0xFF64748B)
+                                                checkedColor = com.example.ui.theme.AppTheme.primary,
+                                                uncheckedColor = com.example.ui.theme.AppTheme.textSecondary
                                             )
                                         )
                                         Column {
                                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                                 Text(
                                                     text = server.name,
-                                                    color = Color.White,
+                                                    color = com.example.ui.theme.AppTheme.textPrimary,
                                                     fontSize = 13.sp,
                                                     fontWeight = FontWeight.Bold
                                                 )
@@ -931,7 +931,7 @@ fun SelectMcpDialog(
                                             }
                                             Text(
                                                 text = server.platform.replaceFirstChar { it.uppercase() } + " • " + server.url,
-                                                color = Color(0xFF94A3B8),
+                                                color = com.example.ui.theme.AppTheme.textSecondary,
                                                 fontSize = 11.sp,
                                                 maxLines = 1
                                             )

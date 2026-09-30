@@ -111,7 +111,7 @@ fun AgentSkillsDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF0B0C10))
+                .background(com.example.ui.theme.AppTheme.bgCanvas)
         ) {
             Column(
                 modifier = Modifier
@@ -132,12 +132,12 @@ fun AgentSkillsDialog(
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFF161822))
+                                .background(com.example.ui.theme.AppTheme.bgSurfaceElevated)
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Back",
-                                tint = Color.White
+                                tint = com.example.ui.theme.AppTheme.textPrimary
                             )
                         }
 
@@ -147,21 +147,21 @@ fun AgentSkillsDialog(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(20.dp))
-                                .background(Color(0xFF1A1D2C))
-                                .border(BorderStroke(1.dp, Color(0xFF2A2E44)), RoundedCornerShape(20.dp))
+                                .background(com.example.ui.theme.AppTheme.bgSurfaceElevated)
+                                .border(BorderStroke(1.dp, com.example.ui.theme.AppTheme.border), RoundedCornerShape(20.dp))
                                 .padding(horizontal = 14.dp, vertical = 6.dp)
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     imageVector = Icons.Default.Extension,
                                     contentDescription = null,
-                                    tint = Color(0xFF00F2FE),
+                                    tint = com.example.ui.theme.AppTheme.accentBlue,
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = "Agent Skills",
-                                    color = Color.White,
+                                    color = com.example.ui.theme.AppTheme.textPrimary,
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -179,20 +179,20 @@ fun AgentSkillsDialog(
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFF161822))
-                                .border(BorderStroke(1.dp, Color(0xFF00F2FE).copy(alpha = 0.5f)), CircleShape)
+                                .background(com.example.ui.theme.AppTheme.bgSurfaceElevated)
+                                .border(BorderStroke(1.dp, com.example.ui.theme.AppTheme.accentBlue.copy(alpha = 0.5f)), CircleShape)
                         ) {
                             if (isFetchingSkills) {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(20.dp),
-                                    color = Color(0xFF00F2FE),
+                                    color = com.example.ui.theme.AppTheme.accentBlue,
                                     strokeWidth = 2.dp
                                 )
                             } else {
                                 Icon(
                                     imageVector = Icons.Default.Refresh,
                                     contentDescription = "Fetch Skills",
-                                    tint = Color(0xFF00F2FE)
+                                    tint = com.example.ui.theme.AppTheme.accentBlue
                                 )
                             }
                         }
@@ -220,13 +220,13 @@ fun AgentSkillsDialog(
                     text = "Discover Agent Skills",
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = com.example.ui.theme.AppTheme.textPrimary
                 )
 
                 Text(
                     text = "Extend your Agent with real skills across Google Gemini, Android, Anthropic, Vercel, Browser Use, and more.",
                     fontSize = 13.sp,
-                    color = Color(0xFF94A3B8),
+                    color = com.example.ui.theme.AppTheme.textSecondary,
                     modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
                 )
 
@@ -234,12 +234,12 @@ fun AgentSkillsDialog(
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    placeholder = { Text("Search skills (e.g., Gemini, Android, Claude, Browser)...", color = Color(0xFF64748B), fontSize = 13.sp) },
+                    placeholder = { Text("Search skills (e.g., Gemini, Android, Claude, Browser)...", color = com.example.ui.theme.AppTheme.textMuted, fontSize = 13.sp) },
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Default.Search,
                             contentDescription = "Search",
-                            tint = Color(0xFF64748B)
+                            tint = com.example.ui.theme.AppTheme.textSecondary
                         )
                     },
                     trailingIcon = {
@@ -248,7 +248,7 @@ fun AgentSkillsDialog(
                                 Icon(
                                     imageVector = Icons.Default.Clear,
                                     contentDescription = "Clear",
-                                    tint = Color(0xFF64748B)
+                                    tint = com.example.ui.theme.AppTheme.textSecondary
                                 )
                             }
                         }
@@ -256,12 +256,14 @@ fun AgentSkillsDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFF161822)),
+                        .background(com.example.ui.theme.AppTheme.inputBg),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFF00F2FE),
-                        unfocusedBorderColor = Color(0xFF222533),
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White
+                        focusedBorderColor = com.example.ui.theme.AppTheme.accentBlue,
+                        unfocusedBorderColor = com.example.ui.theme.AppTheme.border,
+                        focusedTextColor = com.example.ui.theme.AppTheme.textPrimary,
+                        unfocusedTextColor = com.example.ui.theme.AppTheme.textPrimary,
+                        focusedContainerColor = com.example.ui.theme.AppTheme.inputBg,
+                        unfocusedContainerColor = com.example.ui.theme.AppTheme.inputBg
                     ),
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search)
@@ -386,8 +388,8 @@ fun AgentSkillsDialog(
 
                         Card(
                             shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF131520)),
-                            border = BorderStroke(1.dp, if (skill.isInstalled && skill.isEnabled) Color(0xFF00F2FE).copy(alpha = 0.4f) else Color(0xFF222533)),
+                            colors = CardDefaults.cardColors(containerColor = com.example.ui.theme.AppTheme.bgCard),
+                            border = BorderStroke(1.dp, if (skill.isInstalled && skill.isEnabled) com.example.ui.theme.AppTheme.accentBlue.copy(alpha = 0.5f) else com.example.ui.theme.AppTheme.border),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(
@@ -411,7 +413,7 @@ fun AgentSkillsDialog(
                                                 text = skill.name,
                                                 fontSize = 17.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                color = Color.White,
+                                                color = com.example.ui.theme.AppTheme.textPrimary,
                                                 modifier = Modifier.weight(1f, fill = false)
                                             )
                                             Box(

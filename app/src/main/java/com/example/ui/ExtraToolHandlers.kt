@@ -953,7 +953,9 @@ object ExtraToolHandlers {
             "browser_controller", "browser_interact", "browser_action" -> {
                 val resolvedText = args?.text ?: args?.content ?: args?.query ?: args?.message ?: args?.search
                 val resolvedSelector = args?.selector ?: args?.targetFile ?: args?.path ?: args?.targetAnchor
-                val act = args?.action ?: if (!resolvedText.isNullOrBlank()) "type" else if (args?.elementIndex != null || !resolvedSelector.isNullOrBlank()) "click" else "scroll"
+                val filePathArg = args?.filePath ?: args?.path ?: args?.targetFile ?: args?.sourcePath ?: args?.file
+                val destPathArg = args?.destinationPath ?: args?.targetFile ?: args?.newPath
+                val act = args?.action ?: if (!filePathArg.isNullOrBlank() && (args?.action == "upload" || resolvedText?.contains("upload") == true)) "upload" else if (!resolvedText.isNullOrBlank()) "type" else if (args?.elementIndex != null || !resolvedSelector.isNullOrBlank()) "click" else "scroll"
                 val actLog = createLog(
                     "Browser Controller Action",
                     "thinking",
@@ -972,11 +974,67 @@ object ExtraToolHandlers {
                     pressEnter = args?.pressEnter ?: false,
                     direction = args?.direction,
                     amount = args?.amount,
-                    backgroundBrowser = backgroundBrowser
+                    backgroundBrowser = backgroundBrowser,
+                    filePath = filePathArg,
+                    destinationPath = destPathArg,
+                    projectName = project.name,
+                    repository = repository,
+                    normalizePath = normalizePath
                 )
 
                 val isSuccess = !result.startsWith("Error")
                 updateLog(actLog.id, if (isSuccess) "success" else "failed", result)
+                result
+            }
+            "browser_download", "download_from_browser", "web_download" -> {
+                val targetUrlOrSelector = args?.url ?: args?.query ?: args?.selector ?: args?.text ?: args?.message ?: ""
+                val destPath = args?.destinationPath ?: args?.targetFile ?: args?.path
+                val downLog = createLog(
+                    "Browser Download",
+                    "thinking",
+                    "Downloading asset/file from browser: ${targetUrlOrSelector.ifBlank { "current page/link" }}",
+                    "web-clone"
+                )
+                addLog(downLog)
+                setAgentStatus("Downloading file from browser...")
+
+                val result = com.example.browser.BrowserTransferEngine.downloadFromBrowser(
+                    urlOrSelector = targetUrlOrSelector.ifBlank { null },
+                    destinationPath = destPath,
+                    projectName = project.name,
+                    repository = repository,
+                    backgroundBrowser = backgroundBrowser,
+                    normalizePath = normalizePath
+                )
+
+                val isSuccess = !result.startsWith("Error")
+                updateLog(downLog.id, if (isSuccess) "success" else "failed", result)
+                result
+            }
+            "browser_upload", "upload_to_browser", "web_upload" -> {
+                val targetFile = args?.filePath ?: args?.path ?: args?.targetFile ?: args?.sourcePath ?: args?.file ?: args?.text ?: ""
+                val selector = args?.selector ?: args?.targetAnchor
+                val upLog = createLog(
+                    "Browser Upload",
+                    "thinking",
+                    "Uploading workspace file '$targetFile' to browser...",
+                    "web-clone"
+                )
+                addLog(upLog)
+                setAgentStatus("Uploading file to browser: $targetFile...")
+
+                val result = com.example.browser.BrowserTransferEngine.uploadToBrowser(
+                    filePath = targetFile,
+                    selector = selector,
+                    elementIndex = args?.elementIndex,
+                    projectName = project.name,
+                    repository = repository,
+                    backgroundBrowser = backgroundBrowser,
+                    normalizePath = normalizePath
+                )
+
+                val isSuccess = !result.startsWith("Error")
+                updateLog(upLog.id, if (isSuccess) "success" else "failed", result)
                 result
             }
             "deep_clone_web_ui" -> {

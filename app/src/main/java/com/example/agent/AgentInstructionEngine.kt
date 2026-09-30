@@ -262,7 +262,9 @@ object AgentInstructionEngine {
         tools.add("'browser_search'(query)")
         tools.add("'browser_read'()")
         tools.add("'browser_snapshot'()")
-        tools.add("'browser_controller'(action: 'click'|'type'|'scroll', elementIndex?, selector?, text?)")
+        tools.add("'browser_controller'(action: 'click'|'type'|'scroll'|'download'|'upload', elementIndex?, selector?, text?, filePath?, destinationPath?)")
+        tools.add("'browser_download'(url?, selector?, destinationPath?) [Downloads any file, image, PDF, or asset from browser into workspace]")
+        tools.add("'browser_upload'(filePath, selector?, elementIndex?) [Uploads workspace file into browser file input]")
         tools.add("'fetch_url'(url, targetFile?)")
         tools.add("'clone_web_ui'(url, targetFilePath?)")
         tools.add("'deep_clone_web_ui'(url, targetFilePath?)")
@@ -296,6 +298,12 @@ Single format (Exploratory only): {"thought":"...","tool":"global_search","argum
 CRITICAL: Never return only a {"thought":"..."} block without tools when coding. Always bundle your tool calls in 'tools' within the same JSON response.
 Call 'complete' with Markdown summary when finished.
         """.trimIndent())
+
+        // 9. User Custom Instructions (Injected persistently)
+        val customPrompt = com.example.settings.CustomInstructionEngine.formatCustomInstructionsForPrompt()
+        if (customPrompt.isNotBlank()) {
+            sb.append("\n\n").append(customPrompt)
+        }
 
         return sb.toString()
     }

@@ -25,7 +25,20 @@ private val DarkColorScheme =
     outline = SlateBorder
   )
 
-private val LightColorScheme = DarkColorScheme
+private val LightColorScheme =
+  lightColorScheme(
+    primary = androidx.compose.ui.graphics.Color(0xFF0969DA),
+    secondary = androidx.compose.ui.graphics.Color(0xFF0550AE),
+    tertiary = androidx.compose.ui.graphics.Color(0xFF1A7F37),
+    background = androidx.compose.ui.graphics.Color(0xFFF6F8FA),
+    surface = androidx.compose.ui.graphics.Color(0xFFFFFFFF),
+    surfaceVariant = androidx.compose.ui.graphics.Color(0xFFF3F4F6),
+    onPrimary = androidx.compose.ui.graphics.Color.White,
+    onBackground = androidx.compose.ui.graphics.Color(0xFF1F2328),
+    onSurface = androidx.compose.ui.graphics.Color(0xFF1F2328),
+    onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF656D76),
+    outline = androidx.compose.ui.graphics.Color(0xFFD0D7DE)
+  )
 
 
 @Composable

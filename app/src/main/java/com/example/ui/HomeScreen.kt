@@ -62,14 +62,14 @@ fun HomeScreen(
                     ) {
                         Surface(
                             shape = RoundedCornerShape(8.dp),
-                            color = Color(0xFF21262D),
+                            color = com.example.ui.theme.AppTheme.bgSurfaceElevated,
                             modifier = Modifier.size(32.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     imageVector = Icons.Default.Code,
                                     contentDescription = "Code Icon",
-                                    tint = Color(0xFF2F81F7),
+                                    tint = com.example.ui.theme.AppTheme.accentBlue,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -79,36 +79,36 @@ fun HomeScreen(
                             fontFamily = FontFamily.SansSerif,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 17.sp,
-                            color = Color(0xFFE6EDF3)
+                            color = com.example.ui.theme.AppTheme.textPrimary
                         )
                         Surface(
                             shape = RoundedCornerShape(4.dp),
-                            color = Color(0xFF30363D),
-                            border = BorderStroke(1.dp, Color(0xFF30363D))
+                            color = com.example.ui.theme.AppTheme.bgSurfaceElevated,
+                            border = BorderStroke(1.dp, com.example.ui.theme.AppTheme.border)
                         ) {
                             Text(
                                 text = "IDE Workspace",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Medium,
-                                color = Color(0xFF8D96A0),
+                                color = com.example.ui.theme.AppTheme.textSecondary,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF0D1117),
-                    titleContentColor = Color(0xFFE6EDF3)
+                    containerColor = com.example.ui.theme.AppTheme.topBarBg,
+                    titleContentColor = com.example.ui.theme.AppTheme.textPrimary
                 )
             )
         },
-        containerColor = Color(0xFF0D1117)
+        containerColor = com.example.ui.theme.AppTheme.bgCanvas
     ) { innerPadding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .background(Color(0xFF0D1117)),
+                .background(com.example.ui.theme.AppTheme.bgCanvas),
             contentAlignment = Alignment.TopCenter
         ) {
             Column(
@@ -121,8 +121,8 @@ fun HomeScreen(
                 // Intro Hero Banner - Professional Slate Developer Card
                 Card(
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF161B22)),
-                    border = BorderStroke(1.dp, Color(0xFF30363D)),
+                    colors = CardDefaults.cardColors(containerColor = com.example.ui.theme.AppTheme.bgCard),
+                    border = BorderStroke(1.dp, com.example.ui.theme.AppTheme.border),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
@@ -138,20 +138,20 @@ fun HomeScreen(
                             Icon(
                                 imageVector = Icons.Default.AutoAwesome,
                                 contentDescription = null,
-                                tint = Color(0xFF2F81F7),
+                                tint = com.example.ui.theme.AppTheme.accentBlue,
                                 modifier = Modifier.size(18.dp)
                             )
                             Text(
                                 text = "Autonomous Software Agent Workspace",
                                 fontSize = 14.5.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFFE6EDF3)
+                                color = com.example.ui.theme.AppTheme.textPrimary
                             )
                         }
                         Text(
                             text = "Develop web applications, Android packages, and services using direct file operations, embedded terminal tools, and automated compilation pipelines.",
                             fontSize = 12.sp,
-                            color = Color(0xFF8D96A0),
+                            color = com.example.ui.theme.AppTheme.textSecondary,
                             lineHeight = 17.sp
                         )
                         FlowRow(
@@ -186,12 +186,12 @@ fun HomeScreen(
                         text = "Your Projects",
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = com.example.ui.theme.AppTheme.textPrimary
                     )
                     Text(
                         text = "${projects.size} active",
                         fontSize = 12.sp,
-                        color = Color(0xFF80809B)
+                        color = com.example.ui.theme.AppTheme.textSecondary
                     )
                 }
 

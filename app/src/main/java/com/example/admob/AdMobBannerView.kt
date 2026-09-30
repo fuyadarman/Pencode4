@@ -36,6 +36,9 @@ fun AdMobBanner(
     modifier: Modifier = Modifier,
     adUnitId: String = AdMobManager.TEST_BANNER_AD_UNIT_ID
 ) {
+    if (!AdMobManager.isAdsEnabled) {
+        return
+    }
     val context = LocalContext.current
     val adView = remember {
         AdView(context).apply {

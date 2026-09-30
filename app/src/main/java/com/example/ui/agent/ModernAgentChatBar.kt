@@ -66,10 +66,10 @@ fun ModernAgentChatBar(
             .fillMaxWidth()
             .padding(horizontal = 10.dp, vertical = 6.dp),
         shape = RoundedCornerShape(16.dp),
-        color = com.example.ui.theme.StitchTheme.SurfaceGlass,
+        color = com.example.ui.theme.AppTheme.bgSurface,
         border = BorderStroke(
             1.dp,
-            if (canSend) com.example.ui.theme.StitchTheme.PrimaryViolet.copy(alpha = 0.5f) else com.example.ui.theme.StitchTheme.BorderSubtle
+            if (canSend) com.example.ui.theme.AppTheme.accentBlue.copy(alpha = 0.5f) else com.example.ui.theme.AppTheme.border
         ),
         tonalElevation = 6.dp
     ) {
@@ -91,7 +91,7 @@ fun ModernAgentChatBar(
                         ModernAttachmentChip(
                             label = file.name,
                             icon = Icons.Default.AttachFile,
-                            accentColor = Color(0xFF58A6FF),
+                            accentColor = com.example.ui.theme.AppTheme.accentBlue,
                             onRemove = { onRemoveAttachedFile(file) }
                         )
                     }
@@ -121,12 +121,12 @@ fun ModernAgentChatBar(
                 placeholder = {
                     Text(
                         text = "Describe your request (@ files, / skills)...",
-                        color = Color(0xFF7D8590),
+                        color = com.example.ui.theme.AppTheme.textMuted,
                         fontSize = 13.sp
                     )
                 },
                 textStyle = TextStyle(
-                    color = Color(0xFFE6EDF3),
+                    color = com.example.ui.theme.AppTheme.textPrimary,
                     fontSize = 13.sp
                 ),
                 colors = TextFieldDefaults.colors(
@@ -136,7 +136,7 @@ fun ModernAgentChatBar(
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent,
                     disabledIndicatorColor = Color.Transparent,
-                    cursorColor = Color.White
+                    cursorColor = com.example.ui.theme.AppTheme.accentBlue
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -165,7 +165,7 @@ fun ModernAgentChatBar(
                         Icon(
                             imageVector = Icons.Default.AttachFile,
                             contentDescription = "Attach File",
-                            tint = Color(0xFF8D96A0),
+                            tint = com.example.ui.theme.AppTheme.textSecondary,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -173,10 +173,10 @@ fun ModernAgentChatBar(
                     // MCP Selection Button inside chatbar
                     Surface(
                         shape = RoundedCornerShape(6.dp),
-                        color = Color(0xFF21262D),
+                        color = com.example.ui.theme.AppTheme.bgSurfaceElevated,
                         border = BorderStroke(
                             1.dp,
-                            if (selectedMcpServerIds.isNotEmpty()) Color(0xFF2F81F7) else Color(0xFF30363D)
+                            if (selectedMcpServerIds.isNotEmpty()) com.example.ui.theme.AppTheme.accentBlue else com.example.ui.theme.AppTheme.border
                         ),
                         modifier = Modifier.clickable(onClick = onOpenSelectMcpDialog)
                     ) {
@@ -188,14 +188,14 @@ fun ModernAgentChatBar(
                             Icon(
                                 imageVector = Icons.Default.Hub,
                                 contentDescription = "MCP",
-                                tint = if (selectedMcpServerIds.isNotEmpty()) Color(0xFF2F81F7) else Color(0xFF8B949E),
+                                tint = if (selectedMcpServerIds.isNotEmpty()) com.example.ui.theme.AppTheme.accentBlue else com.example.ui.theme.AppTheme.textSecondary,
                                 modifier = Modifier.size(13.dp)
                             )
                             Text(
                                 text = if (selectedMcpServerIds.isNotEmpty()) "MCP (${selectedMcpServerIds.size})" else "MCP",
                                 fontSize = 11.5.sp,
                                 fontWeight = FontWeight.Medium,
-                                color = if (selectedMcpServerIds.isNotEmpty()) Color(0xFFF0F6FC) else Color(0xFFE6EDF3)
+                                color = com.example.ui.theme.AppTheme.textPrimary
                             )
                         }
                     }
@@ -239,8 +239,8 @@ fun ModernAgentChatBar(
                                         .border(BorderStroke(1.dp, Color(0xFF2EA043).copy(alpha = 0.6f)), RoundedCornerShape(8.dp))
                                 } else {
                                     Modifier
-                                        .background(Color(0xFF21262D))
-                                        .border(BorderStroke(1.dp, Color(0xFF30363D)), RoundedCornerShape(8.dp))
+                                        .background(com.example.ui.theme.AppTheme.bgSurfaceElevated)
+                                        .border(BorderStroke(1.dp, com.example.ui.theme.AppTheme.border), RoundedCornerShape(8.dp))
                                 }
                             )
                             .then(
@@ -253,7 +253,7 @@ fun ModernAgentChatBar(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Send,
                             contentDescription = "Send",
-                            tint = if (canSend) Color.White else StitchTheme.TextSub,
+                            tint = if (canSend) Color.White else com.example.ui.theme.AppTheme.textMuted,
                             modifier = Modifier.size(16.dp)
                         )
                     }
@@ -272,8 +272,8 @@ private fun ModernAttachmentChip(
 ) {
     Surface(
         shape = RoundedCornerShape(10.dp),
-        color = Color(0xFF161B22),
-        border = BorderStroke(1.dp, accentColor.copy(alpha = 0.4f))
+        color = com.example.ui.theme.AppTheme.bgSurfaceElevated,
+        border = BorderStroke(1.dp, com.example.ui.theme.AppTheme.border)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -289,7 +289,7 @@ private fun ModernAttachmentChip(
             Text(
                 text = label,
                 fontSize = 11.sp,
-                color = Color(0xFFE6EDF3),
+                color = com.example.ui.theme.AppTheme.textPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.widthIn(max = 140.dp)
@@ -297,7 +297,7 @@ private fun ModernAttachmentChip(
             Icon(
                 imageVector = Icons.Default.Close,
                 contentDescription = "Remove",
-                tint = Color(0xFF8B949E),
+                tint = com.example.ui.theme.AppTheme.textSecondary,
                 modifier = Modifier
                     .size(12.dp)
                     .clickable(onClick = onRemove)

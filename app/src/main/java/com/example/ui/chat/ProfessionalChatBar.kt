@@ -109,8 +109,8 @@ fun ProfessionalChatBar(
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(26.dp),
-            color = Color(0xFF1E1F22),
-            border = BorderStroke(1.dp, Color(0xFF2B2D31)),
+            color = com.example.ui.theme.AppTheme.bgCard,
+            border = BorderStroke(1.dp, com.example.ui.theme.AppTheme.border),
             tonalElevation = 2.dp
         ) {
             Column(
@@ -125,12 +125,12 @@ fun ProfessionalChatBar(
                     placeholder = {
                         Text(
                             text = "describe your request (@ files, / skills)...",
-                            color = Color(0xFF8E9297),
+                            color = com.example.ui.theme.AppTheme.textMuted,
                             fontSize = 13.5.sp
                         )
                     },
                     textStyle = TextStyle(
-                        color = Color(0xFFF2F3F5),
+                        color = com.example.ui.theme.AppTheme.textPrimary,
                         fontSize = 13.5.sp,
                         lineHeight = 19.sp
                     ),
@@ -141,7 +141,7 @@ fun ProfessionalChatBar(
                         focusedIndicatorColor = Color.Transparent,
                         unfocusedIndicatorColor = Color.Transparent,
                         disabledIndicatorColor = Color.Transparent,
-                        cursorColor = Color(0xFF2979FF)
+                        cursorColor = com.example.ui.theme.AppTheme.accentBlue
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -171,7 +171,7 @@ fun ProfessionalChatBar(
                                 Icon(
                                     imageVector = Icons.Default.Add,
                                     contentDescription = "Add attachment or tools",
-                                    tint = Color(0xFFDBDEE1),
+                                    tint = com.example.ui.theme.AppTheme.textSecondary,
                                     modifier = Modifier.size(24.dp)
                                 )
                             }
@@ -179,12 +179,12 @@ fun ProfessionalChatBar(
                             DropdownMenu(
                                 expanded = showPlusMenu,
                                 onDismissRequest = { showPlusMenu = false },
-                                modifier = Modifier.background(Color(0xFF2B2D31))
+                                modifier = Modifier.background(com.example.ui.theme.AppTheme.bgSurfaceElevated)
                             ) {
                                 DropdownMenuItem(
-                                    text = { Text("Attach File", color = Color(0xFFF2F3F5), fontSize = 13.sp) },
+                                    text = { Text("Attach File", color = com.example.ui.theme.AppTheme.textPrimary, fontSize = 13.sp) },
                                     leadingIcon = {
-                                        Icon(Icons.Default.AttachFile, contentDescription = null, tint = Color(0xFF58A6FF), modifier = Modifier.size(18.dp))
+                                        Icon(Icons.Default.AttachFile, contentDescription = null, tint = com.example.ui.theme.AppTheme.accentBlue, modifier = Modifier.size(18.dp))
                                     },
                                     onClick = {
                                         showPlusMenu = false
@@ -195,7 +195,7 @@ fun ProfessionalChatBar(
                                     text = {
                                         Text(
                                             if (selectedMcpServerIds.isNotEmpty()) "MCP Servers (${selectedMcpServerIds.size})" else "MCP Servers",
-                                            color = Color(0xFFF2F3F5),
+                                            color = com.example.ui.theme.AppTheme.textPrimary,
                                             fontSize = 13.sp
                                         )
                                     },
@@ -207,12 +207,12 @@ fun ProfessionalChatBar(
                                         onOpenSelectMcpDialog()
                                     }
                                 )
-                                HorizontalDivider(color = Color(0xFF383A40))
+                                HorizontalDivider(color = com.example.ui.theme.AppTheme.border)
                                 DropdownMenuItem(
                                     text = {
                                         Text(
                                             "Thinking: ${currentReasoningEffort.name.lowercase().replaceFirstChar { it.uppercase() }}",
-                                            color = Color(0xFFF2F3F5),
+                                            color = com.example.ui.theme.AppTheme.textPrimary,
                                             fontSize = 13.sp
                                         )
                                     },
@@ -231,10 +231,10 @@ fun ProfessionalChatBar(
                         Surface(
                             onClick = onOpenSelectMcpDialog,
                             shape = RoundedCornerShape(6.dp),
-                            color = Color(0xFF21262D),
+                            color = com.example.ui.theme.AppTheme.bgSurfaceElevated,
                             border = BorderStroke(
                                 1.dp,
-                                if (selectedMcpServerIds.isNotEmpty()) Color(0xFF2F81F7) else Color(0xFF30363D)
+                                if (selectedMcpServerIds.isNotEmpty()) com.example.ui.theme.AppTheme.accentBlue else com.example.ui.theme.AppTheme.border
                             )
                         ) {
                             Row(
@@ -245,14 +245,14 @@ fun ProfessionalChatBar(
                                 Icon(
                                     imageVector = Icons.Default.Hub,
                                     contentDescription = "MCP Servers",
-                                    tint = if (selectedMcpServerIds.isNotEmpty()) Color(0xFF2F81F7) else Color(0xFF8B949E),
+                                    tint = if (selectedMcpServerIds.isNotEmpty()) com.example.ui.theme.AppTheme.accentBlue else com.example.ui.theme.AppTheme.textSecondary,
                                     modifier = Modifier.size(13.dp)
                                 )
                                 Text(
                                     text = if (selectedMcpServerIds.isNotEmpty()) "MCP (${selectedMcpServerIds.size})" else "MCP",
                                     fontSize = 11.5.sp,
                                     fontWeight = FontWeight.Medium,
-                                    color = if (selectedMcpServerIds.isNotEmpty()) Color(0xFFF0F6FC) else Color(0xFFE6EDF3)
+                                    color = if (selectedMcpServerIds.isNotEmpty()) com.example.ui.theme.AppTheme.accentBlue else com.example.ui.theme.AppTheme.textPrimary
                                 )
                             }
                         }
@@ -263,8 +263,8 @@ fun ProfessionalChatBar(
                                 showReasoningEffortDialog = true
                             },
                             shape = RoundedCornerShape(6.dp),
-                            color = Color(0xFF21262D),
-                            border = BorderStroke(1.dp, Color(0xFF30363D))
+                            color = com.example.ui.theme.AppTheme.bgSurfaceElevated,
+                            border = BorderStroke(1.dp, com.example.ui.theme.AppTheme.border)
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -274,19 +274,19 @@ fun ProfessionalChatBar(
                                 Icon(
                                     imageVector = Icons.Default.Psychology,
                                     contentDescription = "Thinking Effort",
-                                    tint = Color(0xFF8B949E),
+                                    tint = com.example.ui.theme.AppTheme.textSecondary,
                                     modifier = Modifier.size(13.dp)
                                 )
                                 Text(
                                     text = currentReasoningEffort.name.lowercase().replaceFirstChar { it.uppercase() },
                                     fontSize = 11.5.sp,
                                     fontWeight = FontWeight.Medium,
-                                    color = Color(0xFFE6EDF3)
+                                    color = com.example.ui.theme.AppTheme.textPrimary
                                 )
                                 Icon(
                                     imageVector = Icons.Default.KeyboardArrowDown,
                                     contentDescription = "Choose effort",
-                                    tint = Color(0xFF8B949E),
+                                    tint = com.example.ui.theme.AppTheme.textSecondary,
                                     modifier = Modifier.size(13.dp)
                                 )
                             }
@@ -309,7 +309,7 @@ fun ProfessionalChatBar(
                             Icon(
                                 imageVector = Icons.Default.Mic,
                                 contentDescription = "Voice Input",
-                                tint = Color(0xFFDBDEE1),
+                                tint = com.example.ui.theme.AppTheme.textSecondary,
                                 modifier = Modifier.size(22.dp)
                             )
                         }
@@ -332,12 +332,13 @@ fun ProfessionalChatBar(
                                 Text("Stop", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                             }
                         } else {
+                            val isDarkTheme = com.example.ui.theme.AppTheme.isDark
                             Box(
                                 modifier = Modifier
                                     .size(36.dp)
                                     .clip(CircleShape)
                                     .background(
-                                        if (canSend) Color(0xFF2979FF) else Color(0xFF313338)
+                                        if (canSend) Color(0xFF2979FF) else (if (isDarkTheme) Color(0xFF313338) else Color(0xFFE2E8F0))
                                     )
                                     .clickable(enabled = canSend, onClick = onSend),
                                 contentAlignment = Alignment.Center
@@ -345,7 +346,7 @@ fun ProfessionalChatBar(
                                 Icon(
                                     imageVector = Icons.Default.ArrowUpward,
                                     contentDescription = "Send",
-                                    tint = if (canSend) Color.White else Color(0xFF80848E),
+                                    tint = if (canSend) Color.White else (if (isDarkTheme) Color(0xFF80848E) else Color(0xFF94A3B8)),
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -366,8 +367,8 @@ private fun ProfessionalChip(
 ) {
     Surface(
         shape = RoundedCornerShape(8.dp),
-        color = Color(0xFF2B2D31),
-        border = BorderStroke(1.dp, Color(0xFF383A40))
+        color = com.example.ui.theme.AppTheme.bgSurfaceElevated,
+        border = BorderStroke(1.dp, com.example.ui.theme.AppTheme.border)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -383,7 +384,7 @@ private fun ProfessionalChip(
             Text(
                 text = label,
                 fontSize = 11.sp,
-                color = Color(0xFFF2F3F5),
+                color = com.example.ui.theme.AppTheme.textPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.widthIn(max = 140.dp)
@@ -391,7 +392,7 @@ private fun ProfessionalChip(
             Icon(
                 imageVector = Icons.Default.Close,
                 contentDescription = "Remove",
-                tint = Color(0xFF949BA4),
+                tint = com.example.ui.theme.AppTheme.textSecondary,
                 modifier = Modifier
                     .size(12.dp)
                     .clickable(onClick = onRemove)

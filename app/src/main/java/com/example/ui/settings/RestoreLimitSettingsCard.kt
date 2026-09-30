@@ -38,8 +38,8 @@ fun RestoreLimitSettingsCard(
 
     Card(
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F141C)),
-        border = BorderStroke(1.dp, Color(0xFF30363D)),
+        colors = CardDefaults.cardColors(containerColor = com.example.ui.theme.AppTheme.bgSurfaceElevated),
+        border = BorderStroke(1.dp, com.example.ui.theme.AppTheme.border),
         modifier = modifier.fillMaxWidth()
     ) {
         Column(
@@ -62,13 +62,13 @@ fun RestoreLimitSettingsCard(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(RoundedCornerShape(10.dp))
-                            .background(Color(0xFF2F81F7).copy(alpha = 0.15f)),
+                            .background(com.example.ui.theme.AppTheme.accentBlue.copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.History,
                             contentDescription = "Version Restore",
-                            tint = Color(0xFF58A6FF),
+                            tint = com.example.ui.theme.AppTheme.accentBlue,
                             modifier = Modifier.size(22.dp)
                         )
                     }
@@ -76,13 +76,13 @@ fun RestoreLimitSettingsCard(
                     Column {
                         Text(
                             text = "Version Restore Retention",
-                            color = Color(0xFFF0F6FC),
+                            color = com.example.ui.theme.AppTheme.textPrimary,
                             fontSize = 14.5.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
                             text = "Project snapshots saved before each prompt",
-                            color = Color(0xFF8B949E),
+                            color = com.example.ui.theme.AppTheme.textSecondary,
                             fontSize = 11.5.sp
                         )
                     }
@@ -92,13 +92,13 @@ fun RestoreLimitSettingsCard(
 
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = Color(0xFF2F81F7).copy(alpha = 0.18f),
-                    border = BorderStroke(1.dp, Color(0xFF2F81F7).copy(alpha = 0.5f)),
+                    color = com.example.ui.theme.AppTheme.accentBlue.copy(alpha = 0.18f),
+                    border = BorderStroke(1.dp, com.example.ui.theme.AppTheme.accentBlue.copy(alpha = 0.5f)),
                     modifier = Modifier.wrapContentSize()
                 ) {
                     Text(
                         text = "$limit Versions",
-                        color = Color(0xFF79C0FF),
+                        color = com.example.ui.theme.AppTheme.accentBlue,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
@@ -110,7 +110,7 @@ fun RestoreLimitSettingsCard(
 
             Text(
                 text = "Default is 10 snapshots (upgraded from 3). You can preserve up to 20 historical versions for rollbacks.",
-                color = Color(0xFF8B949E),
+                color = com.example.ui.theme.AppTheme.textSecondary,
                 fontSize = 11.5.sp,
                 lineHeight = 15.sp
             )
@@ -119,7 +119,7 @@ fun RestoreLimitSettingsCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFF161B22), RoundedCornerShape(8.dp))
+                    .background(com.example.ui.theme.AppTheme.bgSurface, RoundedCornerShape(8.dp))
                     .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -137,7 +137,7 @@ fun RestoreLimitSettingsCard(
                     Icon(
                         imageVector = Icons.Default.Remove,
                         contentDescription = "Decrease limit",
-                        tint = if (limit > 3) Color(0xFFC9D1D9) else Color(0xFF484F58),
+                        tint = if (limit > 3) com.example.ui.theme.AppTheme.textPrimary else com.example.ui.theme.AppTheme.textMuted,
                         modifier = Modifier.size(16.dp)
                     )
                 }
@@ -153,9 +153,9 @@ fun RestoreLimitSettingsCard(
                     valueRange = 3f..20f,
                     steps = 16,
                     colors = SliderDefaults.colors(
-                        thumbColor = Color(0xFF58A6FF),
-                        activeTrackColor = Color(0xFF2F81F7),
-                        inactiveTrackColor = Color(0xFF30363D)
+                        thumbColor = com.example.ui.theme.AppTheme.accentBlue,
+                        activeTrackColor = com.example.ui.theme.AppTheme.accentBlue,
+                        inactiveTrackColor = com.example.ui.theme.AppTheme.border
                     ),
                     modifier = Modifier.weight(1f)
                 )
@@ -173,7 +173,7 @@ fun RestoreLimitSettingsCard(
                     Icon(
                         imageVector = Icons.Default.Add,
                         contentDescription = "Increase limit",
-                        tint = if (limit < 20) Color(0xFFC9D1D9) else Color(0xFF484F58),
+                        tint = if (limit < 20) com.example.ui.theme.AppTheme.textPrimary else com.example.ui.theme.AppTheme.textMuted,
                         modifier = Modifier.size(16.dp)
                     )
                 }
@@ -188,10 +188,10 @@ fun RestoreLimitSettingsCard(
                     val isSelected = limit == preset
                     Surface(
                         shape = RoundedCornerShape(6.dp),
-                        color = if (isSelected) Color(0xFF2F81F7).copy(alpha = 0.25f) else Color(0xFF161B22),
+                        color = if (isSelected) com.example.ui.theme.AppTheme.accentBlue.copy(alpha = 0.2f) else com.example.ui.theme.AppTheme.bgSurface,
                         border = BorderStroke(
                             1.dp,
-                            if (isSelected) Color(0xFF2F81F7) else Color(0xFF30363D)
+                            if (isSelected) com.example.ui.theme.AppTheme.accentBlue else com.example.ui.theme.AppTheme.border
                         ),
                         modifier = Modifier
                             .weight(1f)
@@ -208,7 +208,7 @@ fun RestoreLimitSettingsCard(
                                 text = if (preset == 10) "10 (Def)" else "$preset",
                                 fontSize = 11.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isSelected) Color(0xFF79C0FF) else Color(0xFF8B949E)
+                                color = if (isSelected) com.example.ui.theme.AppTheme.accentBlue else com.example.ui.theme.AppTheme.textSecondary
                             )
                         }
                     }
