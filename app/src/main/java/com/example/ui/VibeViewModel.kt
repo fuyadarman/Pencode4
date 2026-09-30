@@ -1260,6 +1260,9 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
 
                 if (repoVal.isEmpty() || tokenVal.isEmpty()) {
                     _buildStatus.value = "Waiting for GitHub configuration..."
+                    _buildSteps.value = emptyList()
+                    _buildLogs.value = ""
+                    _gitHubWorkflows.value = emptyList()
                     delay(5000)
                     continue
                 }
@@ -1409,66 +1412,85 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                             Log.e("VibeViewModel", "Error polling workflows list: ${e.localizedMessage}")
                         }
                         
+                        val curProjName = _currentProject.value?.name ?: ""
+                        val projSnapshot = com.example.build.ProjectBuildIsolationManager.getSnapshot(curProjName)
+
                         if (!workflowRuns.isNullOrEmpty()) {
-                            val latestRun = workflowRuns[0] as? Map<*, *>
-                            val runId = (latestRun?.get("id") as? Number)?.toLong()
-                            val status = latestRun?.get("status") as? String ?: "unknown"
-                            val conclusion = latestRun?.get("conclusion") as? String
-                            val runNumber = (latestRun?.get("run_number") as? Number)?.toInt() ?: 1
+                            if (!projSnapshot.hasBuildInitiated && projSnapshot.projectRunId == null) {
+                                if (_buildStatus.value.isBlank() || _buildStatus.value == "Idle") {
+                                    _buildStatus.value = "Idle (Tap 'Build' to compile)"
+                                }
+                            } else {
+                                val targetRun = if (projSnapshot.projectRunId != null) {
+                                    workflowRuns.find { ((it as? Map<*, *>)?.get("id") as? Number)?.toLong() == projSnapshot.projectRunId } as? Map<*, *>
+                                        ?: workflowRuns[0] as? Map<*, *>
+                                } else {
+                                    val r = workflowRuns[0] as? Map<*, *>
+                                    val newId = (r?.get("id") as? Number)?.toLong()
+                                    if (newId != null) {
+                                        com.example.build.ProjectBuildIsolationManager.setProjectRunId(curProjName, newId)
+                                    }
+                                    r
+                                }
 
-                            _buildStatus.value = "Run #$runNumber: Status = $status" + (if (conclusion != null) " ($conclusion)" else "")
+                                val runId = (targetRun?.get("id") as? Number)?.toLong()
+                                val status = targetRun?.get("status") as? String ?: "unknown"
+                                val conclusion = targetRun?.get("conclusion") as? String
+                                val runNumber = (targetRun?.get("run_number") as? Number)?.toInt() ?: 1
 
-                            if (status == "completed" && conclusion == "success" && runId != null) {
-                                downloadAndUnzipApk(owner, repoName, runId, tokenVal)
-                            }
+                                _buildStatus.value = "Run #$runNumber: Status = $status" + (if (conclusion != null) " ($conclusion)" else "")
 
-                            if (runId != null) {
-                                val jobsUrl = "https://api.github.com/repos/$owner/$repoName/actions/runs/$runId/jobs"
-                                val jobsRequest = Request.Builder()
-                                    .url(jobsUrl)
-                                    .header("Authorization", "token $tokenVal")
-                                    .header("Accept", "application/vnd.github.v3+json")
-                                    .build()
+                                if (status == "completed" && conclusion == "success" && runId != null) {
+                                    downloadAndUnzipApk(owner, repoName, runId, tokenVal)
+                                }
 
-                                val jobsResponse = client.newCall(jobsRequest).execute()
-                                if (jobsResponse.isSuccessful) {
-                                    val jobsBodyStr = jobsResponse.body?.string() ?: ""
-                                    val jobsMap = moshi.adapter(Map::class.java).fromJson(jobsBodyStr) as? Map<*, *>
-                                    val jobsList = jobsMap?.get("jobs") as? List<*>
-                                    
-                                    if (!jobsList.isNullOrEmpty()) {
-                                        val jobsMapList = jobsList.mapNotNull { it as? Map<*, *> }
-                                        val failedJobInList = jobsMapList.find { (it["conclusion"] as? String) == "failure" }
-                                        val primaryJob = failedJobInList 
-                                            ?: jobsMapList.find { (it["status"] as? String) == "in_progress" } 
-                                            ?: jobsMapList[0]
+                                if (runId != null) {
+                                    val jobsUrl = "https://api.github.com/repos/$owner/$repoName/actions/runs/$runId/jobs"
+                                    val jobsRequest = Request.Builder()
+                                        .url(jobsUrl)
+                                        .header("Authorization", "token $tokenVal")
+                                        .header("Accept", "application/vnd.github.v3+json")
+                                        .build()
 
-                                        val stepsList = primaryJob["steps"] as? List<*>
-                                        val parsedSteps = mutableListOf<BuildStep>()
+                                    val jobsResponse = client.newCall(jobsRequest).execute()
+                                    if (jobsResponse.isSuccessful) {
+                                        val jobsBodyStr = jobsResponse.body?.string() ?: ""
+                                        val jobsMap = moshi.adapter(Map::class.java).fromJson(jobsBodyStr) as? Map<*, *>
+                                        val jobsList = jobsMap?.get("jobs") as? List<*>
                                         
-                                        stepsList?.forEach { stepObj ->
-                                            val stepMap = stepObj as? Map<*, *>
-                                            val stepName = stepMap?.get("name") as? String ?: "Step"
-                                            val stepStatus = stepMap?.get("status") as? String ?: "queued"
-                                            val stepConclusion = stepMap?.get("conclusion") as? String
-                                            val stepNumber = (stepMap?.get("number") as? Number)?.toInt() ?: 1
+                                        if (!jobsList.isNullOrEmpty()) {
+                                            val jobsMapList = jobsList.mapNotNull { it as? Map<*, *> }
+                                            val failedJobInList = jobsMapList.find { (it["conclusion"] as? String) == "failure" }
+                                            val primaryJob = failedJobInList 
+                                                ?: jobsMapList.find { (it["status"] as? String) == "in_progress" } 
+                                                ?: jobsMapList[0]
+
+                                            val stepsList = primaryJob["steps"] as? List<*>
+                                            val parsedSteps = mutableListOf<BuildStep>()
                                             
-                                            parsedSteps.add(BuildStep(stepName, stepStatus, stepConclusion, stepNumber))
-                                        }
-                                        _buildSteps.value = parsedSteps
+                                            stepsList?.forEach { stepObj ->
+                                                val stepMap = stepObj as? Map<*, *>
+                                                val stepName = stepMap?.get("name") as? String ?: "Step"
+                                                val stepStatus = stepMap?.get("status") as? String ?: "queued"
+                                                val stepConclusion = stepMap?.get("conclusion") as? String
+                                                val stepNumber = (stepMap?.get("number") as? Number)?.toInt() ?: 1
+                                                
+                                                parsedSteps.add(BuildStep(stepName, stepStatus, stepConclusion, stepNumber))
+                                            }
+                                            _buildSteps.value = parsedSteps
 
-                                        val failedStep = parsedSteps.find { it.conclusion == "failure" }
-                                        val runName = (latestRun["name"] as? String) ?: "Workflow"
-                                        val wfPath = (latestRun["path"] as? String) ?: ".github/workflows/android.yml"
+                                            val failedStep = parsedSteps.find { it.conclusion == "failure" }
+                                            val runName = (targetRun?.get("name") as? String) ?: "Workflow"
+                                            val wfPath = (targetRun?.get("path") as? String) ?: ".github/workflows/android.yml"
 
-                                        if (failedStep != null) {
-                                            _buildError.value = "$runName failed at step: '${failedStep.name}'."
-                                        } else if (conclusion == "failure") {
-                                            _buildError.value = "$runName failed."
-                                        } else {
-                                            _buildError.value = null
-                                            _detectedAndroidBuildErrors.value = emptyList()
-                                        }
+                                            if (failedStep != null) {
+                                                _buildError.value = "$runName failed at step: '${failedStep.name}'."
+                                            } else if (conclusion == "failure") {
+                                                _buildError.value = "$runName failed."
+                                            } else {
+                                                _buildError.value = null
+                                                _detectedAndroidBuildErrors.value = emptyList()
+                                            }
 
                                         val jobId = (primaryJob["id"] as? Number)?.toLong()
                                         if (jobId != null) {
@@ -1526,7 +1548,8 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                                     }
                                 }
                             }
-                        } else {
+                        }
+                    } else {
                             _buildStatus.value = "No workflow runs found. Push code to trigger a build!"
                             _buildSteps.value = emptyList()
                             _buildLogs.value = ""
@@ -1554,6 +1577,14 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun triggerWorkflows(selectedWorkflowIds: Set<Long>? = null) {
         lastAutoFixedRunId = -1L
+        val curProjName = _currentProject.value?.name ?: ""
+        if (curProjName.isNotBlank()) {
+            com.example.build.ProjectBuildIsolationManager.markBuildInitiated(curProjName)
+            _buildStatus.value = "Triggering build on GitHub Actions... 🚀"
+            _buildSteps.value = emptyList()
+            _buildLogs.value = "Triggering workflows on GitHub Actions for '$curProjName'..."
+            _buildError.value = null
+        }
         val repoVal = _githubRepo.value.trim()
         val tokenVal = _githubToken.value.trim()
         val branchVal = _githubBranch.value.trim().ifBlank { "main" }
@@ -2751,6 +2782,29 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun createProject(name: String, description: String, templateKey: String?, urisToImport: List<android.net.Uri> = emptyList()) {
         viewModelScope.launch {
+            // Save previous project's build state if any
+            val prev = _currentProject.value
+            if (prev != null) {
+                com.example.build.ProjectBuildIsolationManager.saveSnapshot(
+                    projectName = prev.name,
+                    buildStatus = _buildStatus.value,
+                    buildSteps = _buildSteps.value,
+                    buildLogs = _buildLogs.value,
+                    buildError = _buildError.value,
+                    isPollingBuild = _isPollingBuild.value,
+                    gitHubWorkflows = _gitHubWorkflows.value,
+                    apkDownloadProgress = _apkDownloadProgress.value,
+                    apkDownloadPercentage = _apkDownloadPercentage.value,
+                    localApkPath = _localApkPath.value,
+                    webArtifactInfo = _webArtifactInfo.value,
+                    detectedAndroidBuildErrors = _detectedAndroidBuildErrors.value,
+                    lastFailedRunId = lastAutoFixedRunId
+                )
+            }
+
+            // Immediately initialize clean isolated build state for new project
+            com.example.build.ProjectBuildIsolationManager.initCleanProjectBuild(name)
+
             repository.createProject(name, description, templateKey)
             if (urisToImport.isNotEmpty()) {
                 repository.importFilesToProject(name, urisToImport)
@@ -2811,7 +2865,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             projectTodoListMap.remove(projectName)
             projectEditHistoryMap.remove(projectName)
             projectAgentStatusMap.remove(projectName)
-            com.example.build.ProjectBuildStateManager.clearProjectBuild(projectName)
+            com.example.build.ProjectBuildIsolationManager.clearProjectBuild(projectName)
             if (_currentProject.value?.name == projectName) {
                 _currentProject.value = null
                 _projectFiles.value = emptyList()
@@ -2832,7 +2886,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             // Save previous project's build state if any
             val prev = _currentProject.value
             if (prev != null) {
-                com.example.build.ProjectBuildStateManager.saveSnapshot(
+                com.example.build.ProjectBuildIsolationManager.saveSnapshot(
                     projectName = prev.name,
                     buildStatus = _buildStatus.value,
                     buildSteps = _buildSteps.value,
@@ -2853,18 +2907,32 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             _currentTab.value = WorkspaceTab.CHAT
             
             // Restore isolated project-specific build state
-            val snapshot = com.example.build.ProjectBuildStateManager.getSnapshot(project.name)
-            _buildStatus.value = snapshot.buildStatus
-            _buildSteps.value = snapshot.buildSteps
-            _buildLogs.value = snapshot.buildLogs
-            _buildError.value = snapshot.buildError
-            _isPollingBuild.value = snapshot.isPollingBuild
-            _gitHubWorkflows.value = snapshot.gitHubWorkflows
-            _apkDownloadProgress.value = snapshot.apkDownloadProgress
-            _apkDownloadPercentage.value = snapshot.apkDownloadPercentage
-            _localApkPath.value = snapshot.localApkPath
-            _webArtifactInfo.value = snapshot.webArtifactInfo
-            _detectedAndroidBuildErrors.value = snapshot.detectedAndroidBuildErrors
+            val snapshot = com.example.build.ProjectBuildIsolationManager.getSnapshot(project.name)
+            if (snapshot.hasBuildInitiated || snapshot.projectRunId != null) {
+                _buildStatus.value = snapshot.buildStatus
+                _buildSteps.value = snapshot.buildSteps
+                _buildLogs.value = snapshot.buildLogs
+                _buildError.value = snapshot.buildError
+                _isPollingBuild.value = snapshot.isPollingBuild
+                _gitHubWorkflows.value = snapshot.gitHubWorkflows
+                _apkDownloadProgress.value = snapshot.apkDownloadProgress
+                _apkDownloadPercentage.value = snapshot.apkDownloadPercentage
+                _localApkPath.value = snapshot.localApkPath
+                _webArtifactInfo.value = snapshot.webArtifactInfo
+                _detectedAndroidBuildErrors.value = snapshot.detectedAndroidBuildErrors
+            } else {
+                _buildStatus.value = "Idle (Tap 'Build' to compile)"
+                _buildSteps.value = emptyList()
+                _buildLogs.value = ""
+                _buildError.value = null
+                _isPollingBuild.value = snapshot.isPollingBuild
+                _gitHubWorkflows.value = snapshot.gitHubWorkflows
+                _apkDownloadProgress.value = ""
+                _apkDownloadPercentage.value = null
+                _localApkPath.value = null
+                _webArtifactInfo.value = null
+                _detectedAndroidBuildErrors.value = emptyList()
+            }
             if (snapshot.lastFailedRunId != null) {
                 lastAutoFixedRunId = snapshot.lastFailedRunId
             } else {
@@ -2890,7 +2958,11 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             _todoList.value = projectTodoListMap[project.name] ?: emptyList()
             _editHistory.value = projectEditHistoryMap[project.name] ?: emptyList()
 
-            startPollingBuild()
+            if (_githubRepo.value.isNotBlank() && _githubToken.value.isNotBlank()) {
+                startPollingBuild()
+            } else {
+                _buildStatus.value = if (_githubRepo.value.isBlank()) "Waiting for GitHub configuration..." else "Idle"
+            }
             
             try {
                 // Sync physical storage to database FIRST so files on disk are never lost
@@ -2913,7 +2985,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     fun exitProject() {
         val current = _currentProject.value
         if (current != null) {
-            com.example.build.ProjectBuildStateManager.saveSnapshot(
+            com.example.build.ProjectBuildIsolationManager.saveSnapshot(
                 projectName = current.name,
                 buildStatus = _buildStatus.value,
                 buildSteps = _buildSteps.value,
@@ -2941,6 +3013,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         _todoList.value = emptyList()
         _agentStatus.value = ""
         _webArtifactInfo.value = null
+        _githubRepo.value = ""
         _buildStatus.value = "Idle"
         _buildSteps.value = emptyList()
         _buildLogs.value = ""
