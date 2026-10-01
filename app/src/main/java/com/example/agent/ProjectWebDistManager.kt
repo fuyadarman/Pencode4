@@ -219,7 +219,7 @@ object ProjectWebDistManager {
         lastDownloadedRunMap.remove(projectName)
     }
 
-    // Per-project GitHub Repo & Branch persistence with global fallback
+    // Per-project GitHub Repo & Branch persistence
     fun getProjectGithubRepo(prefs: SharedPreferences, projectName: String): String {
         val safeName = sanitizeProjectName(projectName)
         val projectSpecific = prefs.getString("github_repo_$safeName", "") ?: ""
