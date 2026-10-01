@@ -118,8 +118,10 @@ object AgentInstructionEngine {
         allowBuildPush: Boolean,
         reasoningEffort: ReasoningEffort = ReasoningEffort.NORMAL
     ): String {
+        val cleanPrompt = ActivePromptFocusGuard.sanitizePromptForDirective(userPrompt)
+
         val intents = classifyPromptIntent(
-            userPrompt = userPrompt,
+            userPrompt = cleanPrompt,
             hasSelectedMcp = effectiveMcpServers.isNotEmpty(),
             hasTaggedFiles = false,
             hasBrowserUrls = userPrompt.contains("http://") || userPrompt.contains("https://")
@@ -157,29 +159,35 @@ object AgentInstructionEngine {
             return sb.toString()
         }
 
-        // 2. Dynamic Semantic Memory (Jcode Vector Cosine Similarity Retrieval)
+        // 2. Dynamic Semantic Memory (Jcode Vector Cosine Similarity Retrieval - Bounded)
         val relevantMemories = com.example.agent.harness.SemanticMemoryStore.retrieveRelevantMemories(
-            query = userPrompt,
+            query = cleanPrompt,
             projectName = project.name,
             topK = 3,
             threshold = 0.18f
         )
         if (relevantMemories.isNotEmpty()) {
-            sb.append(com.example.agent.harness.SemanticMemoryStore.formatMemoriesForPrompt(relevantMemories))
+            val formattedMemories = com.example.agent.harness.SemanticMemoryStore.formatMemoriesForPrompt(relevantMemories)
+            sb.append(if (formattedMemories.length > 1200) formattedMemories.take(1200) + "\n\n" else formattedMemories)
         }
 
-        // 2b. Autonomous Self-Learned Rules & Fix Memory
-        val learnedRules = HybridSelfLearningEngine.formatLearnedRulesForPrompt(userPrompt)
+        // 2b. Autonomous Self-Learned Rules & Fix Memory (Bounded)
+        val learnedRules = HybridSelfLearningEngine.formatLearnedRulesForPrompt(cleanPrompt)
         if (learnedRules.isNotBlank()) {
-            sb.append(learnedRules)
+            sb.append(if (learnedRules.length > 1200) learnedRules.take(1200) + "\n\n" else learnedRules)
         }
 
-        // 3. Workspace Context (File Tree & Framework)
-        sb.append(fileTreeSummary).append("\n\n")
+        // 3. Workspace Context (File Tree & Framework - Bounded)
+        val compactFileTree = if (fileTreeSummary.length > 2500) {
+            fileTreeSummary.take(2500) + "\n... (use 'scan_dir' for deeper subdirectories)\n"
+        } else {
+            fileTreeSummary
+        }
+        sb.append(compactFileTree).append("\n\n")
         sb.append("FRAMEWORK: ").append(activeTemplateInfo).append("\n\n")
 
-        // 3. Lean Core Directives (Optimized for KV Cache & low token footprint)
-        sb.append(ActivePromptFocusGuard.buildActivePromptDirective(userPrompt)).append("\n\n")
+        // 3. Lean Core Directives (Optimized for KV Cache & ultra-low token footprint)
+        sb.append(ActivePromptFocusGuard.buildActivePromptDirective(cleanPrompt)).append("\n\n")
         sb.append("=== CORE DIRECTIVES ===\n")
         sb.append("1. HIGHEST PRIORITY - LATEST CURRENT PROMPT ONLY: Focus STRICTLY and 100% on the latest user request. Do NOT repeat or get distracted by previous tasks or old queries in conversation history. Every action and tool call MUST directly serve the latest user prompt.\n")
         sb.append("2. TIMELINE & CONTINUITY: Follow the chronological timeline of tool actions, thought reasoning, and responses recorded in this session. Never redo already completed work.\n")

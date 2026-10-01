@@ -9,10 +9,27 @@ package com.example.agent
 object ActivePromptFocusGuard {
 
     /**
+     * Sanitizes prompts for system directives by stripping multiline base64 payloads,
+     * bulky attached files, and capping length so directives stay ultralight (~100-200 tokens).
+     */
+    fun sanitizePromptForDirective(prompt: String): String {
+        var clean = prompt.trim()
+        // Strip multiline base64 images
+        clean = clean.replace(Regex("""\[IMAGE_BASE64:[\s\S]*?\]"""), "[Attached Image]")
+        // Strip large attached file contents while preserving the file name tag
+        clean = clean.replace(Regex("""\[Attached File: (.*?)\][\s\S]*?\[/Attached File\]"""), "[Attached File: $1]")
+        // Limit headline length for the directive to prevent massive prompts from bloating system instruction
+        if (clean.length > 500) {
+            clean = clean.take(500) + "... [truncated for system directive]"
+        }
+        return clean
+    }
+
+    /**
      * Builds an authoritative prompt directive that anchors the agent to the current request.
      */
     fun buildActivePromptDirective(currentPrompt: String): String {
-        val cleanPrompt = currentPrompt.trim().replace("""\[IMAGE_BASE64: data:.*?;base64,.*?\]""".toRegex(), "[Attached Image]")
+        val cleanPrompt = sanitizePromptForDirective(currentPrompt)
         return """
             === ACTIVE USER REQUEST (CURRENT TARGET TASK) ===
             Current Task: "$cleanPrompt"
@@ -38,7 +55,7 @@ object ActivePromptFocusGuard {
      * Formats historical completed requests so the model knows they are archived and must not be worked on.
      */
     fun formatHistoricalPastRequest(pastPrompt: String): String {
-        val clean = pastPrompt.trim().replace("""\[IMAGE_BASE64: data:.*?;base64,.*?\]""".toRegex(), "[Attached Image]")
+        val clean = sanitizePromptForDirective(pastPrompt)
         return """
             [ARCHIVED PAST REQUEST - COMPLETED & CLOSED]
             Previous Turn: "$clean"

@@ -3903,14 +3903,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                         "\n\n" + com.example.agent.TaskInterruptionResumeManager.buildSideQuestionGuidance(currentCheckpoint)
                     } else ""
 
-                    val promptFocusDirective = com.example.agent.ActivePromptFocusGuard.buildActivePromptDirective(currentPromptText)
-                    val dynamicSystemInstruction = """
-                        $systemInstruction
-                        
-                        $promptFocusDirective
-                        
-                        $pacingNotice$sideQuestionGuidance
-                    """.trimIndent()
+                    val dynamicSystemInstruction = if (pacingNotice.isNotBlank() || sideQuestionGuidance.isNotBlank()) {
+                        "$systemInstruction\n\n$pacingNotice$sideQuestionGuidance"
+                    } else {
+                        systemInstruction
+                    }
 
                     val stepStartTime = System.currentTimeMillis()
                     com.example.agent.AgentResponseStreamManager.startStreaming()
