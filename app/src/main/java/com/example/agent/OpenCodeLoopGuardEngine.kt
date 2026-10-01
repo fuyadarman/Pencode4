@@ -38,6 +38,7 @@ object OpenCodeLoopGuardEngine {
     data class ActionSignature(
         val tool: String,
         val target: String,
+        val snippetHash: Int,
         val turn: Int
     )
 
@@ -92,7 +93,21 @@ object OpenCodeLoopGuardEngine {
         ).trim()
 
         val normalizedTool = tool.lowercase().trim()
-        val signature = ActionSignature(normalizedTool, target, turn)
+
+        val targetSnippet = (
+            args?.targetContent ?:
+            args?.targetContentPascal ?:
+            args?.old_string ?:
+            args?.old_str ?:
+            args?.old_text ?:
+            args?.search_block ?:
+            args?.searchStr ?:
+            args?.startLine?.toString() ?:
+            ""
+        ).trim()
+        val snippetHash = if (targetSnippet.isNotEmpty()) targetSnippet.hashCode() else 0
+
+        val signature = ActionSignature(normalizedTool, target, snippetHash, turn)
         actionHistory.add(signature)
 
         val isReadFile = normalizedTool in setOf("read_file", "view_file", "read_file_range")
@@ -127,7 +142,30 @@ object OpenCodeLoopGuardEngine {
             return RepetitionResult.Proceed
         }
 
-        // Modification/Command actions (e.g. edit_file, create_file, execute_command)
+        val isFileEditing = normalizedTool in setOf("edit_file", "multi_edit_file", "patch_file")
+        if (isFileEditing) {
+            // Edits to different lines/functions in the same file are completely legitimate progress.
+            // Only flag if the AI is attempting to edit the EXACT SAME snippet/code block 3+ times consecutively.
+            if (actionHistory.size >= 3) {
+                val lastThree = actionHistory.takeLast(3)
+                val allSameTool = lastThree.all { it.tool == signature.tool }
+                val allSameTarget = lastThree.all { it.target == signature.target }
+                val allSameSnippet = lastThree.all { it.snippetHash != 0 && it.snippetHash == signature.snippetHash }
+                if (allSameTool && allSameTarget && allSameSnippet) {
+                    if (actionHistory.size >= 5 && hasModifiedFiles) {
+                        return RepetitionResult.AbortRepetition(
+                            "Task finished: modifications are already in place and repetitive action on '$target' was halted."
+                        )
+                    }
+                    return RepetitionResult.WarnAndNudge(
+                        "You have attempted to edit the exact same code block in '$target' repeatedly without progression. Do NOT repeat the exact same call. Adjust your target search block or use a different approach."
+                    )
+                }
+            }
+            return RepetitionResult.Proceed
+        }
+
+        // Other Modification/Command actions (e.g. create_file, execute_command)
         if (actionHistory.size >= 3) {
             val lastThree = actionHistory.takeLast(3)
             val allSameTool = lastThree.all { it.tool == signature.tool }
