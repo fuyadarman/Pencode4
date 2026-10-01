@@ -52,7 +52,10 @@ fun McpOAuthConnectDialog(
         ) 
     }
     var oauthRedirectUri by remember {
-        mutableStateOf("https://pencode.vercel.app/oauth/callback")
+        mutableStateOf(
+            if (platformType == com.example.data.McpPlatformType.VERCEL) "http://localhost:8080/callback"
+            else "https://pencode.vercel.app/oauth/callback"
+        )
     }
     var showToken by remember { mutableStateOf(false) }
     var isAuthorizing by remember { mutableStateOf(false) }
