@@ -4510,7 +4510,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 
                                 if (result.startsWith("Successfully") || result.contains("Successfully")) {
                                     filesModifiedThisPrompt = true
-                                    _projectFiles.value = repository.getFilesForProject(project.name)
+                                    try {
+                                        _projectFiles.value = repository.getFilesForProject(project.name)
+                                    } catch (t: Throwable) {
+                                        Log.e("VibeViewModel", "Error refreshing files after tool '$tool'", t)
+                                    }
                                 }
 
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))

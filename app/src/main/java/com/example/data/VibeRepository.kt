@@ -272,9 +272,14 @@ class VibeRepository(private val dao: VibeDao, private val context: Context) {
 
     suspend fun getFilesForProject(projectName: String): List<ProjectFileEntity> = withContext(Dispatchers.IO) {
         val projectDir = getProjectDir(projectName)
-        val dbFiles = dao.getFilesForProject(projectName).filter { 
-            !it.path.startsWith("agent-skills/") && !it.path.startsWith("skills/") && !it.path.startsWith(".skills/") &&
-            it.path != "task.json" && !it.path.endsWith("/task.json")
+        val dbFiles = try {
+            dao.getFilesForProject(projectName).filter { 
+                !it.path.startsWith("agent-skills/") && !it.path.startsWith("skills/") && !it.path.startsWith(".skills/") &&
+                it.path != "task.json" && !it.path.endsWith("/task.json")
+            }
+        } catch (t: Throwable) {
+            android.util.Log.e("VibeRepository", "Error reading DB files for project $projectName", t)
+            emptyList()
         }
         dbFiles.map { entity ->
             val normPath = entity.path.replace("\\", "/")
@@ -310,18 +315,26 @@ class VibeRepository(private val dao: VibeDao, private val context: Context) {
             file.writeText(normalizedContent)
         }
 
-        val dbContent = if (normalizedContent.length > 200_000) {
-            if (isBinaryExtension(normPath) || normalizedContent.startsWith("data:")) "[Binary file: ${file.length()} bytes]"
-            else normalizedContent
+        val maxSafeDbLength = 250_000
+        val dbContent = if (normalizedContent.length > maxSafeDbLength) {
+            if (isBinaryExtension(normPath) || normalizedContent.startsWith("data:")) {
+                "[Binary file: ${file.length()} bytes]"
+            } else {
+                normalizedContent.take(maxSafeDbLength) + "\n\n/* ...[Truncated in DB preview to protect SQLite; full file safely stored on disk]... */"
+            }
         } else {
             normalizedContent
         }
 
-        val existing = dao.getFileByPath(projectName, normPath)
-        if (existing != null) {
-            dao.updateFile(existing.copy(content = dbContent))
-        } else {
-            dao.insertFile(ProjectFileEntity(projectName = projectName, path = normPath, content = dbContent))
+        try {
+            val existing = dao.getFileByPath(projectName, normPath)
+            if (existing != null) {
+                dao.updateFile(existing.copy(content = dbContent))
+            } else {
+                dao.insertFile(ProjectFileEntity(projectName = projectName, path = normPath, content = dbContent))
+            }
+        } catch (t: Throwable) {
+            android.util.Log.e("VibeRepository", "Error saving file $normPath to DB", t)
         }
     }
 

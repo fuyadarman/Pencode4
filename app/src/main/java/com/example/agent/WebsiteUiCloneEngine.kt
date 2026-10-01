@@ -176,10 +176,15 @@ object WebsiteUiCloneEngine {
             val jsPath = normalizePath("cloned_ui/script.js")
             val tokensPath = normalizePath("cloned_ui/design_tokens.json")
 
-            repository.saveFile(projectName, htmlPath, processedHtml)
-            repository.saveFile(projectName, cssPath, consolidatedCss.toString())
-            repository.saveFile(projectName, jsPath, consolidatedJs.toString())
-            repository.saveFile(projectName, tokensPath, tokens)
+            val safeHtml = if (processedHtml.length > 300_000) processedHtml.take(300_000) + "\n<!-- Truncated large HTML structure for system safety -->" else processedHtml
+            val safeCss = if (consolidatedCss.length > 200_000) consolidatedCss.substring(0, 200_000) else consolidatedCss.toString()
+            val safeJs = if (consolidatedJs.length > 150_000) consolidatedJs.substring(0, 150_000) else consolidatedJs.toString()
+            val safeTokens = if (tokens.length > 50_000) tokens.take(50_000) else tokens
+
+            repository.saveFile(projectName, htmlPath, safeHtml)
+            repository.saveFile(projectName, cssPath, safeCss)
+            repository.saveFile(projectName, jsPath, safeJs)
+            repository.saveFile(projectName, tokensPath, safeTokens)
 
             val linesCount = processedHtml.lines().size
             val cssSizeKb = consolidatedCss.length / 1024

@@ -3077,6 +3077,12 @@ fun uploadToPasteEe(htmlContent: String, onSuccess: (String) -> Unit, onError: (
 
 private class FilesHolder(var filesList: List<ProjectFileEntity> = emptyList())
 
+enum class PreviewViewport(val label: String, val widthDp: androidx.compose.ui.unit.Dp?, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
+    MOBILE("Mobile View (390px)", 390.dp, Icons.Default.Smartphone),
+    TABLET("Tablet View (768px)", 768.dp, Icons.Default.Tablet),
+    DESKTOP("Desktop View (Full)", null, Icons.Default.Computer)
+}
+
 @Composable
 fun PreviewTabContent(
     files: List<ProjectFileEntity>,
@@ -3215,6 +3221,9 @@ fun PreviewTabContent(
     val defaultPreviewUrl = remember(isReactViteFramework, hasWebDist) {
         if (isReactViteFramework && hasWebDist) "http://localhost:5173" else "http://localhost:8080/index.html"
     }
+    var currentViewport by remember { mutableStateOf(PreviewViewport.DESKTOP) }
+    var showHamburgerMenu by remember { mutableStateOf(false) }
+
     var customUrl by remember { mutableStateOf<String?>(null) }
     var urlInputText by remember { mutableStateOf(defaultPreviewUrl) }
     var canGoBack by remember { mutableStateOf(false) }
@@ -3240,16 +3249,15 @@ fun PreviewTabContent(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                // Navigation controls (Back & Forward)
-                if (customUrl != null) {
+                // Navigation controls (Back & Forward) when navigable
+                if (canGoBack || canGoForward || customUrl != null) {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(end = 6.dp)
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         IconButton(
                             onClick = {
@@ -3286,37 +3294,42 @@ fun PreviewTabContent(
                     }
                 }
 
-                // Interactive Browser URL Address Bar
+                // Professional Modern Address / Type Bar (Maximized space)
                 Surface(
-                    color = com.example.ui.theme.AppTheme.inputBg,
-                    border = BorderStroke(1.dp, com.example.ui.theme.AppTheme.border),
-                    shape = RoundedCornerShape(6.dp),
+                    color = Color(0xFF0F141C),
+                    border = BorderStroke(1.dp, if (customUrl != null) Color(0xFF38BDF8).copy(alpha = 0.5f) else Color(0xFF30363D)),
+                    shape = RoundedCornerShape(10.dp),
                     modifier = Modifier
                         .weight(1f)
-                        .padding(end = 8.dp)
+                        .height(38.dp)
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(7.dp)
-                                .clip(CircleShape)
-                                .background(if (customUrl != null) com.example.ui.theme.AppTheme.accentBlue else Color(0xFF3FB950))
+                        // Security SSL Lock / Web Indicator
+                        Icon(
+                            imageVector = if (urlInputText.startsWith("https://")) Icons.Default.Lock else Icons.Default.Language,
+                            contentDescription = "Security Status",
+                            tint = if (urlInputText.startsWith("https://") || customUrl == null) Color(0xFF3FB950) else Color(0xFF8B949E),
+                            modifier = Modifier.size(14.dp)
                         )
+
+                        // Editable Address Bar TextField
                         androidx.compose.foundation.text.BasicTextField(
                             value = urlInputText,
                             onValueChange = { urlInputText = it },
                             modifier = Modifier.weight(1f),
                             singleLine = true,
                             textStyle = androidx.compose.ui.text.TextStyle(
-                                color = com.example.ui.theme.AppTheme.textPrimary,
-                                fontSize = 11.sp,
+                                color = Color(0xFFE6EDF3),
+                                fontSize = 12.sp,
                                 fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
                             ),
-                            cursorBrush = androidx.compose.ui.graphics.SolidColor(com.example.ui.theme.AppTheme.accentBlue),
+                            cursorBrush = androidx.compose.ui.graphics.SolidColor(Color(0xFF38BDF8)),
                             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                                 keyboardType = androidx.compose.ui.text.input.KeyboardType.Uri,
                                 imeAction = androidx.compose.ui.text.input.ImeAction.Go
@@ -3339,9 +3352,9 @@ fun PreviewTabContent(
                             decorationBox = { innerTextField ->
                                 if (urlInputText.isEmpty()) {
                                     Text(
-                                        text = "Search or type URL (e.g. youtube.com, google.com)",
-                                        color = Color(0xFF484F58),
-                                        fontSize = 11.sp,
+                                        text = "Search or enter website URL (e.g. google.com, localhost:3000)...",
+                                        color = Color(0xFF6E7681),
+                                        fontSize = 11.5.sp,
                                         fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
                                         maxLines = 1
                                     )
@@ -3350,8 +3363,8 @@ fun PreviewTabContent(
                             }
                         )
 
-                        // Clear or Home button
-                        if (customUrl != null) {
+                        // Clear button if input is customized
+                        if (urlInputText != defaultPreviewUrl && urlInputText.isNotBlank()) {
                             IconButton(
                                 onClick = {
                                     customUrl = null
@@ -3362,135 +3375,253 @@ fun PreviewTabContent(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
-                                    contentDescription = "Return to Local Preview",
+                                    contentDescription = "Clear or Return Home",
                                     tint = Color(0xFF8B949E),
                                     modifier = Modifier.size(13.dp)
                                 )
                             }
                         }
+
+                        // Go / Navigate button
+                        IconButton(
+                            onClick = {
+                                val raw = urlInputText.trim()
+                                if (raw.isBlank() || raw == defaultPreviewUrl) {
+                                    customUrl = null
+                                    urlInputText = defaultPreviewUrl
+                                    refreshTrigger++
+                                } else {
+                                    val normalized = com.example.util.WebUrlHelper.normalizeUrl(raw)
+                                    customUrl = normalized
+                                    urlInputText = normalized
+                                    webViewRef?.loadUrl(normalized)
+                                }
+                            },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ArrowForward,
+                                contentDescription = "Go to URL",
+                                tint = Color(0xFF38BDF8),
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
                     }
                 }
-                
-                // Action Buttons
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+
+                // Three-line Hamburger Menu Button with Dropdown
+                Box {
                     Surface(
-                        onClick = {
-                            val nextState = !isInspectorModeActive
-                            isInspectorModeActive = nextState
-                            com.example.ui.preview.WebPreviewElementInspector.setInspectorActive(webViewRef, nextState)
-                            android.widget.Toast.makeText(
-                                context,
-                                if (nextState) "Element Inspector Active: Tap any element" else "Element Inspector Disabled",
-                                android.widget.Toast.LENGTH_SHORT
-                            ).show()
-                        },
-                        shape = RoundedCornerShape(6.dp),
-                        color = if (isInspectorModeActive) com.example.ui.theme.AppTheme.accentBlue else com.example.ui.theme.AppTheme.bgSurfaceElevated,
-                        border = BorderStroke(1.dp, if (isInspectorModeActive) com.example.ui.theme.AppTheme.accentBlue else com.example.ui.theme.AppTheme.border)
+                        onClick = { showHamburgerMenu = true },
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFF161B22),
+                        border = BorderStroke(1.dp, Color(0xFF30363D))
                     ) {
                         Box(
-                            modifier = Modifier.size(32.dp),
+                            modifier = Modifier.size(38.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Default.FilterCenterFocus,
-                                contentDescription = "Inspect Elements",
-                                tint = if (isInspectorModeActive) Color.White else com.example.ui.theme.AppTheme.textPrimary,
-                                modifier = Modifier.size(16.dp)
+                                imageVector = Icons.Default.Menu,
+                                contentDescription = "Browser Options Menu",
+                                tint = Color(0xFFE6EDF3),
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }
 
-                    Surface(
-                        onClick = { showLogs = !showLogs },
-                        shape = RoundedCornerShape(6.dp),
-                        color = if (showLogs) com.example.ui.theme.AppTheme.accentBlue else com.example.ui.theme.AppTheme.bgSurfaceElevated,
-                        border = BorderStroke(1.dp, if (showLogs) com.example.ui.theme.AppTheme.accentBlue else com.example.ui.theme.AppTheme.border)
+                    DropdownMenu(
+                        expanded = showHamburgerMenu,
+                        onDismissRequest = { showHamburgerMenu = false },
+                        modifier = Modifier
+                            .background(Color(0xFF161B22))
+                            .border(1.dp, Color(0xFF30363D), RoundedCornerShape(12.dp))
+                            .widthIn(min = 230.dp)
                     ) {
-                        Box(
-                            modifier = Modifier.size(32.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = if (showLogs) Icons.Default.Terminal else Icons.Default.Code,
-                                contentDescription = "Toggle Logs",
-                                tint = if (showLogs) Color.White else com.example.ui.theme.AppTheme.textPrimary,
-                                modifier = Modifier.size(15.dp)
-                            )
-                        }
-                    }
-
-                    Surface(
-                        onClick = { 
-                            if (customUrl != null) {
-                                webViewRef?.reload()
-                            } else {
-                                refreshTrigger++
-                                onClearLogs()
-                            }
-                        },
-                        shape = RoundedCornerShape(6.dp),
-                        color = com.example.ui.theme.AppTheme.bgSurfaceElevated,
-                        border = BorderStroke(1.dp, com.example.ui.theme.AppTheme.border)
-                    ) {
-                        Box(
-                            modifier = Modifier.size(32.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = "Reload Preview",
-                                tint = com.example.ui.theme.AppTheme.textPrimary,
-                                modifier = Modifier.size(15.dp)
-                            )
-                        }
-                    }
-
-                    Surface(
-                        onClick = {
-                            val targetUrl = if (customUrl != null) {
-                                customUrl!!
-                            } else {
-                                if (htmlFile == null && !hasWebDist) {
-                                    android.widget.Toast.makeText(context, "No index.html found", android.widget.Toast.LENGTH_SHORT).show()
-                                    return@Surface
+                        // Viewport Mode Switcher
+                        Text(
+                            text = "VIEWPORT SIZE",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF8B949E),
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                        )
+                        PreviewViewport.entries.forEach { vp ->
+                            DropdownMenuItem(
+                                text = {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(vp.label, fontSize = 12.sp, color = if (currentViewport == vp) Color(0xFF38BDF8) else Color(0xFFE6EDF3))
+                                        if (currentViewport == vp) {
+                                            Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(14.dp))
+                                        }
+                                    }
+                                },
+                                leadingIcon = {
+                                    Icon(vp.icon, contentDescription = null, tint = if (currentViewport == vp) Color(0xFF38BDF8) else Color(0xFF8B949E), modifier = Modifier.size(16.dp))
+                                },
+                                onClick = {
+                                    currentViewport = vp
+                                    showHamburgerMenu = false
+                                    webViewRef?.settings?.userAgentString = if (vp == PreviewViewport.DESKTOP) {
+                                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+                                    } else {
+                                        "Mozilla/5.0 (Linux; Android 14; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+                                    }
+                                    webViewRef?.reload()
                                 }
-                                com.example.api.LocalHttpServer.start()
-                                com.example.api.LocalHttpServer.updateFiles(files)
-                                "http://127.0.0.1:8080/index.html"
-                            }
-                            try {
-                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(targetUrl)).apply {
-                                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                            )
+                        }
+
+                        HorizontalDivider(color = Color(0xFF30363D), modifier = Modifier.padding(vertical = 4.dp))
+
+                        // Browser Tools Section
+                        Text(
+                            text = "BROWSER TOOLS",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF8B949E),
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                        )
+
+                        DropdownMenuItem(
+                            text = { Text("Reload / Refresh Page", fontSize = 12.sp, color = Color(0xFFE6EDF3)) },
+                            leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null, tint = Color(0xFF8B949E), modifier = Modifier.size(16.dp)) },
+                            onClick = {
+                                showHamburgerMenu = false
+                                if (customUrl != null) {
+                                    webViewRef?.reload()
+                                } else {
+                                    refreshTrigger++
+                                    onClearLogs()
                                 }
-                                context.startActivity(intent)
-                            } catch (e: Exception) {
+                            }
+                        )
+
+                        DropdownMenuItem(
+                            text = { 
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                                    Text("Inspect Elements", fontSize = 12.sp, color = if (isInspectorModeActive) Color(0xFF38BDF8) else Color(0xFFE6EDF3))
+                                    if (isInspectorModeActive) {
+                                        Text("ON", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF38BDF8))
+                                    }
+                                }
+                            },
+                            leadingIcon = { Icon(Icons.Default.FilterCenterFocus, contentDescription = null, tint = if (isInspectorModeActive) Color(0xFF38BDF8) else Color(0xFF8B949E), modifier = Modifier.size(16.dp)) },
+                            onClick = {
+                                showHamburgerMenu = false
+                                val nextState = !isInspectorModeActive
+                                isInspectorModeActive = nextState
+                                com.example.ui.preview.WebPreviewElementInspector.setInspectorActive(webViewRef, nextState)
+                                android.widget.Toast.makeText(
+                                    context,
+                                    if (nextState) "Element Inspector Active: Tap any element" else "Element Inspector Disabled",
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        )
+
+                        DropdownMenuItem(
+                            text = { 
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                                    Text("Console Output", fontSize = 12.sp, color = if (showLogs) Color(0xFF38BDF8) else Color(0xFFE6EDF3))
+                                    if (consoleLogs.isNotEmpty()) {
+                                        Text("${consoleLogs.size}", fontSize = 10.sp, color = Color(0xFF38BDF8))
+                                    }
+                                }
+                            },
+                            leadingIcon = { Icon(Icons.Default.Code, contentDescription = null, tint = if (showLogs) Color(0xFF38BDF8) else Color(0xFF8B949E), modifier = Modifier.size(16.dp)) },
+                            onClick = {
+                                showHamburgerMenu = false
+                                showLogs = !showLogs
+                            }
+                        )
+
+                        DropdownMenuItem(
+                            text = { Text("Open in External Browser", fontSize = 12.sp, color = Color(0xFF3FB950)) },
+                            leadingIcon = { Icon(Icons.Default.OpenInBrowser, contentDescription = null, tint = Color(0xFF3FB950), modifier = Modifier.size(16.dp)) },
+                            onClick = {
+                                showHamburgerMenu = false
+                                val targetUrl = if (customUrl != null) {
+                                    customUrl!!
+                                } else {
+                                    if (htmlFile == null && !hasWebDist) {
+                                        android.widget.Toast.makeText(context, "No index.html found", android.widget.Toast.LENGTH_SHORT).show()
+                                        return@DropdownMenuItem
+                                    }
+                                    com.example.api.LocalHttpServer.start()
+                                    com.example.api.LocalHttpServer.updateFiles(files)
+                                    "http://127.0.0.1:8080/index.html"
+                                }
                                 try {
-                                    uriHandler.openUri(targetUrl)
-                                } catch (e2: Exception) {
-                                    android.widget.Toast.makeText(context, "Failed to open browser: ${e2.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(targetUrl)).apply {
+                                        addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    }
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    try {
+                                        uriHandler.openUri(targetUrl)
+                                    } catch (e2: Exception) {
+                                        android.widget.Toast.makeText(context, "Failed to open browser: ${e2.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
                                 }
                             }
-                        },
-                        shape = RoundedCornerShape(6.dp),
-                        color = Color(0xFF238636),
-                        border = BorderStroke(1.dp, Color(0xFF2EA043))
-                    ) {
-                        Box(
-                            modifier = Modifier.size(32.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.OpenInBrowser,
-                                contentDescription = "Open in Browser",
-                                tint = Color.White,
-                                modifier = Modifier.size(15.dp)
-                            )
-                        }
+                        )
+
+                        HorizontalDivider(color = Color(0xFF30363D), modifier = Modifier.padding(vertical = 4.dp))
+
+                        // Real Browser Cookies & Storage Section
+                        DropdownMenuItem(
+                            text = { Text("Clear Cookies & Cache", fontSize = 12.sp, color = Color(0xFFF85149)) },
+                            leadingIcon = { Icon(Icons.Default.DeleteOutline, contentDescription = null, tint = Color(0xFFF85149), modifier = Modifier.size(16.dp)) },
+                            onClick = {
+                                showHamburgerMenu = false
+                                com.example.browser.LivePreviewBrowserManager.clearBrowserData {
+                                    android.widget.Toast.makeText(context, "Cookies & Cache Cleared", android.widget.Toast.LENGTH_SHORT).show()
+                                    webViewRef?.reload()
+                                }
+                            }
+                        )
                     }
+                }
+            }
+        }
+
+        // Live AI Browser Agent Action Banner
+        val liveAgentStatus by com.example.browser.LivePreviewBrowserManager.agentActionStatus.collectAsState()
+        AnimatedVisibility(
+            visible = !liveAgentStatus.isNullOrBlank(),
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
+        ) {
+            Surface(
+                color = Color(0xFF0C2D48),
+                border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.6f)),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(12.dp),
+                        strokeWidth = 1.5.dp,
+                        color = Color(0xFF38BDF8)
+                    )
+                    Text(
+                        text = liveAgentStatus ?: "",
+                        color = Color(0xFFE0F2FE),
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1
+                    )
                 }
             }
         }
@@ -3604,28 +3735,64 @@ fun PreviewTabContent(
                         onDispose { }
                     }
 
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        AndroidView(
-                            factory = { context ->
-                                WebView(context).apply {
-                                    setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
-                                    settings.apply {
-                                        javaScriptEnabled = true
-                                        domStorageEnabled = true
-                                        databaseEnabled = true
-                                        allowFileAccess = true
-                                        allowContentAccess = true
-                                        useWideViewPort = true
-                                        loadWithOverviewMode = true
-                                        setSupportZoom(true)
-                                        builtInZoomControls = true
-                                        displayZoomControls = false
-                                        mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                                        cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
-                                        allowFileAccessFromFileURLs = true
-                                        allowUniversalAccessFromFileURLs = true
-                                        mediaPlaybackRequiresUserGesture = false
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(if (currentViewport.widthDp != null) Color(0xFF090D14) else Color.White),
+                        contentAlignment = Alignment.TopCenter
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .then(
+                                    if (currentViewport.widthDp != null) {
+                                        Modifier
+                                            .width(currentViewport.widthDp!!)
+                                            .padding(vertical = 8.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .border(1.5.dp, Color(0xFF30363D), RoundedCornerShape(12.dp))
+                                    } else {
+                                        Modifier.fillMaxWidth()
                                     }
+                                )
+                                .background(Color.White)
+                        ) {
+                            AndroidView(
+                                factory = { context ->
+                                    WebView(context).apply {
+                                        setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
+                                        // Enable Real Browser Cookies & Storage
+                                        try {
+                                            val cm = android.webkit.CookieManager.getInstance()
+                                            cm.setAcceptCookie(true)
+                                            cm.setAcceptThirdPartyCookies(this, true)
+                                        } catch (_: Exception) {}
+                                        com.example.browser.LivePreviewBrowserManager.registerActiveWebView(this)
+
+                                        settings.apply {
+                                            javaScriptEnabled = true
+                                            domStorageEnabled = true
+                                            databaseEnabled = true
+                                            allowFileAccess = true
+                                            allowContentAccess = true
+                                            useWideViewPort = true
+                                            loadWithOverviewMode = true
+                                            setSupportZoom(true)
+                                            builtInZoomControls = true
+                                            displayZoomControls = false
+                                            mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                                            cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+                                            allowFileAccessFromFileURLs = true
+                                            allowUniversalAccessFromFileURLs = true
+                                            mediaPlaybackRequiresUserGesture = false
+                                            javaScriptCanOpenWindowsAutomatically = true
+                                            setGeolocationEnabled(true)
+                                            userAgentString = if (currentViewport == PreviewViewport.DESKTOP) {
+                                                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+                                            } else {
+                                                "Mozilla/5.0 (Linux; Android 14; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+                                            }
+                                        }
                                     isFocusable = true
                                     isFocusableInTouchMode = true
                                     scrollBarStyle = android.view.View.SCROLLBARS_INSIDE_OVERLAY
@@ -3844,6 +4011,7 @@ fun PreviewTabContent(
                         },
                         update = { webView ->
                             webViewRef = webView
+                            com.example.browser.LivePreviewBrowserManager.registerActiveWebView(webView)
                             com.example.ui.preview.WebPreviewLifecycleManager.prepareWebView(webView)
                             if (isInspectorModeActive) {
                                 com.example.ui.preview.WebPreviewElementInspector.setInspectorActive(webView, true)
@@ -3863,6 +4031,7 @@ fun PreviewTabContent(
                             }
                         },
                         onRelease = { webView ->
+                            com.example.browser.LivePreviewBrowserManager.unregisterActiveWebView(webView)
                             com.example.ui.preview.WebPreviewPerformanceGuard.safelyReleaseWebView(webView)
                             webViewRef = null
                         },
@@ -3880,6 +4049,7 @@ fun PreviewTabContent(
                             trackColor = Color(0xFF161B22)
                         )
                     }
+                }
                 }
                 }
             }

@@ -531,43 +531,34 @@ class BackgroundBrowser(private val context: Context) {
     suspend fun captureScreenshot(): Bitmap? = withContext(Dispatchers.Main) {
         val wv = webView ?: return@withContext null
         try {
-            val width = if (wv.width > 0) wv.width else 1080
-            val height = if (wv.height > 0) wv.height else 1920
+            val rawW = if (wv.width > 0) wv.width else 1080
+            val rawH = if (wv.height > 0) wv.height else 1920
+
+            // Scale down to safe dimensions to prevent Android Bitmap OutOfMemoryError
+            val scale = if (rawW > 720) 720f / rawW else 1.0f
+            val width = (rawW * scale).toInt().coerceAtLeast(360)
+            val height = (rawH * scale).toInt().coerceAtLeast(640)
 
             wv.measure(
-                android.view.View.MeasureSpec.makeMeasureSpec(width, android.view.View.MeasureSpec.EXACTLY),
-                android.view.View.MeasureSpec.makeMeasureSpec(height, android.view.View.MeasureSpec.EXACTLY)
+                android.view.View.MeasureSpec.makeMeasureSpec(rawW, android.view.View.MeasureSpec.EXACTLY),
+                android.view.View.MeasureSpec.makeMeasureSpec(rawH, android.view.View.MeasureSpec.EXACTLY)
             )
-            wv.layout(0, 0, width, height)
+            wv.layout(0, 0, rawW, rawH)
 
-            kotlinx.coroutines.delay(300)
+            kotlinx.coroutines.delay(200)
 
             val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             val canvas = android.graphics.Canvas(bitmap)
+            canvas.scale(scale, scale)
             wv.draw(canvas)
 
             if (!isBitmapBlank(bitmap)) {
                 return@withContext bitmap
             }
 
-            // Fallback drawing cache
-            try {
-                wv.isDrawingCacheEnabled = true
-                wv.buildDrawingCache()
-                val cacheBitmap = wv.drawingCache
-                if (cacheBitmap != null && !isBitmapBlank(cacheBitmap)) {
-                    val copy = cacheBitmap.copy(Bitmap.Config.ARGB_8888, true)
-                    wv.isDrawingCacheEnabled = false
-                    return@withContext copy
-                }
-                wv.isDrawingCacheEnabled = false
-            } catch (e: Exception) {
-                // Ignore fallback error
-            }
-
             bitmap
-        } catch (e: Exception) {
-            e.printStackTrace()
+        } catch (t: Throwable) {
+            android.util.Log.e("BackgroundBrowser", "captureScreenshot failed: ${t.message}")
             null
         }
     }

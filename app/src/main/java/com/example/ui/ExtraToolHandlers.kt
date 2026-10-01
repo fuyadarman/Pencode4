@@ -28,7 +28,8 @@ object ExtraToolHandlers {
         activeSkills: List<AgentSkill> = emptyList(),
         gitToken: String? = null
     ): String {
-        return when (tool) {
+        return try {
+            when (tool) {
             "generate_image", "pollinations_image", "create_image", "generate_logo", "create_logo" -> {
                 val isLogo = tool == "generate_logo" || tool == "create_logo" || args?.isLogo == true
                 val filePath = normalizePath(if (!args?.path.isNullOrBlank()) args.path else if (!args?.targetFile.isNullOrBlank()) args.targetFile else if (isLogo) "assets/logo.png" else "assets/image.png")
@@ -612,6 +613,8 @@ object ExtraToolHandlers {
 
                 val result = if (targetUrl.isBlank()) {
                     "Error: 'url' parameter cannot be empty for open_url."
+                } else if (com.example.browser.LivePreviewBrowserManager.isAvailable()) {
+                    com.example.browser.LivePreviewBrowserManager.navigate(targetUrl)
                 } else {
                     when (val browserResult = backgroundBrowser.navigate(targetUrl)) {
                         is BrowserResult.Success -> {
@@ -738,14 +741,14 @@ object ExtraToolHandlers {
                 val result = if (bitmap != null) {
                     try {
                         val stream = java.io.ByteArrayOutputStream()
-                        bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 95, stream)
+                        bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, stream)
                         val bytes = stream.toByteArray()
-                        val base64Content = "data:image/png;base64," + android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                        val base64Content = "data:image/jpeg;base64," + android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
                         repository.saveFile(project.name, targetPath, base64Content)
                         bitmap.recycle()
                         "Successfully captured screenshot (${bytes.size / 1024} KB) and saved to workspace: '$targetPath'"
-                    } catch (e: Exception) {
-                        "Error saving screenshot: ${e.localizedMessage}"
+                    } catch (t: Throwable) {
+                        "Error saving screenshot: ${t.localizedMessage}"
                     }
                 } else {
                     "Error: Failed to capture WebView screenshot. Ensure page is loaded."
@@ -768,6 +771,8 @@ object ExtraToolHandlers {
 
                 val result = if (targetSelector.isBlank()) {
                     "Error: 'selector' cannot be empty for click."
+                } else if (com.example.browser.LivePreviewBrowserManager.isAvailable()) {
+                    com.example.browser.LivePreviewBrowserManager.clickElement(targetSelector)
                 } else {
                     when (val browserResult = backgroundBrowser.clickElement(targetSelector)) {
                         is BrowserResult.Success -> browserResult.content
@@ -793,6 +798,8 @@ object ExtraToolHandlers {
 
                 val result = if (targetSelector.isBlank()) {
                     "Error: 'selector' cannot be empty for type."
+                } else if (com.example.browser.LivePreviewBrowserManager.isAvailable()) {
+                    com.example.browser.LivePreviewBrowserManager.typeText(targetSelector, inputText)
                 } else {
                     when (val browserResult = backgroundBrowser.typeText(targetSelector, inputText)) {
                         is BrowserResult.Success -> browserResult.content
@@ -816,9 +823,13 @@ object ExtraToolHandlers {
                 addLog(scrollLog)
                 setAgentStatus("Scrolling web page $direction...")
 
-                val result = when (val browserResult = backgroundBrowser.scrollPage(direction, amount)) {
-                    is BrowserResult.Success -> browserResult.content
-                    is BrowserResult.Error -> "Error scrolling: ${browserResult.message}"
+                val result = if (com.example.browser.LivePreviewBrowserManager.isAvailable()) {
+                    com.example.browser.LivePreviewBrowserManager.scrollPage(direction, amount)
+                } else {
+                    when (val browserResult = backgroundBrowser.scrollPage(direction, amount)) {
+                        is BrowserResult.Success -> browserResult.content
+                        is BrowserResult.Error -> "Error scrolling: ${browserResult.message}"
+                    }
                 }
 
                 updateLog(scrollLog.id, "success", result)
@@ -1063,6 +1074,10 @@ object ExtraToolHandlers {
                 result
             }
             else -> "Error: Unknown tool '$tool'"
+        }
+        } catch (t: Throwable) {
+            android.util.Log.e("ExtraToolHandlers", "Fatal caught in tool '$tool'", t)
+            "Error executing tool '$tool': ${t.localizedMessage ?: t.javaClass.simpleName}"
         }
     }
 }

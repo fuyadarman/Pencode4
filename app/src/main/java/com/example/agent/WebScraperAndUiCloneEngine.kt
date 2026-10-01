@@ -109,16 +109,22 @@ object WebScraperAndUiCloneEngine {
                 return@withContext "Error: Failed to fetch URL (HTTP ${response.code})"
             }
 
-            val bodyText = response.body?.string() ?: ""
-            if (saveToWorkspace) {
+            val body = response.body
+            val bodyText = if (body != null) {
+                // Safeguard against massive downloads blowing up memory
+                val raw = body.string()
+                if (raw.length > 500_000) raw.take(500_000) + "\n...[truncated remainder of large webpage]" else raw
+            } else ""
+
+            if (saveToWorkspace && bodyText.isNotBlank()) {
                 val savePath = normalizePath(targetFile ?: "fetched_content.txt")
                 repository.saveFile(projectName, savePath, bodyText)
             }
 
             val textSnippet = if (bodyText.length > 3000) bodyText.take(3000) + "\n...[truncated ${bodyText.length - 3000} more chars]" else bodyText
             "Successfully fetched URL '$fullUrl' (HTTP ${response.code}):\n\n$textSnippet"
-        } catch (e: Exception) {
-            "Error fetching URL '$cleanUrl': ${e.localizedMessage ?: e.javaClass.simpleName}"
+        } catch (t: Throwable) {
+            "Error fetching URL '$cleanUrl': ${t.localizedMessage ?: t.javaClass.simpleName}"
         }
     }
 
