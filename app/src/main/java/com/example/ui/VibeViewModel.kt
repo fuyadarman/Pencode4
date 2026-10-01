@@ -2811,7 +2811,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             projectTodoListMap.remove(projectName)
             projectEditHistoryMap.remove(projectName)
             projectAgentStatusMap.remove(projectName)
-            com.example.build.ProjectBuildStateManager.clearProjectBuild(projectName)
+            com.example.data.ProjectBuildStateManager.clearProjectBuild(projectName)
             if (_currentProject.value?.name == projectName) {
                 _currentProject.value = null
                 _projectFiles.value = emptyList()
@@ -2832,7 +2832,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             // Save previous project's build state if any
             val prev = _currentProject.value
             if (prev != null) {
-                com.example.build.ProjectBuildStateManager.saveSnapshot(
+                com.example.data.ProjectBuildStateManager.saveSnapshot(
                     projectName = prev.name,
                     buildStatus = _buildStatus.value,
                     buildSteps = _buildSteps.value,
@@ -2853,7 +2853,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             _currentTab.value = WorkspaceTab.CHAT
             
             // Restore isolated project-specific build state
-            val snapshot = com.example.build.ProjectBuildStateManager.getSnapshot(project.name)
+            val snapshot = com.example.data.ProjectBuildStateManager.getSnapshot(project.name)
             _buildStatus.value = snapshot.buildStatus
             _buildSteps.value = snapshot.buildSteps
             _buildLogs.value = snapshot.buildLogs
@@ -2913,7 +2913,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     fun exitProject() {
         val current = _currentProject.value
         if (current != null) {
-            com.example.build.ProjectBuildStateManager.saveSnapshot(
+            com.example.data.ProjectBuildStateManager.saveSnapshot(
                 projectName = current.name,
                 buildStatus = _buildStatus.value,
                 buildSteps = _buildSteps.value,

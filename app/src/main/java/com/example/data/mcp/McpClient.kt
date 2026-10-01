@@ -18,11 +18,59 @@ class McpClient(
 ) {
     private val sessionIds = java.util.concurrent.ConcurrentHashMap<String, String>()
     private val activeEndpoints = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val supabaseProjectIds = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
+
+    /**
+     * Automatically resolves Supabase project_id by checking URL or querying list_projects on Supabase MCP
+     */
+    private suspend fun resolveSupabaseProjectId(server: McpServer, tokenEndpoint: String?): String? {
+        val cached = supabaseProjectIds[server.id]
+        if (!cached.isNullOrBlank()) return cached
+
+        // 1. Check if server URL contains project ref: e.g. https://<ref>.supabase.co
+        try {
+            val url = server.url.lowercase().trim()
+            if (url.contains(".supabase.co")) {
+                val host = java.net.URI(server.url.trim()).host ?: ""
+                val subdomain = host.substringBefore(".supabase.co")
+                if (subdomain.isNotBlank() && subdomain != "api" && subdomain != "mcp") {
+                    supabaseProjectIds[server.id] = subdomain
+                    return subdomain
+                }
+            }
+        } catch (_: Exception) {}
+
+        // 2. Discover project_id via list_projects tool call on Supabase MCP
+        try {
+            val listParams = JSONObject().apply {
+                put("name", "list_projects")
+                put("arguments", JSONObject())
+            }
+            val res = sendJsonRpc(server, tokenEndpoint, "tools/call", listParams)
+            if (res.isSuccess) {
+                val json = res.getOrNull()
+                val resultObj = json?.optJSONObject("result")
+                val content = resultObj?.optJSONArray("content")
+                val text = content?.optJSONObject(0)?.optString("text") ?: resultObj?.toString() ?: ""
+                val idRegex = Regex(""""id"\s*:\s*"([a-zA-Z0-9_\-]+)"""")
+                val match = idRegex.find(text)
+                if (match != null) {
+                    val foundId = match.groupValues[1]
+                    if (foundId.isNotBlank()) {
+                        supabaseProjectIds[server.id] = foundId
+                        return foundId
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+
+        return null
+    }
 
     /**
      * Fetch authorization header if available and valid
@@ -405,6 +453,36 @@ class McpClient(
             }
         }
 
+        val isSupabase = server.platform.equals("SUPABASE", ignoreCase = true) ||
+                server.name.contains("supabase", ignoreCase = true) ||
+                server.url.contains("supabase", ignoreCase = true)
+
+        if (isSupabase && !actualToolName.equals("list_projects", ignoreCase = true)) {
+            if (!parsedArgs.has("project_id")) {
+                val altId = parsedArgs.optString("projectId", "").ifBlank {
+                    parsedArgs.optString("project_ref", "").ifBlank {
+                        parsedArgs.optString("ref", "").ifBlank {
+                            parsedArgs.optString("project", "")
+                        }
+                    }
+                }
+                if (altId.isNotBlank()) {
+                    parsedArgs.put("project_id", altId)
+                    supabaseProjectIds[server.id] = altId
+                } else {
+                    val resolvedId = resolveSupabaseProjectId(server, tokenEndpoint)
+                    if (!resolvedId.isNullOrBlank()) {
+                        parsedArgs.put("project_id", resolvedId)
+                    }
+                }
+            } else {
+                val explicitId = parsedArgs.optString("project_id", "")
+                if (explicitId.isNotBlank()) {
+                    supabaseProjectIds[server.id] = explicitId
+                }
+            }
+        }
+
         val params = JSONObject().apply {
             put("name", actualToolName)
             put("arguments", parsedArgs)
@@ -429,6 +507,30 @@ class McpClient(
                     }
                     if (sb.isNotBlank()) {
                         val isErr = resultObj.optBoolean("isError", false)
+                        val errorText = sb.toString().trim()
+                        if (isErr && isSupabase && errorText.contains("project_id") && !actualToolName.equals("list_projects", ignoreCase = true)) {
+                            // Retry once by discovering project_id from list_projects
+                            val fallbackId = resolveSupabaseProjectId(server, tokenEndpoint)
+                            if (!fallbackId.isNullOrBlank() && parsedArgs.optString("project_id") != fallbackId) {
+                                parsedArgs.put("project_id", fallbackId)
+                                params.put("arguments", parsedArgs)
+                                val retryRes = sendJsonRpc(server, tokenEndpoint, "tools/call", params)
+                                if (retryRes.isSuccess) {
+                                    val retryJson = retryRes.getOrNull()
+                                    val retryContent = retryJson?.optJSONObject("result")?.optJSONArray("content")
+                                    if (retryContent != null && retryContent.length() > 0) {
+                                        val retrySb = StringBuilder()
+                                        for (j in 0 until retryContent.length()) {
+                                            val t = retryContent.optJSONObject(j)?.optString("text") ?: ""
+                                            if (t.isNotBlank()) retrySb.append(t).append("\n")
+                                        }
+                                        if (retrySb.isNotBlank()) {
+                                            return@withContext Result.success(retrySb.toString().trim())
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         return@withContext if (isErr) {
                             Result.failure(Exception("MCP Tool Error ($actualToolName): ${sb.toString().trim()}"))
                         } else {

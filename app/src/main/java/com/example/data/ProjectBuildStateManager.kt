@@ -1,4 +1,4 @@
-package com.example.build
+package com.example.data
 
 import com.example.ui.AndroidBuildError
 import com.example.ui.BuildStep
@@ -21,7 +21,7 @@ data class ProjectBuildSnapshot(
 )
 
 object ProjectBuildStateManager {
-    private val projectSnapshots = mutableMapOf<String, ProjectBuildSnapshot>()
+    private val projectSnapshots = java.util.concurrent.ConcurrentHashMap<String, ProjectBuildSnapshot>()
 
     fun saveSnapshot(
         projectName: String,
