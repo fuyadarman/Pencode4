@@ -3378,10 +3378,12 @@ fun PreviewTabContent(
                 ) {
                     Surface(
                         onClick = {
-                            isInspectorModeActive = !isInspectorModeActive
+                            val nextState = !isInspectorModeActive
+                            isInspectorModeActive = nextState
+                            com.example.ui.preview.WebPreviewElementInspector.setInspectorActive(webViewRef, nextState)
                             android.widget.Toast.makeText(
                                 context,
-                                if (isInspectorModeActive) "Element Inspector Active: Tap any element" else "Element Inspector Disabled",
+                                if (nextState) "Element Inspector Active: Tap any element" else "Element Inspector Disabled",
                                 android.widget.Toast.LENGTH_SHORT
                             ).show()
                         },
@@ -3843,6 +3845,9 @@ fun PreviewTabContent(
                         update = { webView ->
                             webViewRef = webView
                             com.example.ui.preview.WebPreviewLifecycleManager.prepareWebView(webView)
+                            if (isInspectorModeActive) {
+                                com.example.ui.preview.WebPreviewElementInspector.setInspectorActive(webView, true)
+                            }
                             if (customUrl == null && !hasWebDist && htmlFile != null) {
                                 val currentContent = com.example.ui.preview.WebPreviewPerformanceGuard.preprocessHtmlSafely(htmlFile.content)
                                 if (lastLoadedHtml != currentContent) {

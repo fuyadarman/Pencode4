@@ -147,6 +147,8 @@ object WebPreviewElementInspector {
                     window._pencodeInspectorInitialized = true;
 
                     // Mouse & Pointer events for desktop / emulator cursor
+                    var lastTarget = null;
+
                     document.addEventListener('mouseover', function(e) {
                         if (window.isInspectorModeActive) {
                             updateHighlight(e.target);
@@ -156,25 +158,33 @@ object WebPreviewElementInspector {
                     // Touch events for mobile screens
                     document.addEventListener('touchstart', function(e) {
                         if (window.isInspectorModeActive) {
-                            e.preventDefault();
-                            e.stopPropagation();
                             if (e.touches && e.touches.length > 0) {
                                 var touch = e.touches[0];
-                                var target = document.elementFromPoint(touch.clientX, touch.clientY);
+                                if (overlay) overlay.style.display = 'none';
+                                if (badge) badge.style.display = 'none';
+                                var target = document.elementFromPoint(touch.clientX, touch.clientY) || e.target;
+                                lastTarget = target;
                                 updateHighlight(target);
                             }
+                            e.preventDefault();
+                            e.stopPropagation();
                         }
                     }, { passive: false, capture: true });
 
                     document.addEventListener('touchmove', function(e) {
                         if (window.isInspectorModeActive) {
-                            e.preventDefault();
-                            e.stopPropagation();
                             if (e.touches && e.touches.length > 0) {
                                 var touch = e.touches[0];
-                                var target = document.elementFromPoint(touch.clientX, touch.clientY);
-                                updateHighlight(target);
+                                if (overlay) overlay.style.display = 'none';
+                                if (badge) badge.style.display = 'none';
+                                var target = document.elementFromPoint(touch.clientX, touch.clientY) || e.target;
+                                if (target) {
+                                    lastTarget = target;
+                                    updateHighlight(target);
+                                }
                             }
+                            e.preventDefault();
+                            e.stopPropagation();
                         }
                     }, { passive: false, capture: true });
 
@@ -182,12 +192,18 @@ object WebPreviewElementInspector {
                         if (window.isInspectorModeActive) {
                             e.preventDefault();
                             e.stopPropagation();
+                            var target = lastTarget;
+                            if (overlay) overlay.style.display = 'none';
+                            if (badge) badge.style.display = 'none';
                             if (e.changedTouches && e.changedTouches.length > 0) {
                                 var touch = e.changedTouches[0];
-                                var target = document.elementFromPoint(touch.clientX, touch.clientY);
-                                if (target) {
-                                    triggerSelect(target);
+                                var ptTarget = document.elementFromPoint(touch.clientX, touch.clientY);
+                                if (ptTarget && ptTarget !== overlay && ptTarget !== badge) {
+                                    target = ptTarget;
                                 }
+                            }
+                            if (target && target !== overlay && target !== badge) {
+                                triggerSelect(target);
                             }
                         }
                     }, { passive: false, capture: true });
@@ -196,7 +212,15 @@ object WebPreviewElementInspector {
                         if (window.isInspectorModeActive) {
                             e.preventDefault();
                             e.stopPropagation();
-                            triggerSelect(e.target);
+                            var target = e.target;
+                            if (target === overlay || target === badge) {
+                                if (overlay) overlay.style.display = 'none';
+                                if (badge) badge.style.display = 'none';
+                                target = document.elementFromPoint(e.clientX, e.clientY);
+                            }
+                            if (target) {
+                                triggerSelect(target);
+                            }
                         }
                     }, true);
                 }
@@ -220,8 +244,10 @@ object WebPreviewElementInspector {
     fun setInspectorActive(webView: WebView?, isActive: Boolean) {
         if (webView == null) return
         try {
-            webView.evaluateJavascript("window.isInspectorModeActive = $isActive;", null)
-            if (!isActive) {
+            if (isActive) {
+                injectInspectorScript(webView, true)
+            } else {
+                webView.evaluateJavascript("window.isInspectorModeActive = false;", null)
                 webView.evaluateJavascript("""
                     (function() {
                         var o = document.getElementById('pencode-inspector-overlay');
