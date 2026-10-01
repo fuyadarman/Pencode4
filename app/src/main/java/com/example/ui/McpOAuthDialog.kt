@@ -332,6 +332,23 @@ fun McpOAuthConnectDialog(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1B4B).copy(alpha = 0.6f)),
+                        border = androidx.compose.foundation.BorderStroke(0.8.dp, Color(0xFF6366F1).copy(alpha = 0.5f)),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "💡 'Invalid redirect URL' error? Copy the exact URI above and paste it into your OAuth provider dashboard, or use the 'API Key / Token' tab for instant connection.",
+                            fontSize = 11.sp,
+                            color = Color(0xFFC7D2FE),
+                            modifier = Modifier.padding(8.dp),
+                            lineHeight = 15.sp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
                     OutlinedTextField(
                         value = tokenValue,
                         onValueChange = { input ->

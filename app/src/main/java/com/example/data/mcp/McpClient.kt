@@ -381,6 +381,26 @@ class McpClient(
                     }
                 } catch (e: Exception) {
                     put("query", argumentsJson)
+                    if (actualToolName.equals("execute", ignoreCase = true)) {
+                        put("code", argumentsJson)
+                    }
+                }
+            }
+            // If tool is 'execute' and 'code' is missing, fallback to query, command, script, content, or sql
+            if (actualToolName.equals("execute", ignoreCase = true) && !has("code")) {
+                val candidateCode = optString("query", "").ifBlank {
+                    optString("command", "").ifBlank {
+                        optString("script", "").ifBlank {
+                            optString("content", "").ifBlank {
+                                optString("sql", "").ifBlank {
+                                    optString("action", "")
+                                }
+                            }
+                        }
+                    }
+                }
+                if (candidateCode.isNotBlank()) {
+                    put("code", candidateCode)
                 }
             }
         }

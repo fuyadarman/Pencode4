@@ -323,17 +323,23 @@ class McpManager(private val context: Context) {
                 Result.success(tools)
             } else {
                 val fallbackTools = fetchRemoteToolsFallback(server)
-                toolRegistry.registerToolsForServer(server, fallbackTools)
-                updateServer(server.copy(status = "Connected", availableTools = fallbackTools))
-                Result.success(fallbackTools)
+                if (fallbackTools != null) {
+                    toolRegistry.registerToolsForServer(server, fallbackTools)
+                    updateServer(server.copy(status = "Connected", availableTools = fallbackTools))
+                    Result.success(fallbackTools)
+                } else {
+                    val err = toolsRes.exceptionOrNull()?.localizedMessage ?: "Connection or authentication failed"
+                    updateServer(server.copy(status = "Failed: $err", availableTools = emptyList()))
+                    Result.failure(Exception(err))
+                }
             }
         } catch (e: Exception) {
-            updateServer(server.copy(status = "Error: ${e.localizedMessage ?: "Connection failed"}"))
+            updateServer(server.copy(status = "Error: ${e.localizedMessage ?: "Connection failed"}", availableTools = emptyList()))
             Result.failure(e)
         }
     }
 
-    private fun fetchRemoteToolsFallback(server: McpServer): List<McpToolInfo> {
+    private fun fetchRemoteToolsFallback(server: McpServer): List<McpToolInfo>? {
         val jsonRpcPayload = JSONObject().apply {
             put("jsonrpc", "2.0")
             put("id", 1)
@@ -349,7 +355,9 @@ class McpManager(private val context: Context) {
 
         val tokens = tokenStore.getTokens(server.id)
         if (!server.apiKey.isNullOrBlank()) {
-            requestBuilder.addHeader("Authorization", "Bearer ${server.apiKey}")
+            val key = server.apiKey.trim()
+            requestBuilder.addHeader("Authorization", "Bearer $key")
+            requestBuilder.addHeader("apikey", key)
         } else if (tokens != null && tokens.accessToken.isNotBlank()) {
             requestBuilder.addHeader("Authorization", "${tokens.tokenType} ${tokens.accessToken}")
         }
@@ -360,17 +368,7 @@ class McpManager(private val context: Context) {
             null
         }
         if (response == null || !response.isSuccessful) {
-            val presetTools = getPresetToolsForPlatform(server.platform, server.name)
-            if (presetTools.isNotEmpty()) {
-                return presetTools
-            }
-            return listOf(
-                McpToolInfo(
-                    name = "${server.name.lowercase().replace(" ", "_")}_action",
-                    description = "Execute operation on ${server.name}",
-                    parametersJsonSchema = """{"type":"object","properties":{"action":{"type":"string"}}}"""
-                )
-            )
+            return null
         }
 
         val responseBody = response.body?.string() ?: ""

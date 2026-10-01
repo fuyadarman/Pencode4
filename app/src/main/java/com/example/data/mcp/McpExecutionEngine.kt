@@ -87,21 +87,70 @@ object McpExecutionEngine {
     fun extractMcpPayload(args: ToolArguments?): String {
         if (args == null) return "{}"
 
-        // 1. Direct explicit JSON string
+        val json = JSONObject()
+
+        // 1. If explicit mcpArgsJson string exists, populate base object
         if (!args.mcpArgsJson.isNullOrBlank()) {
-            return normalizeJsonString(args.mcpArgsJson)
+            try {
+                val parsed = JSONObject(args.mcpArgsJson.trim())
+                parsed.keys().forEach { k -> json.put(k, parsed.get(k)) }
+            } catch (_: Exception) {
+                json.put("query", args.mcpArgsJson.trim())
+            }
         }
 
-        // 2. Query / Content / Command / Message fallback
-        val textPayload = args.query ?: args.content ?: args.command ?: args.message
-        if (!textPayload.isNullOrBlank()) {
-            val trimmed = textPayload.trim()
-            if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
-                return trimmed
+        // 2. Explicitly transfer all known and critical fields from ToolArguments
+        if (!args.code.isNullOrBlank() && !json.has("code")) {
+            json.put("code", args.code)
+        }
+        if (!args.script.isNullOrBlank() && !json.has("script")) {
+            json.put("script", args.script)
+        }
+        if (!args.command.isNullOrBlank() && !json.has("command")) {
+            json.put("command", args.command)
+        }
+        if (!args.query.isNullOrBlank() && !json.has("query")) {
+            json.put("query", args.query)
+        }
+        if (!args.content.isNullOrBlank() && !json.has("content")) {
+            json.put("content", args.content)
+        }
+        if (!args.path.isNullOrBlank() && !json.has("path")) {
+            json.put("path", args.path)
+        }
+        if (!args.targetFile.isNullOrBlank() && !json.has("targetFile")) {
+            json.put("targetFile", args.targetFile)
+        }
+        if (!args.url.isNullOrBlank() && !json.has("url")) {
+            json.put("url", args.url)
+        }
+        if (!args.name.isNullOrBlank() && !json.has("name")) {
+            json.put("name", args.name)
+        }
+        if (!args.text.isNullOrBlank() && !json.has("text")) {
+            json.put("text", args.text)
+        }
+        if (!args.message.isNullOrBlank() && !json.has("message")) {
+            json.put("message", args.message)
+        }
+        if (!args.prompt.isNullOrBlank() && !json.has("prompt")) {
+            json.put("prompt", args.prompt)
+        }
+
+        // 3. Fallback for 'execute' tool calls: if code is still empty, map from script/command/content/query
+        if (!json.has("code")) {
+            val fallbackCode = args.code
+                ?: args.script
+                ?: args.command
+                ?: args.content
+                ?: args.query
+            if (!fallbackCode.isNullOrBlank()) {
+                json.put("code", fallbackCode)
             }
-            return JSONObject().apply {
-                put("query", trimmed)
-            }.toString()
+        }
+
+        if (json.length() > 0) {
+            return json.toString()
         }
 
         return "{}"
