@@ -32,23 +32,43 @@ class ContextOptimizationManager {
         }
 
         // Stage 3: Optional Symbol Context Augmentation (RAG Indexing)
+        var resultHistory = compactedHistory
         if (!activeTaskQuery.isNullOrBlank()) {
             val symbolBlock = symbolIndexer.buildSymbolContextBlock(activeTaskQuery)
-            if (symbolBlock.isNotBlank() && compactedHistory.isNotEmpty()) {
-                val lastContent = compactedHistory.last()
+            if (symbolBlock.isNotBlank() && resultHistory.isNotEmpty()) {
+                val lastContent = resultHistory.last()
                 if (lastContent.role == "user" && lastContent.parts.isNotEmpty()) {
                     val updatedText = (lastContent.parts.first().text ?: "") + "\n" + symbolBlock
                     val updatedParts = lastContent.parts.toMutableList()
                     updatedParts[0] = updatedParts[0].copy(text = updatedText)
 
-                    val updatedHistory = compactedHistory.toMutableList()
+                    val updatedHistory = resultHistory.toMutableList()
                     updatedHistory[updatedHistory.lastIndex] = lastContent.copy(parts = updatedParts)
-                    return updatedHistory
+                    resultHistory = updatedHistory
+                }
+            }
+
+            // Stage 4: Reinforce Active Goal Anchor so model never drifts in multi-turn tool loops
+            if (resultHistory.isNotEmpty()) {
+                val lastContent = resultHistory.last()
+                if (lastContent.role == "user" && lastContent.parts.isNotEmpty()) {
+                    val currentText = lastContent.parts.first().text ?: ""
+                    if (!currentText.contains("[ACTIVE GOAL ANCHOR:") && !currentText.contains("[CURRENT ACTIVE USER REQUEST")) {
+                        val goalAnchor = com.example.agent.AgentGoalAlignmentEngine.buildToolOutputGoalAnchor(activeTaskQuery)
+                        if (goalAnchor.isNotBlank()) {
+                            val updatedText = currentText + goalAnchor
+                            val updatedParts = lastContent.parts.toMutableList()
+                            updatedParts[0] = updatedParts[0].copy(text = updatedText)
+                            val updatedHistory = resultHistory.toMutableList()
+                            updatedHistory[updatedHistory.lastIndex] = lastContent.copy(parts = updatedParts)
+                            resultHistory = updatedHistory
+                        }
+                    }
                 }
             }
         }
 
-        return compactedHistory
+        return resultHistory
     }
 
     /**

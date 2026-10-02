@@ -4075,6 +4075,41 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                             }
                         }
 
+                        // Inspect model goal alignment to prevent confusion, drifting, or doing unrequested tasks
+                        val alignmentCheck = com.example.agent.AgentGoalAlignmentEngine.inspectModelAlignment(
+                            thought = thoughtText,
+                            plannedTools = toolCalls.map { it.tool },
+                            userPrompt = userPrompt,
+                            turn = turn,
+                            actionsCount = actionsCount,
+                            hasModifiedFiles = hasModifiedFiles
+                        )
+                        when (alignmentCheck) {
+                            is com.example.agent.AgentGoalAlignmentEngine.AlignmentCheckResult.ConcludeCompletedTask -> {
+                                val completeLog = createAiLog(
+                                    title = "Task Completed (Goal Reached)",
+                                    status = "success",
+                                    details = alignmentCheck.summary
+                                )
+                                _aiActionLogs.value = _aiActionLogs.value + completeLog
+                                handleComplete(alignmentCheck.summary)
+                                loopCompleted = true
+                                break
+                            }
+                            is com.example.agent.AgentGoalAlignmentEngine.AlignmentCheckResult.NudgeBackToGoal -> {
+                                history.add(Content(role = "user", parts = listOf(Part(text = alignmentCheck.directive))))
+                                val nudgeLog = createAiLog(
+                                    title = "Goal Alignment Directive",
+                                    status = "thinking",
+                                    details = "Keeping AI focused on current user prompt..."
+                                )
+                                _aiActionLogs.value = _aiActionLogs.value + nudgeLog
+                            }
+                            com.example.agent.AgentGoalAlignmentEngine.AlignmentCheckResult.Aligned -> {
+                                // Model is aligned with current user request
+                            }
+                        }
+
                         val hasPlannedEdits = toolCalls.any { 
                             val t = it.tool.lowercase()
                             t.contains("edit") || t.contains("create") || t.contains("write") || 
