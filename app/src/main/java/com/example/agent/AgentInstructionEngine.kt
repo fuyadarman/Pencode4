@@ -190,10 +190,10 @@ object AgentInstructionEngine {
         sb.append(ActivePromptFocusGuard.buildActivePromptDirective(cleanPrompt)).append("\n\n")
         sb.append("=== CORE DIRECTIVES ===\n")
         sb.append("1. HIGHEST PRIORITY - LATEST CURRENT PROMPT ONLY: Focus STRICTLY and 100% on the latest user request. Do NOT repeat or get distracted by previous tasks or old queries in conversation history. Every action and tool call MUST directly serve the latest user prompt.\n")
-        sb.append("2. FAST CONVERGENCE & MINIMAL OPERATIONS (Claude Code & OpenCode Standard): Complete tasks decisively in the fewest operations (typically 1-3 turns). Plan in 'thought', find code with grep/read_file, make precise surgical edits, and immediately conclude with 'complete'. Do NOT linger in infinite verification loops once changes are applied.\n")
+        sb.append("2. FAST CONVERGENCE: Complete tasks decisively in the fewest necessary operations. Plan changes in 'thought', execute the required edits, and conclude with 'complete' when all user requirements are fulfilled.\n")
         sb.append("3. BUDGET: Max steps: $maxActionSteps. Language: match user (Bangla/English).\n")
-        sb.append("4. CODE INSPECTION: Read only files strictly necessary for the user prompt using 'read_file' or 'read_file_range'. Use 'global_search' or 'grep' to quickly locate relevant symbols.\n")
-        sb.append("5. DECISIVE COMPLETION: Once you have applied all necessary edits or created files, call 'complete' with a clear summary. Do NOT wander into other files or run redundant checks after changes are successfully applied.\n")
+        sb.append(AgentSearchPolicyEngine.buildSearchDirective(allFiles.size)).append("\n")
+        sb.append("5. DECISIVE COMPLETION: Once you have applied all necessary edits or created files across all required files, call 'complete' with a clear summary.\n")
         sb.append("6. SURGICAL EDITS: Never overwrite files >30 lines. Read once before editing with 'edit_file'/'multi_edit_file'.\n")
         sb.append("7. NEW FILES: Use 'create_file' ONLY for new files. Existing files must be edited.\n")
         sb.append("8. DIAGNOSTICS: Use 'read_preview_errors' for preview bugs and 'read_build_errors' for build failures.\n")
@@ -244,7 +244,7 @@ object AgentInstructionEngine {
 
         // Code / File tools
         if (intents.contains(PromptIntent.CODE_MODIFICATION_OR_FEATURE) || intents.contains(PromptIntent.DEBUG_AND_ERROR_FIXING) || intents.contains(PromptIntent.GENERAL_AGENT_TASK) || intents.contains(PromptIntent.SEARCH_AND_EXPLORATION)) {
-            tools.add("'global_search'(query) [or 'grep'(query) - Fast grep across all files. ALWAYS USE FIRST TO FIND CODE]")
+            tools.add(AgentSearchPolicyEngine.formatSearchToolDoc(allFiles.size))
             tools.add("'read_file'(path)")
             tools.add("'read_file_range'(path, startLine, endLine) [Use only when line numbers are already pinpointed]")
             tools.add("'multi_read_file'(path, ranges:[{startLine,endLine}])")

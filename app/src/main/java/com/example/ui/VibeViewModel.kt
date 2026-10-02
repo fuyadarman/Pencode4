@@ -4017,28 +4017,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                         val hasExplicitComplete = toolCalls.any { it.tool == "complete" }
                         val hasModifiedFiles = filesModifiedThisPrompt || loopProtectionEngine.hasModifiedAnyFiles()
 
-                        // Fast convergence policy (OpenCode & Claude Code standard)
-                        val convergenceDecision = com.example.agent.AgentFastConvergencePolicy.evaluateConvergence(
-                            turn = turn,
-                            actionsCount = actionsCount,
-                            hasModifiedFiles = hasModifiedFiles,
-                            hasPlannedActionTools = realActionTools.isNotEmpty(),
-                            modelThought = thoughtText,
-                            modelMessage = stepMsg,
-                            userPrompt = userPrompt
-                        )
-                        if (convergenceDecision is com.example.agent.AgentFastConvergencePolicy.ConvergenceDecision.ConcludeImmediately) {
-                            val completeLog = createAiLog(
-                                title = "Task Completed (Fast Convergence)",
-                                status = "success",
-                                details = convergenceDecision.reason
-                            )
-                            _aiActionLogs.value = _aiActionLogs.value + completeLog
-                            handleComplete(convergenceDecision.summary)
-                            loopCompleted = true
-                            break
-                        }
-
                         if (hasExplicitComplete) {
                             val candidateMsg = toolCalls.firstOrNull { it.tool == "complete" }?.arguments?.message ?: stepMsg
                             val completionCheck = com.example.agent.AgentModelExecutionSafeguard.validateTaskCompletion(
@@ -4107,17 +4085,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                             hasModifiedFiles = hasModifiedFiles
                         )
                         when (alignmentCheck) {
-                            is com.example.agent.AgentGoalAlignmentEngine.AlignmentCheckResult.ConcludeCompletedTask -> {
-                                val completeLog = createAiLog(
-                                    title = "Task Completed (Goal Reached)",
-                                    status = "success",
-                                    details = alignmentCheck.summary
-                                )
-                                _aiActionLogs.value = _aiActionLogs.value + completeLog
-                                handleComplete(alignmentCheck.summary)
-                                loopCompleted = true
-                                break
-                            }
                             is com.example.agent.AgentGoalAlignmentEngine.AlignmentCheckResult.NudgeBackToGoal -> {
                                 history.add(Content(role = "user", parts = listOf(Part(text = alignmentCheck.directive))))
                                 val nudgeLog = createAiLog(
