@@ -72,7 +72,15 @@ object ThoughtExecutionResilienceGuard {
     ): GuardDecision {
         val thoughtText = (currentThought ?: "").trim()
 
-        // 1. Genuine natural completion
+        // 1. Natural completion when files have already been modified (Claude Code & OpenCode standard)
+        if (hasModifiedFiles) {
+            val sanitized = AgentThoughtLoopGuard.sanitizeThoughtForUserResponse(thoughtText)
+                .ifBlank { "All requested changes have been successfully implemented and applied to your project." }
+            Log.d(TAG, "Task completed naturally: files were modified and model concluded.")
+            return GuardDecision.CompleteNaturally(sanitized, "Work is applied and model concluded.")
+        }
+
+        // 1.5. Genuine natural completion via explicit thought
         if (isGenuineTaskCompletion(thoughtText, hasModifiedFiles, userPrompt)) {
             val sanitized = AgentThoughtLoopGuard.sanitizeThoughtForUserResponse(thoughtText)
                 .ifBlank { "All requested changes have been successfully implemented." }

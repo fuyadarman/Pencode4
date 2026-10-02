@@ -72,8 +72,43 @@ object AgentThoughtAndToolParser {
             return fallbackParser(rawText, finishReason)
         }
 
-        // 5. If there is a thought block and NO tool, treat it as 'ai_think'
-        // This prevents the agent from halting or outputting {"thought": "..."} as a complete message!
+        // 4.5. Check if the model provided a message or summary (standard in Claude, GPT-4, and Gemini completions)
+        val messageField = standardParsed?.arguments?.message
+            ?: extractField(trimmedRaw, "message")
+            ?: extractField(trimmedRaw, "content")
+            ?: extractField(trimmedRaw, "summary")
+            ?: extractField(trimmedRaw, "response")
+            ?: extractField(trimmedRaw, "final_response")
+
+        if (!messageField.isNullOrBlank()) {
+            Log.d(TAG, "Parsed completion response message: ${messageField.take(60)}...")
+            return ToolCallResponse(
+                thought = thoughtText ?: "Task completed",
+                tool = "complete",
+                arguments = ToolArguments(message = messageField),
+                finishReason = finishReason
+            )
+        }
+
+        // 5. If thought indicates task conclusion or completion, treat as complete
+        val lowerThought = (thoughtText ?: "").lowercase()
+        val indicatesConclusion = lowerThought.contains("changes are complete") ||
+                lowerThought.contains("implemented successfully") ||
+                lowerThought.contains("task is complete") ||
+                lowerThought.contains("all requested changes") ||
+                lowerThought.contains("done") && lowerThought.length < 50
+
+        if (indicatesConclusion && !thoughtText.isNullOrBlank()) {
+            return ToolCallResponse(
+                thought = thoughtText,
+                tool = "complete",
+                arguments = ToolArguments(message = thoughtText),
+                finishReason = finishReason
+            )
+        }
+
+        // 5.1. If there is a thought block and NO tool, treat it as 'ai_think'
+        // This allows mid-task planning steps to proceed
         if (!thoughtText.isNullOrBlank()) {
             Log.d(TAG, "Parsed orphan thought block as ai_think action: ${thoughtText.take(60)}...")
             return ToolCallResponse(
