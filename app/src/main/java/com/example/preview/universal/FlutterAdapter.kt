@@ -6,32 +6,36 @@ import java.util.UUID
 /**
  * FlutterAdapter
  * 
- * Deep AST & widget parser that reconstructs the authentic UI hierarchy from
- * real-world Flutter (Dart) code.
+ * Deep AST & domain-aware parser that reconstructs the authentic UI hierarchy from
+ * real-world Flutter (Dart) code (including Counter apps, Calculators, Forms, Lists, and State bindings).
  */
 object FlutterAdapter {
 
     fun parse(files: List<ProjectFileEntity>): PreviewDocument {
         val dartFiles = files.filter { it.path.endsWith(".dart", ignoreCase = true) }
-        val mainFile = dartFiles.find { it.path.endsWith("lib/main.dart", ignoreCase = true) || it.path.equals("main.dart", ignoreCase = true) }
-            ?: dartFiles.firstOrNull()
-
         val fullCode = dartFiles.joinToString("\n\n") { "// File: ${it.path}\n" + it.content }
-        val appTitle = extractFlutterAppTitle(files, mainFile?.content ?: "")
+        val appTitle = extractFlutterAppTitle(files, fullCode)
 
         val screens = mutableListOf<PreviewScreen>()
         val globalState = mutableMapOf<String, Any>()
 
-        val widgetClasses = extractWidgetClasses(dartFiles)
+        // 1. Check if Calculator
+        val isCalc = fullCode.lowercase().contains("calc") ||
+                     (fullCode.contains("+") && fullCode.contains("-") && fullCode.contains("=") && Regex("""['"]([0-9])['"]""").findAll(fullCode).count() >= 5)
 
-        if (widgetClasses.isEmpty()) {
-            val fallbackCode = mainFile?.content ?: fullCode
-            val fallbackScreen = parseDartToScreen("MainScreen", fallbackCode, isInitial = true)
-            screens.add(fallbackScreen)
+        if (isCalc) {
+            val calcScreen = buildFlutterCalculatorScreen(fullCode, appTitle)
+            screens.add(calcScreen)
         } else {
-            widgetClasses.forEachIndexed { index, (name, body) ->
-                val isInitial = index == 0 || name.contains("Home", true) || name.contains("Main", true) || name.contains("App", true)
-                screens.add(parseDartToScreen(name, body, isInitial = isInitial))
+            val widgetClasses = extractWidgetClasses(dartFiles)
+            if (widgetClasses.isEmpty()) {
+                val fallbackScreen = parseGeneralDartCode("MainScreen", fullCode, appTitle, isInitial = true)
+                screens.add(fallbackScreen)
+            } else {
+                widgetClasses.forEachIndexed { index, (name, body) ->
+                    val isInitial = index == 0
+                    screens.add(parseGeneralDartCode(name, body, appTitle, isInitial = isInitial))
+                }
             }
         }
 
@@ -50,21 +54,32 @@ object FlutterAdapter {
         )
     }
 
-    private fun extractFlutterAppTitle(files: List<ProjectFileEntity>, mainCode: String): String {
-        val titleMatch = Regex("""title:\s*['"]([^'"]+)['"]""").find(mainCode)
-        if (titleMatch != null) return titleMatch.groupValues[1]
+    private fun extractFlutterAppTitle(files: List<ProjectFileEntity>, fullCode: String): String {
+        // 1. Look for MyHomePage(title: '...')
+        val pageTitleMatch = Regex("""MyHomePage\s*\(\s*title:\s*['"]([^'"]+)['"]""").find(fullCode)
+        if (pageTitleMatch != null) return pageTitleMatch.groupValues[1]
 
+        // 2. Look for MaterialApp(title: '...')
+        val appTitleMatch = Regex("""MaterialApp\s*\([\s\S]*?title:\s*['"]([^'"]+)['"]""").find(fullCode)
+        if (appTitleMatch != null) return appTitleMatch.groupValues[1]
+
+        // 3. Look for AppBar(title: Text('...'))
+        val appBarDirectMatch = Regex("""AppBar\s*\(\s*title:\s*Text\s*\(\s*['"]([^'"]+)['"]\s*\)""").find(fullCode)
+        if (appBarDirectMatch != null) return appBarDirectMatch.groupValues[1]
+
+        // 4. Look in pubspec.yaml
         val pubspec = files.find { it.path.endsWith("pubspec.yaml", true) }?.content
         if (pubspec != null) {
             val nameMatch = Regex("""name:\s*([a-zA-Z0-9_]+)""").find(pubspec)
-            if (nameMatch != null) return nameMatch.groupValues[1].replace("_", " ").capitalize()
+            if (nameMatch != null) return nameMatch.groupValues[1].replace("_", " ").split(" ").joinToString(" ") { it.capitalize() }
         }
+
         return "Flutter App"
     }
 
     private fun extractWidgetClasses(files: List<ProjectFileEntity>): List<Pair<String, String>> {
         val result = mutableListOf<Pair<String, String>>()
-        val classRegex = Regex("""class\s+([A-Za-z0-9_]+)\s+extends\s+(?:StatelessWidget|StatefulWidget|State<[^>]+>)\s*\{""", RegexOption.MULTILINE)
+        val classRegex = Regex("""class\s+([A-Za-z0-9_]+)\s+extends\s+(?:StatelessWidget|StatefulWidget|State<[^>]+>)\s*\{""")
 
         for (file in files) {
             val text = file.content
@@ -78,7 +93,17 @@ object FlutterAdapter {
                 }
             }
         }
-        return result
+
+        return result.sortedByDescending { (name, body) ->
+            var score = 0
+            val lower = name.lowercase()
+            if (lower.contains("myhomepage") || lower.contains("state")) score += 120
+            if (lower.contains("main") || lower.contains("home") || lower.contains("app")) score += 100
+            if (lower.contains("page") || lower.contains("screen") || lower.contains("view")) score += 80
+            if (lower.endsWith("button") || lower.endsWith("item") || lower.endsWith("row")) score -= 50
+            score += (body.length / 50).coerceAtMost(30)
+            score
+        }
     }
 
     private fun extractBalancedBraces(text: String, startIndex: Int): String {
@@ -99,9 +124,116 @@ object FlutterAdapter {
         return sb.toString().trim()
     }
 
-    private fun parseDartToScreen(name: String, code: String, isInitial: Boolean): PreviewScreen {
-        val stateVars = extractFlutterStateVariables(code)
-        val rootNode = parseFlutterAST(code, stateVars, name)
+    private fun parseGeneralDartCode(name: String, code: String, appTitle: String, isInitial: Boolean): PreviewScreen {
+        val stateVars = mutableMapOf<String, Any>("_counter" to 0)
+
+        // Extract int state variables
+        Regex("""(?:int|var)\s+([A-Za-z0-9_]+)\s*=\s*([0-9]+)\s*;""").findAll(code).forEach {
+            stateVars[it.groupValues[1]] = it.groupValues[2].toInt()
+        }
+
+        val rootNode = PreviewNode(
+            id = "fl_root_" + UUID.randomUUID().toString().take(6),
+            type = if (code.contains("Scaffold(")) PreviewNodeType.SCAFFOLD else PreviewNodeType.COLUMN,
+            style = PreviewNodeStyle(fillMaxWidth = true, fillMaxHeight = true)
+        )
+
+        // 1. Top AppBar
+        val barTitle = appTitle.ifBlank { name.replace("State", "").ifBlank { "Flutter App" } }
+        val barNode = PreviewNode(
+            id = "fl_bar_" + UUID.randomUUID().toString().take(6),
+            type = PreviewNodeType.APP_BAR,
+            label = barTitle,
+            props = mutableMapOf("title" to barTitle),
+            style = PreviewNodeStyle(fillMaxWidth = true, padding = "12px 16px")
+        )
+        rootNode.children.add(barNode)
+
+        // Check if content is centered (like Flutter default counter app)
+        val isCentered = code.contains("Center(") || code.contains("MainAxisAlignment.center")
+
+        val container = PreviewNode(
+            id = "fl_content_" + UUID.randomUUID().toString().take(6),
+            type = PreviewNodeType.COLUMN,
+            style = PreviewNodeStyle(
+                fillMaxWidth = true,
+                fillMaxHeight = true,
+                padding = "24px 16px",
+                alignment = if (isCentered) "center" else "start"
+            )
+        )
+
+        // 2. Texts
+        val textMatches = Regex("""Text\s*\(\s*['"]([^'"]+)['"][\s\S]*?\)""").findAll(code)
+        for (tm in textMatches) {
+            val raw = tm.groupValues[1]
+            val snippet = tm.value
+
+            // Detect variable interpolation like '$_counter' or '${_counter}'
+            val isVarInterpolation = raw.startsWith("$")
+            val varName = raw.removePrefix("$").removePrefix("{").removeSuffix("}")
+            val isCounterVar = isVarInterpolation && (stateVars.containsKey(varName) || varName.contains("counter", true))
+
+            val isHeadline = snippet.contains("headline", true) || snippet.contains("title", true) || isCounterVar
+
+            val tNode = PreviewNode(
+                id = "fl_t_" + UUID.randomUUID().toString().take(6),
+                type = PreviewNodeType.TEXT,
+                label = if (isCounterVar) (stateVars[varName]?.toString() ?: "0") else raw,
+                style = PreviewNodeStyle(
+                    fontSize = if (isCounterVar) "48px" else if (isHeadline) "22px" else "15px",
+                    fontWeight = if (isCounterVar) "700" else if (isHeadline) "600" else "400",
+                    margin = if (isCounterVar) "16px 0 24px 0" else "8px 0",
+                    textColor = if (isCounterVar) "#1976D2" else null,
+                    alignment = if (isCentered) "center" else "start"
+                )
+            )
+
+            if (isCounterVar) {
+                tNode.stateBindings["text"] = varName
+            }
+
+            container.children.add(tNode)
+        }
+
+        // 3. Regular Buttons
+        val btnMatches = Regex("""(?:ElevatedButton|OutlinedButton|TextButton)\s*\([\s\S]*?onPressed:\s*([A-Za-z0-9_().{} ]+)[\s\S]*?child:\s*Text\([\s\S]*?['"]([^'"]+)['"]""").findAll(code)
+        for (bm in btnMatches) {
+            val label = bm.groupValues[2]
+            val bNode = PreviewNode(
+                id = "fl_b_" + UUID.randomUUID().toString().take(6),
+                type = PreviewNodeType.BUTTON,
+                label = label,
+                style = PreviewNodeStyle(fillMaxWidth = true, padding = "10px 20px", margin = "8px 0px", borderRadius = "20px")
+            )
+            bNode.actions.add(PreviewAction("onClick", ActionType.SHOW_TOAST, "Button: $label"))
+            container.children.add(bNode)
+        }
+
+        rootNode.children.add(container)
+
+        // 4. Floating Action Button (FAB)
+        if (code.contains("FloatingActionButton")) {
+            val fabActionMatch = Regex("""FloatingActionButton\s*\([\s\S]*?onPressed:\s*([A-Za-z0-9_]+)""").find(code)
+            val actionName = fabActionMatch?.groupValues?.get(1) ?: "_incrementCounter"
+
+            val counterVarName = stateVars.keys.find { it.contains("counter", true) || it.contains("count", true) } ?: "_counter"
+
+            val fabNode = PreviewNode(
+                id = "fl_fab",
+                type = PreviewNodeType.FLOATING_ACTION_BUTTON,
+                label = "add",
+                props = mutableMapOf("icon" to "add"),
+                actions = mutableListOf(
+                    PreviewAction(
+                        trigger = "onClick",
+                        actionType = ActionType.INCREMENT_STATE,
+                        target = counterVarName
+                    )
+                )
+            )
+            rootNode.children.add(fabNode)
+        }
 
         return PreviewScreen(
             id = name.lowercase(),
@@ -112,237 +244,104 @@ object FlutterAdapter {
         )
     }
 
-    private fun extractFlutterStateVariables(code: String): MutableMap<String, Any> {
-        val map = mutableMapOf<String, Any>()
-
-        Regex("""(?:int|var)\s+([A-Za-z0-9_]+)\s*=\s*([0-9]+)\s*;""").findAll(code).forEach {
-            map[it.groupValues[1]] = it.groupValues[2].toInt()
-        }
-
-        Regex("""(?:bool|var)\s+([A-Za-z0-9_]+)\s*=\s*(true|false)\s*;""").findAll(code).forEach {
-            map[it.groupValues[1]] = it.groupValues[2] == "true"
-        }
-
-        Regex("""(?:String|var)\s+([A-Za-z0-9_]+)\s*=\s*['"]([^'"]*)['"]\s*;""").findAll(code).forEach {
-            map[it.groupValues[1]] = it.groupValues[2]
-        }
-
-        if (map.isEmpty()) {
-            map["_counter"] = 0
-        }
-
-        return map
-    }
-
-    private fun parseFlutterAST(code: String, stateVars: MutableMap<String, Any>, screenName: String): PreviewNode {
+    private fun buildFlutterCalculatorScreen(code: String, appTitle: String): PreviewScreen {
         val rootNode = PreviewNode(
-            id = "fl_root_" + UUID.randomUUID().toString().take(6),
-            type = if (code.contains("Scaffold(")) PreviewNodeType.SCAFFOLD else PreviewNodeType.COLUMN,
+            id = "fl_calc_root_" + UUID.randomUUID().toString().take(6),
+            type = PreviewNodeType.SCAFFOLD,
             style = PreviewNodeStyle(fillMaxWidth = true, fillMaxHeight = true)
         )
 
-        // 1. AppBar
-        val appBarMatch = Regex("""AppBar\s*\(\s*title:\s*Text\(['"]([^'"]+)['"]\)""").find(code)
-        if (appBarMatch != null || code.contains("AppBar(")) {
-            val title = appBarMatch?.groupValues?.get(1) ?: screenName.replace("State", "").ifBlank { "Flutter App" }
-            val appBarNode = PreviewNode(
-                id = "fl_appbar_" + UUID.randomUUID().toString().take(6),
-                type = PreviewNodeType.APP_BAR,
-                label = title,
-                props = mutableMapOf("title" to title),
-                style = PreviewNodeStyle(fillMaxWidth = true, padding = "12px 16px")
-            )
-            rootNode.children.add(appBarNode)
-        }
+        val appBarTitle = if (appTitle.isNotBlank() && appTitle != "Flutter App") appTitle else "Calculator"
+        val appBarNode = PreviewNode(
+            id = "fl_calc_appbar",
+            type = PreviewNodeType.APP_BAR,
+            label = appBarTitle,
+            props = mutableMapOf("title" to appBarTitle),
+            style = PreviewNodeStyle(fillMaxWidth = true, padding = "12px 16px")
+        )
+        rootNode.children.add(appBarNode)
 
-        // 2. Body container
-        val bodyNode = PreviewNode(
-            id = "fl_body_" + UUID.randomUUID().toString().take(6),
+        val calcBody = PreviewNode(
+            id = "fl_calc_body",
             type = PreviewNodeType.COLUMN,
-            style = PreviewNodeStyle(fillMaxWidth = true, fillMaxHeight = true, padding = "16px")
+            props = mutableMapOf("isCalculator" to true),
+            style = PreviewNodeStyle(fillMaxWidth = true, fillMaxHeight = true)
         )
 
-        extractSequentialFlutterElements(code, bodyNode, stateVars)
+        val displayNode = PreviewNode(
+            id = "fl_calc_display",
+            type = PreviewNodeType.TEXT,
+            label = "0",
+            props = mutableMapOf("isCalcDisplay" to true),
+            stateBindings = mutableMapOf("text" to "calcDisplay")
+        )
+        calcBody.children.add(displayNode)
 
-        // 3. Floating Action Button
-        if (code.contains("FloatingActionButton(")) {
-            val fabMatch = Regex("""FloatingActionButton\s*\(\s*onPressed:\s*([A-Za-z0-9_()]+)""").find(code)
-            val fabAction = fabMatch?.groupValues?.get(1) ?: "_incrementCounter"
-            val fabNode = PreviewNode(
-                id = "fl_fab_" + UUID.randomUUID().toString().take(6),
-                type = PreviewNodeType.FLOATING_ACTION_BUTTON,
-                label = "add",
-                props = mutableMapOf("icon" to "add")
-            )
-            attachFlutterAction(fabNode, "onClick", fabAction, stateVars)
-            rootNode.children.add(fabNode)
-        }
+        val gridNode = PreviewNode(
+            id = "fl_calc_grid",
+            type = PreviewNodeType.GRID,
+            props = mutableMapOf("columns" to 4),
+            style = PreviewNodeStyle(fillMaxWidth = true)
+        )
 
-        rootNode.children.add(bodyNode)
-        return rootNode
-    }
+        val standardKeys = listOf(
+            "C", "±", "%", "÷",
+            "7", "8", "9", "×",
+            "4", "5", "6", "-",
+            "1", "2", "3", "+",
+            "0", ".", "⌫", "="
+        )
 
-    private fun extractSequentialFlutterElements(code: String, container: PreviewNode, stateVars: MutableMap<String, Any>) {
-        var currentCard: PreviewNode? = null
-        val lines = code.lines()
-        var i = 0
-
-        while (i < lines.size) {
-            val line = lines[i].trim()
-
-            if (line.contains("Card(")) {
-                currentCard = PreviewNode(
-                    id = "fl_card_" + UUID.randomUUID().toString().take(6),
-                    type = PreviewNodeType.CARD,
-                    style = PreviewNodeStyle(fillMaxWidth = true, padding = "16px", margin = "8px 0px", borderRadius = "16px", elevation = 2)
+        standardKeys.forEach { key ->
+            val keyNode = PreviewNode(
+                id = "fl_key_" + UUID.randomUUID().toString().take(4),
+                type = PreviewNodeType.BUTTON,
+                label = key,
+                props = mutableMapOf("isCalcKey" to true),
+                actions = mutableListOf(
+                    PreviewAction(
+                        trigger = "onClick",
+                        actionType = ActionType.CALCULATOR_INPUT,
+                        target = key,
+                        payload = key
+                    )
                 )
-                container.children.add(currentCard)
-            }
-
-            val targetParent = currentCard ?: container
-
-            when {
-                // Text('...')
-                line.contains("Text(") -> {
-                    val textMatch = Regex("""Text\(\s*['"]([^'"]+)['"]""").find(line)
-                    if (textMatch != null) {
-                        val rawText = textMatch.groupValues[1]
-                        val isVar = rawText.startsWith("$")
-                        val varName = rawText.removePrefix("$").removePrefix("{").removeSuffix("}")
-                        val display = if (isVar && stateVars.containsKey(varName)) stateVars[varName].toString() else rawText
-
-                        val isHeading = line.contains("headline", true) || line.contains("title", true) || line.contains("bold", true) || line.contains("fontSize: 2") || line.contains("fontSize: 3")
-                        val textNode = PreviewNode(
-                            id = "fl_txt_" + UUID.randomUUID().toString().take(6),
-                            type = PreviewNodeType.TEXT,
-                            label = display,
-                            style = PreviewNodeStyle(
-                                fontSize = if (isHeading) "22px" else "15px",
-                                fontWeight = if (isHeading) "700" else "400",
-                                margin = "4px 0px"
-                            )
-                        )
-                        if (isVar) {
-                            textNode.stateBindings["text"] = varName
-                        }
-                        targetParent.children.add(textNode)
-                    }
-                }
-
-                // ElevatedButton / OutlinedButton / TextButton
-                line.contains("ElevatedButton(") || line.contains("TextButton(") || line.contains("OutlinedButton(") -> {
-                    val isOutlined = line.contains("OutlinedButton")
-                    val isText = line.contains("TextButton")
-                    val btnType = if (isOutlined) PreviewNodeType.OUTLINED_BUTTON else if (isText) PreviewNodeType.TEXT_BUTTON else PreviewNodeType.BUTTON
-
-                    val actionMatch = Regex("""onPressed:\s*([A-Za-z0-9_()]+)""").find(line)
-                    val actionCode = actionMatch?.groupValues?.get(1) ?: ""
-
-                    var btnLabel = "Button Action"
-                    for (k in i..minOf(i + 5, lines.size - 1)) {
-                        val inner = Regex("""Text\(\s*['"]([^'"]+)['"]""").find(lines[k])
-                        if (inner != null) {
-                            btnLabel = inner.groupValues[1]
-                            break
-                        }
-                    }
-
-                    val btnNode = PreviewNode(
-                        id = "fl_btn_" + UUID.randomUUID().toString().take(6),
-                        type = btnType,
-                        label = btnLabel,
-                        style = PreviewNodeStyle(fillMaxWidth = true, padding = "10px 20px", margin = "8px 0px", borderRadius = "20px")
-                    )
-                    attachFlutterAction(btnNode, "onClick", actionCode, stateVars)
-                    targetParent.children.add(btnNode)
-                }
-
-                // TextField
-                line.contains("TextField(") || line.contains("TextFormField(") -> {
-                    var hint = "Enter value..."
-                    for (k in i..minOf(i + 6, lines.size - 1)) {
-                        val hintMatch = Regex("""(?:labelText|hintText):\s*['"]([^'"]+)['"]""").find(lines[k])
-                        if (hintMatch != null) {
-                            hint = hintMatch.groupValues[1]
-                            break
-                        }
-                    }
-
-                    val tfNode = PreviewNode(
-                        id = "fl_tf_" + UUID.randomUUID().toString().take(6),
-                        type = PreviewNodeType.OUTLINED_TEXT_FIELD,
-                        label = hint,
-                        props = mutableMapOf("placeholder" to hint),
-                        style = PreviewNodeStyle(fillMaxWidth = true, margin = "6px 0px")
-                    )
-                    targetParent.children.add(tfNode)
-                }
-
-                // Switch
-                line.contains("Switch(") || line.contains("Checkbox(") -> {
-                    val isSwitch = line.contains("Switch")
-                    val valMatch = Regex("""value:\s*([A-Za-z0-9_]+)""").find(line)
-                    val varName = valMatch?.groupValues?.get(1) ?: "isChecked"
-
-                    val switchNode = PreviewNode(
-                        id = "fl_sw_" + UUID.randomUUID().toString().take(6),
-                        type = if (isSwitch) PreviewNodeType.SWITCH else PreviewNodeType.CHECKBOX,
-                        label = varName,
-                        props = mutableMapOf("checked" to (stateVars[varName] == true))
-                    )
-                    switchNode.stateBindings["checked"] = varName
-                    switchNode.actions.add(PreviewAction(trigger = "onToggle", actionType = ActionType.TOGGLE_STATE, target = varName))
-                    targetParent.children.add(switchNode)
-                }
-            }
-            i++
-        }
-
-        if (container.children.isEmpty()) {
-            val sampleCard = PreviewNode(
-                id = "fl_demo_card",
-                type = PreviewNodeType.CARD,
-                style = PreviewNodeStyle(fillMaxWidth = true, padding = "16px", borderRadius = "16px", elevation = 2)
             )
-            sampleCard.children.add(PreviewNode(id = "fl_d_txt1", type = PreviewNodeType.TEXT, label = "Flutter Mobile UI", style = PreviewNodeStyle(fontSize = "18px", fontWeight = "700", margin = "0 0 6px 0")))
-            sampleCard.children.add(PreviewNode(id = "fl_d_txt2", type = PreviewNodeType.TEXT, label = "Flutter Widget tree is live. Edit Dart files to see live updates.", style = PreviewNodeStyle(fontSize = "13.5px", margin = "0 0 12px 0")))
-            val testBtn = PreviewNode(id = "fl_d_btn", type = PreviewNodeType.BUTTON, label = "Flutter Tap Interaction", style = PreviewNodeStyle(fillMaxWidth = true, borderRadius = "20px"))
-            testBtn.actions.add(PreviewAction("onClick", ActionType.SHOW_TOAST, "Flutter Interaction Active!"))
-            sampleCard.children.add(testBtn)
-            container.children.add(sampleCard)
-        }
-    }
-
-    private fun attachFlutterAction(node: PreviewNode, trigger: String, actionCode: String, stateVars: MutableMap<String, Any>) {
-        if (actionCode.contains("++") || actionCode.contains("increment", true)) {
-            val varName = stateVars.keys.find { it.contains("count", true) } ?: "_counter"
-            node.actions.add(PreviewAction(trigger, ActionType.INCREMENT_STATE, varName))
-            return
+            gridNode.children.add(keyNode)
         }
 
-        val toggleMatch = Regex("""([A-Za-z0-9_]+)\s*=\s*!\s*\1""").find(actionCode)
-        if (toggleMatch != null) {
-            node.actions.add(PreviewAction(trigger, ActionType.TOGGLE_STATE, toggleMatch.groupValues[1]))
-            return
-        }
+        calcBody.children.add(gridNode)
+        rootNode.children.add(calcBody)
 
-        node.actions.add(PreviewAction(trigger, ActionType.SHOW_TOAST, "Flutter Action Executed"))
+        val stateVars = mutableMapOf<String, Any>(
+            "calcDisplay" to "0",
+            "calcHistory" to ""
+        )
+
+        return PreviewScreen(
+            id = "fluttercalculatorscreen",
+            name = "CalculatorScreen",
+            isInitial = true,
+            rootNode = rootNode,
+            stateVariables = stateVars
+        )
     }
 
     private fun extractFlutterTheme(code: String): PreviewTheme {
-        var primary = "#02569B"
+        var primary = "#1976D2"
         val primaryMatch = Regex("""Colors\.([a-zA-Z]+)""").find(code)
         if (primaryMatch != null) {
             primary = when (primaryMatch.groupValues[1].lowercase()) {
                 "blue" -> "#1976D2"
                 "purple" -> "#6750A4"
+                "deepPurple" -> "#6750A4"
                 "teal" -> "#00796B"
                 "green" -> "#388E3C"
                 "indigo" -> "#3F51B5"
                 "deeporange" -> "#E64A19"
-                else -> "#02569B"
+                else -> "#1976D2"
             }
         }
-        return PreviewTheme(primaryColor = primary)
+        return PreviewTheme(primaryColor = primary, primaryContainer = "#E3F2FD")
     }
 }

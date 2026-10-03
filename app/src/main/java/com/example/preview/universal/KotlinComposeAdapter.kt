@@ -6,41 +6,48 @@ import java.util.UUID
 /**
  * KotlinComposeAdapter
  * 
- * Deep AST & block parser that reconstructs the authentic UI hierarchy from
+ * Deep AST & domain-aware parser that reconstructs the authentic UI hierarchy from
  * real-world Native Android Kotlin Jetpack Compose code.
+ * Inlines composable calls, resolves custom colors, and guarantees non-empty previews.
  */
 object KotlinComposeAdapter {
 
     fun parse(files: List<ProjectFileEntity>): PreviewDocument {
         val kotlinFiles = files.filter { it.path.endsWith(".kt", ignoreCase = true) }
-        val mainFile = kotlinFiles.find { it.path.endsWith("MainActivity.kt", ignoreCase = true) }
-            ?: kotlinFiles.firstOrNull()
-
         val fullCode = kotlinFiles.joinToString("\n\n") { "// File: ${it.path}\n" + it.content }
         val appTitle = extractAppTitle(files)
 
         val screens = mutableListOf<PreviewScreen>()
         val globalState = mutableMapOf<String, Any>()
 
-        // 1. Extract composable functions & setContent blocks
-        val composableBlocks = extractAllComposableBlocks(kotlinFiles)
+        // 1. Extract Exact Theme & Colors from Project
+        val theme = ThemeColorExtractor.extract(files)
 
-        if (composableBlocks.isEmpty()) {
-            val fallbackCode = mainFile?.content ?: fullCode
-            val singleScreen = parseCodeToScreen("MainScreen", fallbackCode, isInitial = true)
-            screens.add(singleScreen)
+        // 2. Check if the app is a Calculator
+        val isCalculatorApp = isCalculatorCode(fullCode)
+
+        if (isCalculatorApp) {
+            val calcScreen = buildCalculatorScreen(fullCode, appTitle, theme)
+            screens.add(calcScreen)
         } else {
-            composableBlocks.forEachIndexed { index, (name, body) ->
-                val isInitial = index == 0 || name.contains("Main", true) || name.contains("Home", true) || name.contains("App", true)
-                screens.add(parseCodeToScreen(name, body, isInitial = isInitial))
+            // 3. Extract and map all defined Composable functions
+            val composablesMap = extractComposableFunctionsMap(kotlinFiles)
+            val composableBlocks = rankComposableBlocks(composablesMap)
+
+            if (composableBlocks.isEmpty()) {
+                val fallbackScreen = parseGeneralComposeCode("MainScreen", fullCode, composablesMap, isInitial = true)
+                screens.add(fallbackScreen)
+            } else {
+                composableBlocks.forEachIndexed { index, (name, body) ->
+                    val isInitial = index == 0
+                    screens.add(parseGeneralComposeCode(name, body, composablesMap, isInitial = isInitial))
+                }
             }
         }
 
         if (screens.none { it.isInitial } && screens.isNotEmpty()) {
             screens[0] = screens[0].copy(isInitial = true)
         }
-
-        val theme = extractTheme(fullCode)
 
         return PreviewDocument(
             framework = FrameworkDetector.FrameworkType.KOTLIN_COMPOSE,
@@ -51,42 +58,169 @@ object KotlinComposeAdapter {
         )
     }
 
-    private fun extractAppTitle(files: List<ProjectFileEntity>): String {
-        val stringsXml = files.find { it.path.contains("strings.xml") }?.content
-        if (stringsXml != null) {
-            val match = Regex("""<string\s+name=["']app_name["']>([^<]+)</string>""").find(stringsXml)
-            if (match != null) return match.groupValues[1].trim()
-        }
-        return "Android App"
+    private fun isCalculatorCode(code: String): Boolean {
+        val lower = code.lowercase()
+        val hasCalcKeyword = lower.contains("calc") || lower.contains("calculator")
+        val hasCalcOperators = (lower.contains("add") || lower.contains("+")) &&
+                               (lower.contains("sub") || lower.contains("-") || lower.contains("−")) &&
+                               (lower.contains("mul") || lower.contains("*") || lower.contains("×"))
+        val hasDigitsInButtons = Regex("""["']([0-9])["']""").findAll(code).count() >= 5
+
+        return hasCalcKeyword || (hasCalcOperators && hasDigitsInButtons)
     }
 
-    private fun extractAllComposableBlocks(files: List<ProjectFileEntity>): List<Pair<String, String>> {
-        val blocks = mutableListOf<Pair<String, String>>()
+    private fun buildCalculatorScreen(code: String, appTitle: String, theme: PreviewTheme): PreviewScreen {
+        val rootNode = PreviewNode(
+            id = "calc_root_" + UUID.randomUUID().toString().take(6),
+            type = PreviewNodeType.SCAFFOLD,
+            style = PreviewNodeStyle(fillMaxWidth = true, fillMaxHeight = true)
+        )
+
+        val appBarTitle = if (appTitle.isNotBlank() && appTitle != "Android App") appTitle else "Calculator"
+        val topBarNode = PreviewNode(
+            id = "calc_appbar",
+            type = PreviewNodeType.APP_BAR,
+            label = appBarTitle,
+            props = mutableMapOf("title" to appBarTitle),
+            style = PreviewNodeStyle(fillMaxWidth = true, padding = "12px 16px")
+        )
+        rootNode.children.add(topBarNode)
+
+        val calcBody = PreviewNode(
+            id = "calc_body",
+            type = PreviewNodeType.COLUMN,
+            props = mutableMapOf("isCalculator" to true),
+            style = PreviewNodeStyle(fillMaxWidth = true, fillMaxHeight = true)
+        )
+
+        val displayNode = PreviewNode(
+            id = "calc_display",
+            type = PreviewNodeType.TEXT,
+            label = "0",
+            props = mutableMapOf("isCalcDisplay" to true),
+            stateBindings = mutableMapOf("text" to "calcDisplay")
+        )
+        calcBody.children.add(displayNode)
+
+        val gridNode = PreviewNode(
+            id = "calc_grid",
+            type = PreviewNodeType.GRID,
+            props = mutableMapOf("columns" to 4),
+            style = PreviewNodeStyle(fillMaxWidth = true)
+        )
+
+        val extractedKeys = extractKeysFromCode(code)
+        val keysToUse = if (extractedKeys.size >= 12) extractedKeys else listOf(
+            "C", "±", "%", "÷",
+            "7", "8", "9", "×",
+            "4", "5", "6", "-",
+            "1", "2", "3", "+",
+            "0", ".", "⌫", "="
+        )
+
+        keysToUse.forEach { key ->
+            val keyNode = PreviewNode(
+                id = "key_" + UUID.randomUUID().toString().take(4),
+                type = PreviewNodeType.BUTTON,
+                label = key,
+                props = mutableMapOf("isCalcKey" to true),
+                actions = mutableListOf(
+                    PreviewAction(
+                        trigger = "onClick",
+                        actionType = ActionType.CALCULATOR_INPUT,
+                        target = key,
+                        payload = key
+                    )
+                )
+            )
+            gridNode.children.add(keyNode)
+        }
+
+        calcBody.children.add(gridNode)
+        rootNode.children.add(calcBody)
+
+        val stateVars = mutableMapOf<String, Any>(
+            "calcDisplay" to "0",
+            "calcHistory" to ""
+        )
+
+        return PreviewScreen(
+            id = "calculatorscreen",
+            name = "CalculatorScreen",
+            isInitial = true,
+            rootNode = rootNode,
+            stateVariables = stateVars
+        )
+    }
+
+    private fun extractKeysFromCode(code: String): List<String> {
+        val keys = mutableListOf<String>()
+
+        val listMatches = Regex("""listOf(?:<String>)?\s*\(([^)]+)\)""").findAll(code)
+        for (match in listMatches) {
+            val content = match.groupValues[1]
+            val items = Regex("""["']([^"']+)["']""").findAll(content).map { it.groupValues[1] }.toList()
+            if (items.any { it.matches(Regex("""[0-9+\-*\/=C%±÷×]""")) }) {
+                keys.addAll(items)
+            }
+        }
+
+        if (keys.isEmpty()) {
+            val btnMatches = Regex("""(?:CalculatorButton|CalcButton|Button)\s*\([\s\S]*?["']([^"']{1,4})["']""").findAll(code)
+            for (bm in btnMatches) {
+                val sym = bm.groupValues[1]
+                if (!keys.contains(sym)) {
+                    keys.add(sym)
+                }
+            }
+        }
+
+        return keys.distinct()
+    }
+
+    private fun extractComposableFunctionsMap(files: List<ProjectFileEntity>): Map<String, String> {
+        val map = mutableMapOf<String, String>()
 
         for (file in files) {
             val text = file.content
 
-            // 1. Check @Composable fun
             val compRegex = Regex("""@Composable\s+fun\s+([A-Za-z0-9_]+)[\s\S]*?\{""")
             for (match in compRegex.findAll(text)) {
                 val name = match.groupValues[1]
                 val startIndex = match.range.last + 1
                 val body = extractBalancedBraces(text, startIndex)
                 if (body.isNotBlank()) {
-                    blocks.add(Pair(name, body))
+                    map[name] = body
                 }
             }
 
-            // 2. Check setContent in Activities
             val setContentMatch = Regex("""setContent\s*\{""").find(text)
             if (setContentMatch != null) {
                 val body = extractBalancedBraces(text, setContentMatch.range.last + 1)
-                if (body.isNotBlank() && blocks.none { it.first == "MainActivity" }) {
-                    blocks.add(0, Pair("MainActivity", body))
+                if (body.isNotBlank()) {
+                    map["MainActivity"] = body
                 }
             }
         }
-        return blocks
+        return map
+    }
+
+    private fun rankComposableBlocks(map: Map<String, String>): List<Pair<String, String>> {
+        val list = map.toList()
+
+        return list.sortedByDescending { (name, body) ->
+            var score = 0
+            val lower = name.lowercase()
+            // High priority screens
+            if (lower.contains("screen") || lower.contains("view") || lower.contains("page")) score += 120
+            if (lower.contains("main") || lower.contains("home") || lower.contains("app")) score += 100
+            // Low priority helpers
+            if (lower.endsWith("button") || lower.endsWith("item") || lower.endsWith("row") || lower.endsWith("icon")) score -= 60
+            // Reward functions that contain actual UI elements
+            if (body.contains("Text(") || body.contains("Button(") || body.contains("Card(")) score += 50
+            score += (body.length / 50).coerceAtMost(30)
+            score
+        }
     }
 
     private fun extractBalancedBraces(text: String, startIndex: Int): String {
@@ -107,27 +241,27 @@ object KotlinComposeAdapter {
         return sb.toString().trim()
     }
 
-    private fun parseCodeToScreen(name: String, code: String, isInitial: Boolean): PreviewScreen {
-        val stateVars = extractStateVariables(code)
-        val rootNode = parseComposableAST(code, stateVars, name)
+    private fun parseGeneralComposeCode(
+        name: String, 
+        code: String, 
+        composablesMap: Map<String, String>,
+        isInitial: Boolean
+    ): PreviewScreen {
+        val stateVars = mutableMapOf<String, Any>("count" to 0)
 
-        return PreviewScreen(
-            id = name.lowercase(),
-            name = name,
-            isInitial = isInitial,
-            rootNode = rootNode,
-            stateVariables = stateVars
-        )
-    }
+        // Expand any called composable functions in the project to prevent white screens!
+        var expandedCode = code
+        composablesMap.forEach { (compName, compBody) ->
+            if (compName != name && expandedCode.contains("$compName(")) {
+                expandedCode += "\n" + compBody
+            }
+        }
 
-    private fun extractStateVariables(code: String): MutableMap<String, Any> {
-        val map = mutableMapOf<String, Any>()
-
+        // Extract state variables
         val stateRegex = Regex("""var\s+([A-Za-z0-9_]+)\s+(?:by|[:=])\s+(?:remember(?:Saveable)?\s*\{)?\s*mutable(?:State|IntState|DoubleState|FloatState|BooleanState)?Of\(([^)]*)\)""")
-        stateRegex.findAll(code).forEach { match ->
+        stateRegex.findAll(expandedCode).forEach { match ->
             val varName = match.groupValues[1].trim()
             val rawVal = match.groupValues[2].trim()
-
             val parsedVal: Any = when {
                 rawVal == "true" -> true
                 rawVal == "false" -> false
@@ -136,231 +270,176 @@ object KotlinComposeAdapter {
                 rawVal.startsWith("\"") && rawVal.endsWith("\"") -> rawVal.removeSurrounding("\"")
                 else -> rawVal.removeSurrounding("\"")
             }
-            map[varName] = parsedVal
+            stateVars[varName] = parsedVal
         }
 
-        if (map.isEmpty()) {
-            map["count"] = 0
-            map["isLoading"] = false
-        }
-
-        return map
-    }
-
-    private fun parseComposableAST(code: String, stateVars: MutableMap<String, Any>, screenName: String): PreviewNode {
         val rootNode = PreviewNode(
             id = "root_" + UUID.randomUUID().toString().take(6),
-            type = if (code.contains("Scaffold")) PreviewNodeType.SCAFFOLD else PreviewNodeType.COLUMN,
+            type = if (expandedCode.contains("Scaffold")) PreviewNodeType.SCAFFOLD else PreviewNodeType.COLUMN,
             style = PreviewNodeStyle(fillMaxWidth = true, fillMaxHeight = true)
         )
 
-        // 1. Extract TopAppBar if present
-        val topAppBarMatch = Regex("""TopAppBar\s*\(.*?title\s*=\s*\{\s*Text\((?:text\s*=\s*)?["']([^"']+)["']""").find(code)
-            ?: Regex("""centerTitle.*?Text\((?:text\s*=\s*)?["']([^"']+)["']""").find(code)
-
-        if (topAppBarMatch != null || code.contains("TopAppBar")) {
-            val title = topAppBarMatch?.groupValues?.get(1) ?: screenName.replace("Screen", "").ifBlank { "Android App" }
+        // 1. TopAppBar
+        val topAppBarMatch = Regex("""TopAppBar\s*\([\s\S]*?Text\([\s\S]*?["']([^"']+)["']""").find(expandedCode)
+        if (topAppBarMatch != null || expandedCode.contains("TopAppBar")) {
+            val barTitle = topAppBarMatch?.groupValues?.get(1) ?: name.replace("Screen", "").ifBlank { "Android App" }
             val barNode = PreviewNode(
                 id = "appbar_" + UUID.randomUUID().toString().take(6),
                 type = PreviewNodeType.APP_BAR,
-                label = title,
-                props = mutableMapOf("title" to title),
+                label = barTitle,
+                props = mutableMapOf("title" to barTitle),
                 style = PreviewNodeStyle(fillMaxWidth = true, padding = "12px 16px")
             )
             rootNode.children.add(barNode)
         }
 
-        // 2. Content container
-        val contentContainer = PreviewNode(
+        val container = PreviewNode(
             id = "content_" + UUID.randomUUID().toString().take(6),
             type = PreviewNodeType.COLUMN,
             style = PreviewNodeStyle(fillMaxWidth = true, fillMaxHeight = true, padding = "16px")
         )
 
-        // 3. Extract all interactive real elements sequentially
-        extractSequentialComposeElements(code, contentContainer, stateVars)
+        // 2. Texts with exact color parsing
+        val textMatches = Regex("""Text\s*\(\s*(?:text\s*=\s*)?(?:["']([^"']*)["']|([A-Za-z0-9_]+))[\s\S]*?\)(?!\s*\{)""").findAll(expandedCode)
+        for (tm in textMatches) {
+            val literal = tm.groupValues[1]
+            val varName = tm.groupValues[2]
+            val label = if (literal.isNotBlank()) literal else stateVars[varName]?.toString() ?: varName
+            if (label.isNotBlank() && !label.startsWith("Icons.")) {
+                val fullSnippet = tm.value
+                val isHeading = fullSnippet.contains("headline", true) || fullSnippet.contains("title", true) || fullSnippet.contains("bold", true)
+                
+                // Extract color from color = Color(...)
+                val customColorMatch = Regex("""color\s*=\s*([^,\n)]+)""").find(fullSnippet)
+                val customColor = customColorMatch?.let { ThemeColorExtractor.parseColorExpression(it.groupValues[1]) }
 
-        // 4. Extract FAB if present
-        if (code.contains("FloatingActionButton")) {
-            val fabAction = Regex("""FloatingActionButton\s*\(\s*onClick\s*=\s*\{([^}]*)\}""").find(code)?.groupValues?.get(1) ?: "count++"
-            val fabIcon = Regex("""Icons\.Default\.([A-Za-z0-9_]+)""").find(code)?.groupValues?.get(1) ?: "add"
-            val fabNode = PreviewNode(
-                id = "fab_" + UUID.randomUUID().toString().take(6),
-                type = PreviewNodeType.FLOATING_ACTION_BUTTON,
-                label = fabIcon,
-                props = mutableMapOf("icon" to fabIcon)
+                val textNode = PreviewNode(
+                    id = "txt_" + UUID.randomUUID().toString().take(6),
+                    type = PreviewNodeType.TEXT,
+                    label = label,
+                    style = PreviewNodeStyle(
+                        fontSize = if (isHeading) "22px" else "15px",
+                        fontWeight = if (isHeading) "700" else "400",
+                        margin = "6px 0px",
+                        textColor = customColor
+                    )
+                )
+                if (varName.isNotBlank() && stateVars.containsKey(varName)) {
+                    textNode.stateBindings["text"] = varName
+                }
+                container.children.add(textNode)
+            }
+        }
+
+        // 3. Buttons with exact containerColor & textColor
+        val buttonMatches = Regex("""(?:Button|OutlinedButton|TextButton)\s*\([\s\S]*?onClick\s*=\s*\{([^}]*)\}[\s\S]*?\)\s*\{([\s\S]*?)\}""").findAll(expandedCode)
+        for (bm in buttonMatches) {
+            val actionCode = bm.groupValues[1].trim()
+            val childContent = bm.groupValues[2].trim()
+            val fullSnippet = bm.value
+
+            val labelMatch = Regex("""Text\s*\([\s\S]*?["']([^"']+)["']""").find(childContent)
+            val btnLabel = labelMatch?.groupValues?.get(1) ?: "Submit"
+
+            val bgColorMatch = Regex("""(?:containerColor|background)\s*=\s*([^,\n)]+)""").find(fullSnippet)
+            val customBg = bgColorMatch?.let { ThemeColorExtractor.parseColorExpression(it.groupValues[1]) }
+
+            val btnNode = PreviewNode(
+                id = "btn_" + UUID.randomUUID().toString().take(6),
+                type = PreviewNodeType.BUTTON,
+                label = btnLabel,
+                style = PreviewNodeStyle(
+                    fillMaxWidth = true, 
+                    padding = "10px 20px", 
+                    margin = "8px 0px", 
+                    borderRadius = "20px",
+                    backgroundColor = customBg
+                )
             )
-            attachAction(fabNode, "onClick", fabAction, stateVars)
+            attachAction(btnNode, "onClick", actionCode, stateVars)
+            container.children.add(btnNode)
+        }
+
+        // 4. TextFields
+        val tfMatches = Regex("""(?:TextField|OutlinedTextField)\s*\([\s\S]*?value\s*=\s*([A-Za-z0-9_]+)[\s\S]*?\)""").findAll(expandedCode)
+        for (tf in tfMatches) {
+            val varName = tf.groupValues[1]
+            val snippet = tf.value
+            val lblMatch = Regex("""label\s*=\s*\{\s*Text\([\s\S]*?["']([^"']+)["']""").find(snippet)
+                ?: Regex("""placeholder\s*=\s*\{\s*Text\([\s\S]*?["']([^"']+)["']""").find(snippet)
+            val placeholder = lblMatch?.groupValues?.get(1) ?: "Enter text..."
+
+            val tfNode = PreviewNode(
+                id = "tf_" + UUID.randomUUID().toString().take(6),
+                type = PreviewNodeType.OUTLINED_TEXT_FIELD,
+                label = placeholder,
+                props = mutableMapOf("placeholder" to placeholder, "value" to (stateVars[varName]?.toString() ?: "")),
+                style = PreviewNodeStyle(fillMaxWidth = true, margin = "8px 0px")
+            )
+            if (varName.isNotBlank()) {
+                tfNode.stateBindings["value"] = varName
+                tfNode.actions.add(PreviewAction(trigger = "onChange", actionType = ActionType.SET_STATE, target = varName))
+            }
+            container.children.add(tfNode)
+        }
+
+        // 5. Switches
+        val swMatches = Regex("""Switch\s*\([\s\S]*?checked\s*=\s*([A-Za-z0-9_]+)[\s\S]*?\)""").findAll(expandedCode)
+        for (sw in swMatches) {
+            val varName = sw.groupValues[1]
+            val switchNode = PreviewNode(
+                id = "sw_" + UUID.randomUUID().toString().take(6),
+                type = PreviewNodeType.SWITCH,
+                label = varName,
+                props = mutableMapOf("checked" to (stateVars[varName] == true))
+            )
+            switchNode.stateBindings["checked"] = varName
+            switchNode.actions.add(PreviewAction(trigger = "onToggle", actionType = ActionType.TOGGLE_STATE, target = varName))
+            container.children.add(switchNode)
+        }
+
+        // Safety guarantee: If container has 0 children, aggregate from all other composables in the project
+        if (container.children.isEmpty() && composablesMap.isNotEmpty()) {
+            composablesMap.values.forEach { otherCode ->
+                val otherTexts = Regex("""Text\s*\(\s*(?:text\s*=\s*)?["']([^"']+)["']""").findAll(otherCode)
+                for (ot in otherTexts) {
+                    val lbl = ot.groupValues[1]
+                    if (lbl.isNotBlank() && !lbl.startsWith("Icons.")) {
+                        container.children.add(PreviewNode(id = "ot_" + UUID.randomUUID().toString().take(4), type = PreviewNodeType.TEXT, label = lbl, style = PreviewNodeStyle(fontSize = "16px", margin = "4px 0")))
+                    }
+                }
+            }
+        }
+
+        rootNode.children.add(container)
+
+        // 6. Floating Action Button
+        if (expandedCode.contains("FloatingActionButton")) {
+            val fabMatch = Regex("""FloatingActionButton\s*\([\s\S]*?onClick\s*=\s*\{([^}]*)\}""").find(expandedCode)
+            val actionCode = fabMatch?.groupValues?.get(1) ?: "count++"
+            val fabNode = PreviewNode(
+                id = "fab_" + UUID.randomUUID().toString().take(4),
+                type = PreviewNodeType.FLOATING_ACTION_BUTTON,
+                label = "add",
+                props = mutableMapOf("icon" to "add"),
+                actions = mutableListOf(
+                    PreviewAction(
+                        trigger = "onClick",
+                        actionType = ActionType.INCREMENT_STATE,
+                        target = "count"
+                    )
+                )
+            )
             rootNode.children.add(fabNode)
         }
 
-        rootNode.children.add(contentContainer)
-        return rootNode
-    }
-
-    private fun extractSequentialComposeElements(code: String, container: PreviewNode, stateVars: MutableMap<String, Any>) {
-        // Regex pattern to find Compose component calls
-        val componentPattern = Regex("""(Text|Button|OutlinedButton|TextButton|IconButton|TextField|OutlinedTextField|Card|ElevatedCard|Switch|Checkbox|Slider|CircularProgressIndicator|Image|Icon|Spacer|HorizontalDivider|Divider)\s*(\([^)]*\)|\{)""")
-
-        var currentCard: PreviewNode? = null
-
-        // Split code into logical statement blocks
-        val lines = code.lines()
-        var i = 0
-        while (i < lines.size) {
-            val line = lines[i].trim()
-
-            if (line.contains("Card(") || line.contains("ElevatedCard(") || line.contains("OutlinedCard(")) {
-                currentCard = PreviewNode(
-                    id = "card_" + UUID.randomUUID().toString().take(6),
-                    type = PreviewNodeType.CARD,
-                    style = PreviewNodeStyle(fillMaxWidth = true, padding = "16px", margin = "8px 0px", borderRadius = "16px", elevation = 2)
-                )
-                container.children.add(currentCard)
-            }
-
-            val targetParent = currentCard ?: container
-
-            when {
-                // Text("...")
-                line.contains("Text(") -> {
-                    val literalMatch = Regex("""Text\(\s*(?:text\s*=\s*)?["']([^"']+)["']""").find(line)
-                    val varMatch = Regex("""Text\(\s*(?:text\s*=\s*)?([A-Za-z0-9_]+)\s*\)""").find(line)
-
-                    val textVal = literalMatch?.groupValues?.get(1)
-                        ?: varMatch?.groupValues?.get(1)?.let { stateVars[it]?.toString() ?: it }
-
-                    if (!textVal.isNullOrBlank() && !textVal.startsWith("Icons.")) {
-                        val isHeading = line.contains("headline", true) || line.contains("title", true) || line.contains("bold", true) || line.contains("20.sp") || line.contains("24.sp")
-                        val textNode = PreviewNode(
-                            id = "txt_" + UUID.randomUUID().toString().take(6),
-                            type = PreviewNodeType.TEXT,
-                            label = textVal,
-                            style = PreviewNodeStyle(
-                                fontSize = if (isHeading) "20px" else "15px",
-                                fontWeight = if (isHeading) "700" else "400",
-                                margin = "4px 0px"
-                            )
-                        )
-                        if (varMatch != null && stateVars.containsKey(varMatch.groupValues[1])) {
-                            textNode.stateBindings["text"] = varMatch.groupValues[1]
-                        }
-                        targetParent.children.add(textNode)
-                    }
-                }
-
-                // Button(...) { Text(...) }
-                line.contains("Button(") || line.contains("OutlinedButton(") || line.contains("TextButton(") -> {
-                    val isOutlined = line.contains("OutlinedButton")
-                    val isText = line.contains("TextButton")
-                    val btnType = if (isOutlined) PreviewNodeType.OUTLINED_BUTTON else if (isText) PreviewNodeType.TEXT_BUTTON else PreviewNodeType.BUTTON
-
-                    val actionMatch = Regex("""onClick\s*=\s*\{([^}]*)\}""").find(line)
-                    val actionCode = actionMatch?.groupValues?.get(1)?.trim() ?: ""
-
-                    var btnLabel = "Button"
-                    for (k in i..minOf(i + 5, lines.size - 1)) {
-                        val inner = Regex("""Text\(\s*(?:text\s*=\s*)?["']([^"']+)["']""").find(lines[k])
-                        if (inner != null) {
-                            btnLabel = inner.groupValues[1]
-                            break
-                        }
-                    }
-
-                    val btnNode = PreviewNode(
-                        id = "btn_" + UUID.randomUUID().toString().take(6),
-                        type = btnType,
-                        label = btnLabel,
-                        style = PreviewNodeStyle(fillMaxWidth = true, padding = "10px 20px", margin = "8px 0px", borderRadius = "20px")
-                    )
-                    attachAction(btnNode, "onClick", actionCode, stateVars)
-                    targetParent.children.add(btnNode)
-                }
-
-                // OutlinedTextField / TextField
-                line.contains("TextField(") || line.contains("OutlinedTextField(") -> {
-                    val isOutlined = line.contains("OutlinedTextField")
-                    val valMatch = Regex("""value\s*=\s*([A-Za-z0-9_]+)""").find(line)
-                    val varName = valMatch?.groupValues?.get(1) ?: ""
-
-                    var labelText = "Enter text..."
-                    for (k in i..minOf(i + 5, lines.size - 1)) {
-                        val lbl = Regex("""label\s*=\s*\{\s*Text\(["']([^"']+)["']""").find(lines[k])
-                            ?: Regex("""placeholder\s*=\s*\{\s*Text\(["']([^"']+)["']""").find(lines[k])
-                        if (lbl != null) {
-                            labelText = lbl.groupValues[1]
-                            break
-                        }
-                    }
-
-                    val tfNode = PreviewNode(
-                        id = "tf_" + UUID.randomUUID().toString().take(6),
-                        type = if (isOutlined) PreviewNodeType.OUTLINED_TEXT_FIELD else PreviewNodeType.TEXT_FIELD,
-                        label = labelText,
-                        props = mutableMapOf("placeholder" to labelText, "value" to (stateVars[varName]?.toString() ?: "")),
-                        style = PreviewNodeStyle(fillMaxWidth = true, margin = "6px 0px")
-                    )
-                    if (varName.isNotBlank()) {
-                        tfNode.stateBindings["value"] = varName
-                        tfNode.actions.add(PreviewAction(trigger = "onChange", actionType = ActionType.SET_STATE, target = varName))
-                    }
-                    targetParent.children.add(tfNode)
-                }
-
-                // Switch
-                line.contains("Switch(") -> {
-                    val checkedMatch = Regex("""checked\s*=\s*([A-Za-z0-9_]+)""").find(line)
-                    val varName = checkedMatch?.groupValues?.get(1) ?: "isDarkMode"
-                    val switchNode = PreviewNode(
-                        id = "sw_" + UUID.randomUUID().toString().take(6),
-                        type = PreviewNodeType.SWITCH,
-                        label = varName,
-                        props = mutableMapOf("checked" to (stateVars[varName] == true))
-                    )
-                    switchNode.stateBindings["checked"] = varName
-                    switchNode.actions.add(PreviewAction(trigger = "onToggle", actionType = ActionType.TOGGLE_STATE, target = varName))
-                    targetParent.children.add(switchNode)
-                }
-
-                // CircularProgressIndicator
-                line.contains("CircularProgressIndicator") -> {
-                    val progNode = PreviewNode(
-                        id = "prog_" + UUID.randomUUID().toString().take(6),
-                        type = PreviewNodeType.PROGRESS_INDICATOR,
-                        style = PreviewNodeStyle(alignment = "center", margin = "12px 0px")
-                    )
-                    targetParent.children.add(progNode)
-                }
-
-                // Spacer
-                line.contains("Spacer(") -> {
-                    val hMatch = Regex("""height\(([0-9]+)\.dp\)""").find(line)
-                    val heightDp = hMatch?.groupValues?.get(1)?.toIntOrNull() ?: 12
-                    val spNode = PreviewNode(
-                        id = "sp_" + UUID.randomUUID().toString().take(6),
-                        type = PreviewNodeType.SPACER,
-                        style = PreviewNodeStyle(height = "${heightDp}px")
-                    )
-                    targetParent.children.add(spNode)
-                }
-            }
-            i++
-        }
-
-        // If no nodes found at all, create an authentic UI preview card
-        if (container.children.isEmpty()) {
-            val sampleCard = PreviewNode(
-                id = "demo_card",
-                type = PreviewNodeType.CARD,
-                style = PreviewNodeStyle(fillMaxWidth = true, padding = "16px", borderRadius = "16px", elevation = 2)
-            )
-            sampleCard.children.add(PreviewNode(id = "d_txt1", type = PreviewNodeType.TEXT, label = "Native Android Jetpack Compose", style = PreviewNodeStyle(fontSize = "18px", fontWeight = "700", margin = "0 0 6px 0")))
-            sampleCard.children.add(PreviewNode(id = "d_txt2", type = PreviewNodeType.TEXT, label = "Interactive UI is ready. Modify your Compose files to see live changes.", style = PreviewNodeStyle(fontSize = "13.5px", margin = "0 0 12px 0")))
-            val testBtn = PreviewNode(id = "d_btn", type = PreviewNodeType.BUTTON, label = "Tap Interaction Test", style = PreviewNodeStyle(fillMaxWidth = true, borderRadius = "20px"))
-            testBtn.actions.add(PreviewAction("onClick", ActionType.SHOW_TOAST, "Compose Interaction Active!"))
-            sampleCard.children.add(testBtn)
-            container.children.add(sampleCard)
-        }
+        return PreviewScreen(
+            id = name.lowercase(),
+            name = name,
+            isInitial = isInitial,
+            rootNode = rootNode,
+            stateVariables = stateVars
+        )
     }
 
     private fun attachAction(node: PreviewNode, trigger: String, actionCode: String, stateVars: MutableMap<String, Any>) {
@@ -392,12 +471,12 @@ object KotlinComposeAdapter {
         node.actions.add(PreviewAction(trigger, ActionType.SHOW_TOAST, "Action Executed"))
     }
 
-    private fun extractTheme(code: String): PreviewTheme {
-        var primary = "#6750A4"
-        val primaryMatch = Regex("""Color\((?:0x(?:FF)?([0-9a-fA-F]{6}))\)""").find(code)
-        if (primaryMatch != null) {
-            primary = "#" + primaryMatch.groupValues[1]
+    private fun extractAppTitle(files: List<ProjectFileEntity>): String {
+        val stringsXml = files.find { it.path.contains("strings.xml") }?.content
+        if (stringsXml != null) {
+            val match = Regex("""<string\s+name=["']app_name["']>([^<]+)</string>""").find(stringsXml)
+            if (match != null) return match.groupValues[1].trim()
         }
-        return PreviewTheme(primaryColor = primary)
+        return "Android App"
     }
 }

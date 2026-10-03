@@ -52,6 +52,7 @@ enum class PreviewNodeType {
     SNACKBAR_HOST,
     DIALOG,
     CONTAINER,
+    GRID,
     CUSTOM
 }
 
@@ -99,7 +100,8 @@ enum class ActionType {
     INCREMENT_STATE,
     SHOW_TOAST,
     SHOW_SNACKBAR,
-    MOCK_API_CALL
+    MOCK_API_CALL,
+    CALCULATOR_INPUT
 }
 
 data class PreviewTheme(

@@ -5,7 +5,7 @@ package com.example.preview.universal
  * 
  * Generates the high-fidelity interactive browser preview bundle (HTML, CSS, JS).
  * Includes Material 3 renderer, reactive state engine, navigation engine, and mock hardware APIs.
- * Uses inline SVG vector graphics for all system status icons and UI controls (zero external font dependencies).
+ * Supports full interactive Calculator, Grid layouts, and multi-line Compose/Flutter components.
  */
 object UniversalPreviewRuntime {
 
@@ -51,7 +51,7 @@ object UniversalPreviewRuntime {
                     flex-direction: column;
                     align-items: center;
                     justify-content: flex-start;
-                    padding: 10px 6px;
+                    padding: 8px 4px;
                     overflow-x: hidden;
                 }
 
@@ -171,7 +171,15 @@ object UniversalPreviewRuntime {
                     display: flex;
                     flex-direction: row;
                     align-items: center;
-                    gap: 12px;
+                    gap: 10px;
+                }
+
+                .m3-grid {
+                    display: grid;
+                    grid-template-columns: repeat(4, 1fr);
+                    gap: 10px;
+                    width: 100%;
+                    padding: 10px 0;
                 }
 
                 .m3-card {
@@ -181,10 +189,6 @@ object UniversalPreviewRuntime {
                     padding: 16px;
                     box-shadow: 0 2px 8px rgba(0,0,0,0.04);
                     transition: transform 0.15s ease, box-shadow 0.15s ease;
-                }
-                .m3-card:hover {
-                    transform: translateY(-1px);
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
                 }
 
                 .m3-text {
@@ -197,7 +201,7 @@ object UniversalPreviewRuntime {
                     color: var(--md-sys-color-on-primary);
                     border: none;
                     border-radius: 20px;
-                    padding: 10px 24px;
+                    padding: 10px 20px;
                     font-size: 14px;
                     font-weight: 600;
                     cursor: pointer;
@@ -208,7 +212,7 @@ object UniversalPreviewRuntime {
                     transition: background 0.2s, transform 0.1s;
                 }
                 .m3-button:active {
-                    transform: scale(0.97);
+                    transform: scale(0.96);
                     opacity: 0.9;
                 }
 
@@ -217,10 +221,82 @@ object UniversalPreviewRuntime {
                     color: var(--md-sys-color-primary);
                     border: 1.5px solid var(--md-sys-color-primary);
                     border-radius: 20px;
-                    padding: 9px 20px;
+                    padding: 9px 18px;
                     font-size: 14px;
                     font-weight: 600;
                     cursor: pointer;
+                }
+
+                /* Dedicated Calculator Styles */
+                .m3-calc-container {
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: space-between;
+                    height: 100%;
+                    padding: 16px;
+                }
+
+                .m3-calc-display {
+                    width: 100%;
+                    min-height: 110px;
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: flex-end;
+                    align-items: flex-end;
+                    padding: 16px 8px;
+                    text-align: right;
+                    word-break: break-all;
+                }
+
+                .m3-calc-history {
+                    font-size: 16px;
+                    color: #79747E;
+                    min-height: 22px;
+                    margin-bottom: 4px;
+                }
+
+                .m3-calc-val {
+                    font-size: 44px;
+                    font-weight: 700;
+                    color: var(--md-sys-color-on-surface);
+                    letter-spacing: -1px;
+                }
+
+                .m3-calc-btn {
+                    aspect-ratio: 1;
+                    border-radius: 50%;
+                    border: none;
+                    font-size: 22px;
+                    font-weight: 600;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    cursor: pointer;
+                    background: #E8DEF8;
+                    color: #1D192B;
+                    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+                    transition: transform 0.1s, opacity 0.1s;
+                }
+                .m3-calc-btn:active {
+                    transform: scale(0.92);
+                    opacity: 0.85;
+                }
+                .m3-calc-btn.op {
+                    background: var(--md-sys-color-primary);
+                    color: var(--md-sys-color-on-primary);
+                }
+                .m3-calc-btn.fn {
+                    background: #D0BCFF;
+                    color: #381E72;
+                }
+                .m3-calc-btn.num {
+                    background: #F3EDF7;
+                    color: #1D1B20;
+                }
+                .m3-calc-btn.wide {
+                    grid-column: span 2;
+                    aspect-ratio: 2.1 / 1;
+                    border-radius: 36px;
                 }
 
                 .m3-text-field {
@@ -232,11 +308,6 @@ object UniversalPreviewRuntime {
                     outline: none;
                     background: transparent;
                     color: var(--md-sys-color-on-surface);
-                    transition: border-color 0.2s;
-                }
-                .m3-text-field:focus {
-                    border-color: var(--md-sys-color-primary);
-                    border-width: 2px;
                 }
 
                 .m3-fab {
@@ -254,10 +325,6 @@ object UniversalPreviewRuntime {
                     box-shadow: 0 4px 12px rgba(0,0,0,0.25);
                     cursor: pointer;
                     border: none;
-                    transition: transform 0.2s;
-                }
-                .m3-fab:active {
-                    transform: scale(0.92);
                 }
 
                 .m3-switch {
@@ -278,7 +345,7 @@ object UniversalPreviewRuntime {
                 input:checked + .slider { background-color: var(--md-sys-color-primary); }
                 input:checked + .slider:before { transform: translateX(20px); }
 
-                /* Loading Indicator */
+                /* Loading Spinner */
                 .m3-progress-spinner {
                     width: 32px;
                     height: 32px;
@@ -290,7 +357,6 @@ object UniversalPreviewRuntime {
                 }
                 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-                /* Toast & Snackbar Overlay */
                 .toast-overlay {
                     position: absolute;
                     bottom: 40px;
@@ -312,7 +378,6 @@ object UniversalPreviewRuntime {
                     transform: translateX(-50%) translateY(-10px);
                 }
 
-                /* Mobile Nav Bar at Bottom */
                 .nav-bar-bottom {
                     height: 20px;
                     display: flex;
@@ -335,23 +400,14 @@ object UniversalPreviewRuntime {
             </div>
 
             <div class="phone-frame">
-                <!-- Status Bar with Vector SVGs -->
+                <!-- Status Bar -->
                 <div class="status-bar">
                     <span id="clock-display">09:41</span>
                     <div class="notch"></div>
                     <div class="status-icons">
-                        <!-- 4-bar Signal SVG -->
-                        <svg class="svg-icon" viewBox="0 0 24 24">
-                            <path d="M2 22h20V2L2 22z" />
-                        </svg>
-                        <!-- Wi-Fi SVG -->
-                        <svg class="svg-icon" viewBox="0 0 24 24">
-                            <path d="M12 4C7.31 4 3.07 5.9 0 8.98L12 21 24 8.98A16.88 16.88 0 0 0 12 4zm0 4c3.48 0 6.64 1.34 9 3.53L12 19.3 3 11.53A12.92 12.92 0 0 1 12 8z"/>
-                        </svg>
-                        <!-- Battery SVG -->
-                        <svg class="svg-icon" viewBox="0 0 24 24">
-                            <path d="M17 4h-3V2h-4v2H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/>
-                        </svg>
+                        <svg class="svg-icon" viewBox="0 0 24 24"><path d="M2 22h20V2L2 22z" /></svg>
+                        <svg class="svg-icon" viewBox="0 0 24 24"><path d="M12 4C7.31 4 3.07 5.9 0 8.98L12 21 24 8.98A16.88 16.88 0 0 0 12 4zm0 4c3.48 0 6.64 1.34 9 3.53L12 19.3 3 11.53A12.92 12.92 0 0 1 12 8z"/></svg>
+                        <svg class="svg-icon" viewBox="0 0 24 24"><path d="M17 4h-3V2h-4v2H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/></svg>
                     </div>
                 </div>
 
@@ -369,7 +425,6 @@ object UniversalPreviewRuntime {
 
             <script>
                 try {
-                    // Live Clock
                     function updateClock() {
                         const now = new Date();
                         const hours = now.getHours().toString().padStart(2, '0');
@@ -380,17 +435,19 @@ object UniversalPreviewRuntime {
                     setInterval(updateClock, 1000);
                     updateClock();
 
-                    // Universal Preview State Engine
                     const screensData = $allScreensJson;
                     let currentScreenId = "$initialScreenId";
-                    let activeState = {};
+                    let activeState = {
+                        calcDisplay: '0',
+                        calcHistory: '',
+                        count: 0
+                    };
 
-                    // Initialize screen state
                     function initScreen(screenId) {
                         currentScreenId = screenId;
                         const screen = screensData.find(s => s.id === screenId) || screensData[0];
                         if (screen && screen.stateVariables) {
-                            activeState = Object.assign({}, screen.stateVariables, activeState);
+                            activeState = Object.assign({}, activeState, screen.stateVariables);
                         }
                         renderCurrentScreen();
                     }
@@ -423,11 +480,52 @@ object UniversalPreviewRuntime {
                         setTimeout(() => t.classList.remove('active'), 2500);
                     }
 
+                    // Interactive Real Calculator Engine
+                    function onCalculatorInput(key) {
+                        let disp = (activeState['calcDisplay'] !== undefined ? activeState['calcDisplay'].toString() : '0');
+                        let hist = activeState['calcHistory'] || '';
+
+                        if (key === 'C' || key === 'AC' || key === 'Clear' || key === 'CLEAR') {
+                            disp = '0';
+                            hist = '';
+                        } else if (key === '⌫' || key === 'DEL' || key === 'BACK' || key === 'Backspace') {
+                            disp = disp.length > 1 ? disp.slice(0, -1) : '0';
+                        } else if (key === '±') {
+                            disp = disp.startsWith('-') ? disp.slice(1) : '-' + disp;
+                        } else if (key === '%') {
+                            const val = parseFloat(disp) / 100;
+                            disp = isNaN(val) ? '0' : val.toString();
+                        } else if (key === '=') {
+                            try {
+                                const expr = (hist + disp).replace(/×/g, '*').replace(/÷/g, '/').replace(/−/g, '-');
+                                const res = Function('"use strict";return (' + expr + ')')();
+                                hist = hist + disp + ' =';
+                                disp = (Math.round(res * 100000000) / 100000000).toString();
+                            } catch (e) {
+                                disp = 'Error';
+                            }
+                        } else if (['+', '-', '×', '÷', '*', '/'].includes(key)) {
+                            hist = disp + ' ' + key + ' ';
+                            disp = '0';
+                        } else {
+                            if (disp === '0' && key !== '.') {
+                                disp = key;
+                            } else if (key === '.' && disp.includes('.')) {
+                                // ignore double dot
+                            } else {
+                                disp += key;
+                            }
+                        }
+
+                        activeState['calcDisplay'] = disp;
+                        activeState['calcHistory'] = hist;
+                        renderCurrentScreen();
+                    }
+
                     // Node Renderer
                     function renderNode(node) {
                         if (!node) return '';
 
-                        // Check conditional
                         if (node.conditionalExpr) {
                             const cond = node.conditionalExpr;
                             if (cond.startsWith('!') && activeState[cond.substring(1)]) return '';
@@ -441,20 +539,33 @@ object UniversalPreviewRuntime {
                                 return '<div style="display:flex;flex-direction:column;height:100%;">' + childrenHtml + '</div>';
 
                             case 'APP_BAR':
-                                const barTitle = (node.props && node.props.title) || node.label || 'App Header';
+                                const barTitle = (node.props && node.props.title) || node.label || 'App';
                                 return '<div class="m3-app-bar">' + 
                                        '<svg style="width:20px;height:20px;cursor:pointer;fill:currentColor;" viewBox="0 0 24 24" onclick="showToast(\'Menu opened\')"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>' +
                                        '<span>' + barTitle + '</span>' +
                                        '</div>';
 
                             case 'COLUMN':
-                                return '<div class="m3-column">' + childrenHtml + '</div>';
+                                const isCalcContainer = node.props && node.props.isCalculator;
+                                const isCentered = node.style && node.style.alignment === 'center';
+                                const colClass = isCalcContainer ? 'm3-calc-container' : 'm3-column';
+                                const colStyle = isCentered ? 'style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;padding:24px 16px;"' : '';
+                                return '<div class="' + colClass + '" ' + colStyle + '>' + childrenHtml + '</div>';
 
                             case 'ROW':
-                                return '<div class="m3-row">' + childrenHtml + '</div>';
+                                return '<div class="m3-row" style="width:100%;justify-content:space-between;">' + childrenHtml + '</div>';
+
+                            case 'GRID':
+                                const cols = node.props && node.props.columns ? node.props.columns : 4;
+                                return '<div class="m3-grid" style="grid-template-columns: repeat(' + cols + ', 1fr);">' + childrenHtml + '</div>';
 
                             case 'CARD':
-                                return '<div class="m3-card">' + childrenHtml + '</div>';
+                                const cardBg = node.style && node.style.backgroundColor ? ('background-color:' + node.style.backgroundColor + ';') : '';
+                                const cardColor = node.style && node.style.textColor ? ('color:' + node.style.textColor + ';') : '';
+                                const cardRadius = node.style && node.style.borderRadius ? ('border-radius:' + node.style.borderRadius + ';') : '';
+                                const cardPadding = node.style && node.style.padding ? ('padding:' + node.style.padding + ';') : '';
+                                const cardStyle = 'style="' + cardBg + cardColor + cardRadius + cardPadding + '"';
+                                return '<div class="m3-card" ' + cardStyle + '>' + childrenHtml + '</div>';
 
                             case 'TEXT':
                                 let textVal = node.label || '';
@@ -462,13 +573,38 @@ object UniversalPreviewRuntime {
                                     const varKey = node.stateBindings.text;
                                     textVal = activeState[varKey] !== undefined ? activeState[varKey] : textVal;
                                 }
-                                const fSize = node.style && node.style.fontSize ? node.style.fontSize : '15px';
-                                const fWeight = node.style && node.style.fontWeight ? node.style.fontWeight : '400';
-                                return '<div class="m3-text" style="font-size:' + fSize + ';font-weight:' + fWeight + ';">' + textVal + '</div>';
+                                if (node.props && node.props.isCalcDisplay) {
+                                    const disp = activeState['calcDisplay'] || '0';
+                                    const hist = activeState['calcHistory'] || '';
+                                    return '<div class="m3-calc-display">' +
+                                           '<div class="m3-calc-history">' + hist + '</div>' +
+                                           '<div class="m3-calc-val">' + disp + '</div>' +
+                                           '</div>';
+                                }
+                                const fSize = (node.style && node.style.fontSize) ? node.style.fontSize : '15px';
+                                const fWeight = (node.style && node.style.fontWeight) ? node.style.fontWeight : '400';
+                                const txtColor = (node.style && node.style.textColor) ? ('color:' + node.style.textColor + ';') : '';
+                                const txtAlign = (node.style && node.style.alignment === 'center') ? 'text-align:center;width:100%;' : '';
+                                const txtMargin = (node.style && node.style.margin) ? ('margin:' + node.style.margin + ';') : '';
+                                return '<div class="m3-text" style="font-size:' + fSize + ';font-weight:' + fWeight + ';' + txtColor + txtAlign + txtMargin + '">' + textVal + '</div>';
 
                             case 'BUTTON':
-                                const btnAction = (node.actions && node.actions[0]) ? getActionJs(node.actions[0]) : "showToast('Clicked " + (node.label || 'Button') + "')";
-                                return '<button class="m3-button" onclick="' + btnAction + '">' + (node.label || 'Action') + '</button>';
+                                const isCalc = node.props && node.props.isCalcKey;
+                                const keyVal = node.label || '0';
+                                if (isCalc) {
+                                    const isOp = ['+', '-', '×', '÷', '*', '/', '='].includes(keyVal);
+                                    const isFn = ['C', 'AC', '±', '%', '⌫'].includes(keyVal);
+                                    const isWide = keyVal === '0' && node.props.isWide;
+                                    const btnClass = 'm3-calc-btn ' + (isOp ? 'op' : (isFn ? 'fn' : 'num')) + (isWide ? ' wide' : '');
+                                    return '<button class="' + btnClass + '" onclick="onCalculatorInput(\'' + keyVal + '\')">' + keyVal + '</button>';
+                                }
+                                const customBtnBg = node.style && node.style.backgroundColor ? ('background-color:' + node.style.backgroundColor + ';') : '';
+                                const customBtnColor = node.style && node.style.textColor ? ('color:' + node.style.textColor + ';') : '';
+                                const customBtnRadius = node.style && node.style.borderRadius ? ('border-radius:' + node.style.borderRadius + ';') : '';
+                                const customBtnPadding = node.style && node.style.padding ? ('padding:' + node.style.padding + ';') : '';
+                                const customBtnStyle = 'style="' + customBtnBg + customBtnColor + customBtnRadius + customBtnPadding + '"';
+                                const btnAction = (node.actions && node.actions[0]) ? getActionJs(node.actions[0]) : "showToast('Clicked " + keyVal + "')";
+                                return '<button class="m3-button" ' + customBtnStyle + ' onclick="' + btnAction + '">' + keyVal + '</button>';
 
                             case 'OUTLINED_BUTTON':
                                 const obtnAction = (node.actions && node.actions[0]) ? getActionJs(node.actions[0]) : "showToast('Clicked " + (node.label || 'Button') + "')";
@@ -489,7 +625,7 @@ object UniversalPreviewRuntime {
 
                             case 'FLOATING_ACTION_BUTTON':
                                 const fabAction = (node.actions && node.actions[0]) ? getActionJs(node.actions[0]) : "showToast('FAB Clicked')";
-                                return '<button class="m3-fab" onclick="' + fabAction + '"><svg style="width:24px;height:24px;fill:currentColor;" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg></button>';
+                                return '<button class="m3-fab" onclick="' + fabAction + '"><svg style="width:26px;height:26px;fill:currentColor;" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg></button>';
 
                             case 'PROGRESS_INDICATOR':
                                 return '<div class="m3-progress-spinner"></div>';
@@ -509,6 +645,7 @@ object UniversalPreviewRuntime {
                     function getActionJs(action) {
                         if (!action) return '';
                         switch(action.actionType) {
+                            case 'CALCULATOR_INPUT': return "onCalculatorInput('" + (action.payload || action.target) + "')";
                             case 'INCREMENT_STATE': return "incrementState('" + action.target + "')";
                             case 'TOGGLE_STATE': return "toggleState('" + action.target + "')";
                             case 'SET_STATE': return "setState('" + action.target + "', " + JSON.stringify(action.payload || true) + ")";
@@ -525,22 +662,13 @@ object UniversalPreviewRuntime {
 
                         const screen = screensData.find(s => s.id === currentScreenId) || screensData[0];
                         if (!screen || !screen.rootNode) {
-                            appRoot.innerHTML = '<div style="padding:24px;text-align:center;"><h3 style="margin-bottom:8px;">Welcome</h3><p style="color:#666;">Application ready for preview.</p></div>';
+                            appRoot.innerHTML = '<div style="padding:24px;text-align:center;">No UI loaded</div>';
                             return;
                         }
 
-                        const rendered = renderNode(screen.rootNode);
-                        if (!rendered || rendered.trim() === '') {
-                            appRoot.innerHTML = '<div class="m3-column">' +
-                                '<div class="m3-card"><div class="m3-text" style="font-size:18px;font-weight:700;">' + (screen.name || 'App Preview') + '</div><div class="m3-text" style="color:#666;margin-top:6px;">Interactive mobile interface is active.</div></div>' +
-                                '<button class="m3-button" onclick="showToast(\'Tap detected!\')">Interactive Test Button</button>' +
-                                '</div>';
-                        } else {
-                            appRoot.innerHTML = rendered;
-                        }
+                        appRoot.innerHTML = renderNode(screen.rootNode);
                     }
 
-                    // Initial render
                     initScreen(currentScreenId);
                 } catch (e) {
                     console.error('Universal Preview Render Error:', e);
@@ -589,13 +717,20 @@ object UniversalPreviewRuntime {
         node.props.forEach { (k, v) ->
             if (!firstProp) sb.append(",")
             firstProp = false
-            sb.append("\"${escapeJson(k)}\":\"${escapeJson(v.toString())}\"")
+            val vStr = escapeJson(v.toString())
+            sb.append("\"${escapeJson(k)}\":\"$vStr\"")
         }
         sb.append("},")
         sb.append("\"style\":{")
         sb.append("\"fontSize\":\"${node.style.fontSize ?: ""}\",")
         sb.append("\"fontWeight\":\"${node.style.fontWeight ?: ""}\",")
-        sb.append("\"height\":\"${node.style.height ?: ""}\"")
+        sb.append("\"height\":\"${node.style.height ?: ""}\",")
+        sb.append("\"textColor\":\"${node.style.textColor ?: ""}\",")
+        sb.append("\"backgroundColor\":\"${node.style.backgroundColor ?: ""}\",")
+        sb.append("\"borderRadius\":\"${node.style.borderRadius ?: ""}\",")
+        sb.append("\"padding\":\"${node.style.padding ?: ""}\",")
+        sb.append("\"alignment\":\"${node.style.alignment ?: ""}\",")
+        sb.append("\"margin\":\"${node.style.margin ?: ""}\"")
         sb.append("},")
         sb.append("\"stateBindings\":{")
         var firstBind = true
