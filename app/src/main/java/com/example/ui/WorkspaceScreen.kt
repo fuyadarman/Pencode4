@@ -3099,6 +3099,17 @@ fun PreviewTabContent(
     val htmlFile = remember(files) { 
         files.find { it.path.equals("index.html", ignoreCase = true) || it.path.endsWith("/index.html", ignoreCase = true) } 
     }
+    val isUniversalPreviewApplicable = remember(files) {
+        com.example.preview.universal.UniversalPreviewGenerator.isUniversalPreviewApplicable(files)
+    }
+    val universalPreviewHtml = remember(files, webPreviewRefreshTrigger) {
+        if (isUniversalPreviewApplicable && htmlFile == null) {
+            com.example.preview.universal.UniversalPreviewGenerator.generateInteractivePreviewHtml(files)
+        } else null
+    }
+    val effectiveHtmlContent = remember(htmlFile?.content, universalPreviewHtml) {
+        htmlFile?.content ?: universalPreviewHtml
+    }
     val filesHolder = remember { FilesHolder(files) }
     filesHolder.filesList = files
 
@@ -3705,18 +3716,18 @@ fun PreviewTabContent(
                         update = { /* no-op */ },
                         modifier = Modifier.fillMaxSize()
                     )
-                } else if (htmlFile == null && !hasWebDist && customUrl == null) {
+                } else if (effectiveHtmlContent == null && !hasWebDist && customUrl == null) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(Color(0xFF08080C)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("No HTML file found. Create index.html to preview, or type any URL above.", color = Color.Gray)
+                        Text("No preview available. Add code to preview, or type any URL above.", color = Color.Gray)
                     }
                 } else {
-                    val initialProcessedHtml = remember(htmlFile?.content) {
-                        htmlFile?.content?.let { com.example.ui.preview.WebPreviewPerformanceGuard.preprocessHtmlSafely(it) } ?: ""
+                    val initialProcessedHtml = remember(effectiveHtmlContent) {
+                        effectiveHtmlContent?.let { com.example.ui.preview.WebPreviewPerformanceGuard.preprocessHtmlSafely(it) } ?: ""
                     }
                     var lastLoadedHtml by remember { mutableStateOf(initialProcessedHtml) }
                     var isPageLoading by remember { mutableStateOf(true) }
@@ -3998,7 +4009,7 @@ fun PreviewTabContent(
                                     loadUrl(customUrl!!)
                                 } else if (hasWebDist) {
                                     loadUrl(com.example.ui.preview.WebPreviewLifecycleManager.VIRTUAL_BASE_URL)
-                                } else if (htmlFile != null) {
+                                } else if (effectiveHtmlContent != null) {
                                     loadDataWithBaseURL(
                                         com.example.ui.preview.WebPreviewLifecycleManager.VIRTUAL_BASE_URL,
                                         initialProcessedHtml,
@@ -4016,8 +4027,8 @@ fun PreviewTabContent(
                             if (isInspectorModeActive) {
                                 com.example.ui.preview.WebPreviewElementInspector.setInspectorActive(webView, true)
                             }
-                            if (customUrl == null && !hasWebDist && htmlFile != null) {
-                                val currentContent = com.example.ui.preview.WebPreviewPerformanceGuard.preprocessHtmlSafely(htmlFile.content)
+                            if (customUrl == null && !hasWebDist && effectiveHtmlContent != null) {
+                                val currentContent = com.example.ui.preview.WebPreviewPerformanceGuard.preprocessHtmlSafely(effectiveHtmlContent)
                                 if (lastLoadedHtml != currentContent) {
                                     lastLoadedHtml = currentContent
                                     webView.loadDataWithBaseURL(
