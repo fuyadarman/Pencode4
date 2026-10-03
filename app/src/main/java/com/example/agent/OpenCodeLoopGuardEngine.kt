@@ -115,10 +115,10 @@ object OpenCodeLoopGuardEngine {
             val previousReadsOfTarget = actionHistory.dropLast(1).count {
                 it.tool in setOf("read_file", "view_file", "read_file_range") && it.target.equals(target, ignoreCase = true)
             }
-            if (previousReadsOfTarget >= 1) {
-                // Background warning when the AI reads the same file twice (invisible in app UI)
+            if (previousReadsOfTarget >= 5) {
+                // Background warning when the AI reads the same file excessively without edits
                 return RepetitionResult.WarnAndNudge(
-                    message = "Background Warning: You have already read '$target' earlier in this conversation. You already possess its complete contents in your history context. Do NOT re-read '$target'. Proceed directly to applying edits or calling the next necessary action.",
+                    message = "Background Warning: You have inspected '$target' $previousReadsOfTarget times. Please proceed directly to applying edits using 'edit_file' or 'create_file'.",
                     silentInUi = true
                 )
             }

@@ -48,21 +48,23 @@ class ContextOptimizationManager {
                 }
             }
 
-            // Stage 4: Reinforce Active Goal Anchor so model never drifts in multi-turn tool loops
+            // Stage 4: Reinforce Active Goal Anchor & Working Set Banner so model never drifts or loops
             if (resultHistory.isNotEmpty()) {
                 val lastContent = resultHistory.last()
                 if (lastContent.role == "user" && lastContent.parts.isNotEmpty()) {
                     val currentText = lastContent.parts.first().text ?: ""
-                    if (!currentText.contains("[ACTIVE GOAL ANCHOR:") && !currentText.contains("[CURRENT ACTIVE USER REQUEST")) {
-                        val goalAnchor = com.example.agent.AgentGoalAlignmentEngine.buildToolOutputGoalAnchor(activeTaskQuery)
-                        if (goalAnchor.isNotBlank()) {
-                            val updatedText = currentText + goalAnchor
-                            val updatedParts = lastContent.parts.toMutableList()
-                            updatedParts[0] = updatedParts[0].copy(text = updatedText)
-                            val updatedHistory = resultHistory.toMutableList()
-                            updatedHistory[updatedHistory.lastIndex] = lastContent.copy(parts = updatedParts)
-                            resultHistory = updatedHistory
-                        }
+                    val goalAnchor = if (!currentText.contains("[ACTIVE GOAL ANCHOR:") && !currentText.contains("[CURRENT ACTIVE USER REQUEST")) {
+                        com.example.agent.AgentGoalAlignmentEngine.buildToolOutputGoalAnchor(activeTaskQuery)
+                    } else ""
+                    val contextBanner = com.example.agent.AgentContextResilienceEngine.buildContextStateBanner()
+
+                    if (goalAnchor.isNotBlank() || contextBanner.isNotBlank()) {
+                        val updatedText = currentText + goalAnchor + contextBanner
+                        val updatedParts = lastContent.parts.toMutableList()
+                        updatedParts[0] = updatedParts[0].copy(text = updatedText)
+                        val updatedHistory = resultHistory.toMutableList()
+                        updatedHistory[updatedHistory.lastIndex] = lastContent.copy(parts = updatedParts)
+                        resultHistory = updatedHistory
                     }
                 }
             }

@@ -15,10 +15,10 @@ import java.util.regex.Pattern
  */
 object ContextCompactionEngine {
 
-    const val RECENT_TOKEN_BUDGET = 2500
+    const val RECENT_TOKEN_BUDGET = 25000
     private const val CHARS_PER_TOKEN = 4
-    private const val RECENT_CHAR_BUDGET = RECENT_TOKEN_BUDGET * CHARS_PER_TOKEN // ~10,000 chars
-    private const val COMPACTION_TRIGGER_TOKENS = 3200 // Triggers when conversation exceeds ~3.2k tokens
+    private const val RECENT_CHAR_BUDGET = RECENT_TOKEN_BUDGET * CHARS_PER_TOKEN // ~100,000 chars
+    private const val COMPACTION_TRIGGER_TOKENS = 35000 // Triggers when conversation exceeds ~35k tokens
 
     /**
      * Estimates tokens for a single Content object.

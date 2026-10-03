@@ -9,9 +9,9 @@ import com.example.api.Part
  */
 object CodeChunkerAndPruner {
 
-    private const val MAX_FILE_READ_CHARS = 25000
-    private const val MAX_COMMAND_OUTPUT_CHARS = 12000
-    private const val MAX_MODEL_OUTPUT_CHARS = 6000
+    private const val MAX_FILE_READ_CHARS = 120000
+    private const val MAX_COMMAND_OUTPUT_CHARS = 25000
+    private const val MAX_MODEL_OUTPUT_CHARS = 12000
 
     /**
      * Optimizes tool output parts and content messages in conversation history.
@@ -97,9 +97,9 @@ object CodeChunkerAndPruner {
      * Smart File Chunking: Keeps header, relevant key lines, and footer of long source files.
      */
     private fun chunkLargeFileRead(text: String): String {
-        val head = text.take(2200)
-        val tail = text.takeLast(2200)
-        val omittedLength = text.length - 4400
+        val head = text.take(15000)
+        val tail = text.takeLast(15000)
+        val omittedLength = text.length - 30000
         return "$head\n\n[... Smart Chunking: Omitted $omittedLength characters of middle code. Use read_file with startLine/endLine for specific sections ...]\n\n$tail"
     }
 

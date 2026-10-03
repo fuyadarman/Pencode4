@@ -3816,6 +3816,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             com.example.agent.AgentReadLoopPolicy.resetSession()
             com.example.agent.AgentFileReadQuotaGuard.resetSession()
             com.example.agent.OpenCodeLoopGuardEngine.reset()
+            com.example.agent.AgentContextResilienceEngine.resetSession()
             var lastDiagnosedError: String? = null
 
             val handleComplete: suspend (String) -> Unit = { finishMsg: String ->
@@ -4154,6 +4155,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 actionsCount++
                                 _agentStatus.value = "Executing tool '$tool' (Action $actionsCount/$maxActionSteps)..."
 
+                                val circuitBreakerMsg = com.example.agent.AgentContextResilienceEngine.evaluateAntiLoop(tool, args?.path ?: args?.targetFile)
+                                if (circuitBreakerMsg != null) {
+                                    history.add(Content(role = "user", parts = listOf(Part(text = circuitBreakerMsg))))
+                                }
+
                                 val repCheck = com.example.agent.OpenCodeLoopGuardEngine.checkAndRecordRepetition(
                                     tool = tool,
                                     args = args,
@@ -4239,6 +4245,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 _aiActionLogs.value = _aiActionLogs.value + readLog
 
                                 val readTarget = (args?.path ?: args?.targetFile ?: readRes.pathsRead.firstOrNull())
+                                if (readTarget != null && readRes.isSuccess) {
+                                    com.example.agent.AgentContextResilienceEngine.recordFileRead(readTarget)
+                                }
                                 val quotaDirective = if (readTarget != null) {
                                     com.example.agent.AgentFileReadQuotaGuard.recordAndGetDirective(readTarget) ?: ""
                                 } else ""
@@ -4277,6 +4286,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     lastEditError = null
                                     com.example.agent.AgentReadLoopPolicy.onFileModified(mutationRes.filePath)
                                     com.example.agent.AgentFileReadQuotaGuard.onFileModified(mutationRes.filePath)
+                                    com.example.agent.AgentContextResilienceEngine.recordFileModified(mutationRes.filePath)
                                     com.example.ui.preview.WebConsoleSyncManager.notifyCodeEdited(mutationRes.filePath)
                                     _projectFiles.value = repository.getFilesForProject(project.name)
                                     _editHistory.value = _editHistory.value + EditRecord(

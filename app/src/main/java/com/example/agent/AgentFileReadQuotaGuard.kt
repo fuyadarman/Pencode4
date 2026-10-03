@@ -36,11 +36,8 @@ object AgentFileReadQuotaGuard {
         readCounts[normalized] = currentCount
 
         return when {
-            currentCount == 2 -> {
-                "\n\n[CRITICAL SYSTEM DIRECTIVE: You have now read '$normalized' twice. The entire contents and structure of this file are ALREADY fully provided in your conversation context above. You are STRICTLY FORBIDDEN from reading this file again. You MUST proceed immediately to either:\n1. Apply your necessary code modifications using 'edit_file', 'multi_edit_file', or 'create_file', OR\n2. Call 'complete' if no code edits are needed.\nDo NOT call read_file or read_file_range on this file again.]"
-            }
-            currentCount >= 3 -> {
-                "\n\n[STRICT REPETITION BLOCK: You have read '$normalized' $currentCount times. Reading is blocked. You MUST immediately execute your edits via 'edit_file'/'create_file' or call 'complete' now.]"
+            currentCount in 4..6 -> {
+                "\n\n[ADVISORY: You have reviewed '$normalized' $currentCount times. The target lines should now be clear. Proceed with 'edit_file' or 'create_file' to apply your modifications.]"
             }
             else -> null
         }

@@ -60,17 +60,11 @@ object AgentReadToolHandler {
             "read_file" -> {
                 val filePath = normalizePath(args?.path ?: "")
                 val loopCheck = AgentReadLoopPolicy.evaluateRead(tool, filePath, "all")
-                if (loopCheck is AgentReadLoopPolicy.LoopCheckResult.Intercept) {
-                    return ReadResult(
-                        output = loopCheck.responseMessage,
-                        isSuccess = true,
-                        logTitle = AgentLogPrivacySanitizer.sanitizeTitle("Inspected $filePath", "Inspected file"),
-                        logDetails = AgentLogPrivacySanitizer.sanitizeDetails(loopCheck.logDetails, "Explored $filePath context"),
-                        lineRange = "all",
-                        pathsRead = listOf(filePath)
-                    )
+                val warningSuffix = when (loopCheck) {
+                    is AgentReadLoopPolicy.LoopCheckResult.Warn -> "\n\n${loopCheck.directive}"
+                    is AgentReadLoopPolicy.LoopCheckResult.Intercept -> "\n\n${loopCheck.responseMessage}"
+                    else -> ""
                 }
-                val warningSuffix = (loopCheck as? AgentReadLoopPolicy.LoopCheckResult.Warn)?.directive ?: ""
 
                 if (repository.isBinaryExtension(filePath)) {
                     val err = "Error: Reading, editing, patching, or appending to binary image or 3D files directly as text is NOT allowed. You can only view their existence via 'list_directory' or perform operations like rename, delete, move, resize, or format change."
@@ -147,17 +141,11 @@ object AgentReadToolHandler {
                 val lineRangeDesc = "Line $startLine-$endLine"
 
                 val loopCheck = AgentReadLoopPolicy.evaluateRead(tool, filePath, lineRangeDesc)
-                if (loopCheck is AgentReadLoopPolicy.LoopCheckResult.Intercept) {
-                    return ReadResult(
-                        output = loopCheck.responseMessage,
-                        isSuccess = true,
-                        logTitle = AgentLogPrivacySanitizer.sanitizeTitle("Inspected $filePath ($lineRangeDesc)", "Inspected code range"),
-                        logDetails = AgentLogPrivacySanitizer.sanitizeDetails(loopCheck.logDetails, "Explored $filePath $lineRangeDesc"),
-                        lineRange = lineRangeDesc,
-                        pathsRead = listOf(filePath)
-                    )
+                val warningSuffix = when (loopCheck) {
+                    is AgentReadLoopPolicy.LoopCheckResult.Warn -> "\n\n${loopCheck.directive}"
+                    is AgentReadLoopPolicy.LoopCheckResult.Intercept -> "\n\n${loopCheck.responseMessage}"
+                    else -> ""
                 }
-                val warningSuffix = (loopCheck as? AgentReadLoopPolicy.LoopCheckResult.Warn)?.directive ?: ""
 
                 if (repository.isBinaryExtension(filePath)) {
                     val err = "Error: Reading, editing, patching, or appending to binary image or 3D files directly as text is NOT allowed."
