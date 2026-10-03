@@ -32,6 +32,7 @@ object UniversalPreviewRuntime {
                     --md-sys-color-background: ${theme.backgroundColor};
                     --md-sys-color-surface: ${theme.surfaceColor};
                     --md-sys-color-on-surface: ${theme.onSurfaceColor};
+                    --md-sys-color-inverse-primary: ${theme.inversePrimary};
                     --md-sys-color-outline: #79747E;
                 }
 
@@ -540,7 +541,10 @@ object UniversalPreviewRuntime {
 
                             case 'APP_BAR':
                                 const barTitle = (node.props && node.props.title) || node.label || 'App';
-                                return '<div class="m3-app-bar">' + 
+                                const barBg = (node.style && node.style.backgroundColor) ? ('background:' + node.style.backgroundColor + ';') : '';
+                                const barColor = (node.style && node.style.textColor) ? ('color:' + node.style.textColor + ';') : '';
+                                const barStyle = (barBg || barColor) ? ('style="' + barBg + barColor + '"') : '';
+                                return '<div class="m3-app-bar" ' + barStyle + '>' + 
                                        '<svg style="width:20px;height:20px;cursor:pointer;fill:currentColor;" viewBox="0 0 24 24" onclick="showToast(\'Menu opened\')"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>' +
                                        '<span>' + barTitle + '</span>' +
                                        '</div>';
@@ -625,7 +629,10 @@ object UniversalPreviewRuntime {
 
                             case 'FLOATING_ACTION_BUTTON':
                                 const fabAction = (node.actions && node.actions[0]) ? getActionJs(node.actions[0]) : "showToast('FAB Clicked')";
-                                return '<button class="m3-fab" onclick="' + fabAction + '"><svg style="width:26px;height:26px;fill:currentColor;" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg></button>';
+                                const fabBg = (node.style && node.style.backgroundColor) ? ('background:' + node.style.backgroundColor + ';') : '';
+                                const fabColor = (node.style && node.style.textColor) ? ('color:' + node.style.textColor + ';') : '';
+                                const fabStyle = (fabBg || fabColor) ? ('style="' + fabBg + fabColor + '"') : '';
+                                return '<button class="m3-fab" ' + fabStyle + ' onclick="' + fabAction + '"><svg style="width:26px;height:26px;fill:currentColor;" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg></button>';
 
                             case 'PROGRESS_INDICATOR':
                                 return '<div class="m3-progress-spinner"></div>';

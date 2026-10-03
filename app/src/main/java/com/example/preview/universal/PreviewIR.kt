@@ -112,5 +112,6 @@ data class PreviewTheme(
     val backgroundColor: String = "#FEF7FF",
     val surfaceColor: String = "#FEF7FF",
     val onSurfaceColor: String = "#1D1B20",
+    val inversePrimary: String = "#D0BCFF",
     val isDark: Boolean = false
 )
