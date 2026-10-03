@@ -4242,9 +4242,12 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 val quotaDirective = if (readTarget != null) {
                                     com.example.agent.AgentFileReadQuotaGuard.recordAndGetDirective(readTarget) ?: ""
                                 } else ""
+                                val editCue = if (readTarget != null && readRes.isSuccess) {
+                                    com.example.agent.AgentReadToEditTransitionEngine.buildPostReadCue(readTarget, readFilesThisSession.size)
+                                } else ""
 
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
-                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': ${readRes.output}$quotaDirective"))))
+                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': ${readRes.output}$quotaDirective$editCue"))))
                                 loopProtectionEngine.recordActionOutcome(tool, args, isSuccess = readRes.isSuccess, turn = turn)
                             }
                             "create_file", "write_file", "write", "append",

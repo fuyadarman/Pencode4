@@ -48,17 +48,17 @@ object SmartReadBudgetPolicy {
             )
         }
 
-        // 2. Extreme loop protection: 15+ consecutive reads across different files without action
-        if (consecutive >= 15) {
+        // 2. Multi-file reading cap: 5+ consecutive reads across files without editing
+        if (consecutive >= 5) {
             return BudgetEvaluation.ForceAction(
-                message = "[SYSTEM ADVISORY: You have performed $consecutive consecutive file reads. You have ample context across the codebase. Please proceed to execute your implementation using 'edit_file' or 'create_file'.]"
+                message = "[SYSTEM ADVISORY: You have performed $consecutive consecutive file reads. You have ample context. Proceed IMMEDIATELY to apply your changes using 'edit_file', 'multi_edit_file', or 'create_file'.]"
             )
         }
 
-        // 3. Progressive Soft Nudge: Between 6 and 9 reads, gently suggest synthesizing action
-        if (consecutive in 6..9) {
+        // 3. Progressive Soft Nudge: After 2 reads, instruct the model to start editing
+        if (consecutive in 2..4) {
             return BudgetEvaluation.SoftNudge(
-                nudge = "\n\n[PRO-TIP: You have reviewed $consecutive file sections. If you have identified the root cause or target lines, proceed with 'edit_file'.]"
+                nudge = "\n\n[ACTION DIRECTIVE: You have reviewed $consecutive file sections. Proceed to make your changes with 'edit_file' or 'create_file'. Do not keep reading.]"
             )
         }
 

@@ -194,7 +194,7 @@ object AgentInstructionEngine {
         sb.append("3. BUDGET: Max steps: $maxActionSteps. Language: match user (Bangla/English).\n")
         sb.append(AgentSearchPolicyEngine.buildSearchDirective(allFiles.size)).append("\n")
         sb.append("5. DECISIVE COMPLETION: Once you have applied all necessary edits or created files across all required files, call 'complete' with a clear summary.\n")
-        sb.append("6. SURGICAL EDITS: Never overwrite files >30 lines. Read once before editing with 'edit_file'/'multi_edit_file'.\n")
+        sb.append("6. PROMPT-TO-EDIT PIPELINE (Read -> Edit): When modifying code, read ONLY the target file, and in your VERY NEXT TURN execute 'edit_file' or 'multi_edit_file'. Do NOT engage in passive reading loops across multiple files before applying edits. Never overwrite files >30 lines.\n")
         sb.append("7. NEW FILES: Use 'create_file' ONLY for new files. Existing files must be edited.\n")
         sb.append("8. DIAGNOSTICS: Use 'read_preview_errors' for preview bugs and 'read_build_errors' for build failures.\n")
         sb.append("9. TOOL CATALOG: If any tool command is omitted or you need full documentation, invoke 'list_all_tools' to see all available tools and usage.\n")
