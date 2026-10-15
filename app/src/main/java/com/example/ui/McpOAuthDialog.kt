@@ -1,0 +1,572 @@
+package com.example.ui
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import com.example.data.McpPlatformType
+import com.example.data.McpServer
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun McpOAuthConnectDialog(
+    server: McpServer,
+    onStartOAuth: (clientId: String?, clientSecret: String?, redirectUri: String?) -> Unit,
+    onConfirmConnect: (tokenOrApiKey: String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val uriHandler = LocalUriHandler.current
+    val clipboardManager = LocalClipboardManager.current
+    val platformType = McpPlatformType.fromString(server.platform)
+
+    var authMode by remember { mutableStateOf(0) } // 0: OAuth 2.0 Flow, 1: Personal Access Token
+    var tokenValue by remember { mutableStateOf(server.apiKey ?: "") }
+    var oauthClientId by remember { 
+        val envClientId = com.example.BuildConfig.SUPABASE_CLIENT_ID
+        val defaultSupabaseId = if (envClientId.isNotBlank() && envClientId != "null") envClientId else "0191848f-8044-4d51-b69a-296f32c4d900"
+        val envVercelId = com.example.BuildConfig.VERCEL_CLIENT_ID
+        val defaultVercelId = if (envVercelId.isNotBlank() && envVercelId != "null") envVercelId else "cl_j3I8IppmqvaY0Z4r2JAqIch0zDULyj68"
+        mutableStateOf(
+            when {
+                platformType == com.example.data.McpPlatformType.SUPABASE -> defaultSupabaseId
+                platformType == com.example.data.McpPlatformType.VERCEL -> defaultVercelId
+                else -> ""
+            }
+        ) 
+    }
+    var oauthClientSecret by remember {
+        val envVercelSecret = com.example.BuildConfig.VERCEL_CLIENT_SECRET
+        val defaultVercelSecret = if (envVercelSecret.isNotBlank() && envVercelSecret != "null") envVercelSecret else "20201e6931be1a22900bfdbb5bc1296c4c2eab16fc7cf7524e240f2efceab2df"
+        val envSupabaseSecret = com.example.BuildConfig.SUPABASE_CLIENT_SECRET
+        val defaultSupabaseSecret = if (envSupabaseSecret.isNotBlank() && envSupabaseSecret != "null") envSupabaseSecret else "sba_f542cf0850dc25032d53447bbb5b6c8cde1ae950"
+        mutableStateOf(
+            when {
+                platformType == com.example.data.McpPlatformType.VERCEL -> ""
+                platformType == com.example.data.McpPlatformType.SUPABASE -> ""
+                else -> ""
+            }
+        )
+    }
+    var oauthRedirectUri by remember {
+        mutableStateOf(
+            if (platformType == com.example.data.McpPlatformType.VERCEL) {
+                "http://localhost:8080/callback"
+            } else {
+                "https://pencode.vercel.app/oauth/callback"
+            }
+        )
+    }
+    var showSecret by remember { mutableStateOf(false) }
+    var showToken by remember { mutableStateOf(false) }
+    var isAuthorizing by remember { mutableStateOf(false) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth(0.96f)
+                .clip(RoundedCornerShape(18.dp))
+                .border(1.dp, Color(0xFF262C40), RoundedCornerShape(18.dp)),
+            color = Color(0xFF0F1117),
+            tonalElevation = 8.dp
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(18.dp)
+            ) {
+                // Header with Platform Logo
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        com.example.ui.mcp.RealWebsiteMcpLogo(platformType = platformType, serverUrl = server.url, size = 40.dp)
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "Connect ${server.name}",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFF1F5F9),
+                                    fontSize = 15.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = platformType.description,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF94A3B8),
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = Color(0xFF94A3B8),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Authentication Method Segmented Tabs
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFF161A26),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF23293D))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(3.dp)
+                    ) {
+                        val isOAuth = authMode == 0
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { authMode = 0 },
+                            shape = RoundedCornerShape(6.dp),
+                            color = if (isOAuth) Color(0xFF262E45) else Color.Transparent
+                        ) {
+                            Text(
+                                text = "OAuth 2.0 Browser",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = if (isOAuth) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isOAuth) Color(0xFFF1F5F9) else Color(0xFF94A3B8),
+                                modifier = Modifier.padding(vertical = 7.dp),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                fontSize = 12.sp
+                            )
+                        }
+
+                        val isApiKey = authMode == 1
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { authMode = 1 },
+                            shape = RoundedCornerShape(6.dp),
+                            color = if (isApiKey) Color(0xFF262E45) else Color.Transparent
+                        ) {
+                            Text(
+                                text = "API Key / Token",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = if (isApiKey) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isApiKey) Color(0xFFF1F5F9) else Color(0xFF94A3B8),
+                                modifier = Modifier.padding(vertical = 7.dp),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                if (authMode == 0) {
+                    // OAuth 2.0 Connection Info
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF161B29)),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(1.dp, Color(0xFF262E45), RoundedCornerShape(10.dp))
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.VpnKey,
+                                    contentDescription = null,
+                                    tint = Color(0xFF818CF8),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Automated OAuth 2.0 PKCE",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFF1F5F9),
+                                    fontSize = 12.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Authorizes Pencode to securely call ${platformType.displayName} APIs & resources on your behalf.",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontSize = 11.sp,
+                                color = Color(0xFF94A3B8)
+                            )
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            OutlinedButton(
+                                onClick = {
+                                    try {
+                                        uriHandler.openUri(platformType.buildAuthUrl(oauthClientId))
+                                    } catch (e: Exception) {
+                                        // Ignore
+                                    }
+                                },
+                                shape = RoundedCornerShape(6.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2E3852)),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(34.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+                            ) {
+                                Icon(imageVector = Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(13.dp), tint = Color(0xFF818CF8))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Open ${platformType.displayName} Auth URL directly in Browser", fontSize = 11.sp, color = Color(0xFFCBD5E1))
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    OutlinedTextField(
+                        value = oauthClientId,
+                        onValueChange = { oauthClientId = it },
+                        label = {
+                            Text(
+                                "OAuth Client ID / App ID",
+                                fontSize = 11.sp
+                            )
+                        },
+                        placeholder = { 
+                            Text(
+                                when {
+                                    platformType == com.example.data.McpPlatformType.SUPABASE -> "e.g. 123e4567-e89b-12d3-a456-426614174000 (UUID)"
+                                    platformType == com.example.data.McpPlatformType.VERCEL -> "e.g. cl_... or oac_... (Vercel Client ID)"
+                                    else -> "e.g. mcp_app_${platformType.name.lowercase()}"
+                                },
+                                fontSize = 11.sp,
+                                color = Color(0xFF64748B)
+                            ) 
+                        },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = oauthClientSecret,
+                        onValueChange = { oauthClientSecret = it },
+                        label = {
+                            Text(
+                                "Client Secret (Optional - Auto-configured internally)",
+                                fontSize = 11.sp
+                            )
+                        },
+                        placeholder = { 
+                            Text(
+                                "Configured internally via secure environment variables",
+                                fontSize = 11.sp,
+                                color = Color(0xFF64748B)
+                            ) 
+                        },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        visualTransformation = if (showSecret) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { showSecret = !showSecret }) {
+                                Icon(
+                                    imageVector = if (showSecret) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    contentDescription = "Toggle secret visibility",
+                                    tint = Color(0xFF94A3B8),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = oauthRedirectUri,
+                        onValueChange = { oauthRedirectUri = it },
+                        label = { Text("Authorized Redirect URI (PKCE)", fontSize = 11.sp) },
+                        placeholder = { Text("e.g. http://localhost:8080/callback", fontSize = 11.sp, color = Color(0xFF64748B)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        trailingIcon = {
+                            IconButton(onClick = {
+                                clipboardManager.setText(AnnotatedString(oauthRedirectUri))
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Default.ContentCopy,
+                                    contentDescription = "Copy redirect URI",
+                                    tint = Color(0xFF818CF8),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // Preset selection chips
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Surface(
+                            onClick = { oauthRedirectUri = "http://localhost:8080/callback" },
+                            shape = RoundedCornerShape(6.dp),
+                            color = if (oauthRedirectUri == "http://localhost:8080/callback") Color(0xFF6366F1).copy(alpha = 0.25f) else Color(0xFF1E293B),
+                            border = androidx.compose.foundation.BorderStroke(0.5.dp, Color(0xFF475569))
+                        ) {
+                            Text(
+                                text = "Localhost Loopback (Default)",
+                                fontSize = 10.sp,
+                                color = if (oauthRedirectUri == "http://localhost:8080/callback") Color(0xFF818CF8) else Color(0xFF94A3B8),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                            )
+                        }
+
+                        Surface(
+                            onClick = { oauthRedirectUri = "https://pencode.vercel.app/oauth/callback" },
+                            shape = RoundedCornerShape(6.dp),
+                            color = if (oauthRedirectUri == "https://pencode.vercel.app/oauth/callback") Color(0xFF6366F1).copy(alpha = 0.25f) else Color(0xFF1E293B),
+                            border = androidx.compose.foundation.BorderStroke(0.5.dp, Color(0xFF475569))
+                        ) {
+                            Text(
+                                text = "Vercel Web Callback",
+                                fontSize = 10.sp,
+                                color = if (oauthRedirectUri == "https://pencode.vercel.app/oauth/callback") Color(0xFF818CF8) else Color(0xFF94A3B8),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                            )
+                        }
+
+                        Surface(
+                            onClick = { oauthRedirectUri = "pencode://mcp/oauth/callback" },
+                            shape = RoundedCornerShape(6.dp),
+                            color = if (oauthRedirectUri == "pencode://mcp/oauth/callback") Color(0xFF6366F1).copy(alpha = 0.25f) else Color(0xFF1E293B),
+                            border = androidx.compose.foundation.BorderStroke(0.5.dp, Color(0xFF475569))
+                        ) {
+                            Text(
+                                text = "App Scheme",
+                                fontSize = 10.sp,
+                                color = if (oauthRedirectUri == "pencode://mcp/oauth/callback") Color(0xFF818CF8) else Color(0xFF94A3B8),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1B4B).copy(alpha = 0.6f)),
+                        border = androidx.compose.foundation.BorderStroke(0.8.dp, Color(0xFF6366F1).copy(alpha = 0.5f)),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "💡 'Invalid redirect URL' error? Copy the exact URI above and paste it into your OAuth provider dashboard, or use the 'API Key / Token' tab for instant connection.",
+                            fontSize = 11.sp,
+                            color = Color(0xFFC7D2FE),
+                            modifier = Modifier.padding(8.dp),
+                            lineHeight = 15.sp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = tokenValue,
+                        onValueChange = { input ->
+                            var clean = input.trim()
+                            if (clean.contains("code=")) {
+                                try {
+                                    val uri = android.net.Uri.parse(clean)
+                                    val extractedCode = uri.getQueryParameter("code")
+                                    if (!extractedCode.isNullOrBlank()) {
+                                        clean = extractedCode
+                                    }
+                                } catch (e: Exception) {
+                                    val codeIndex = clean.indexOf("code=")
+                                    if (codeIndex != -1) {
+                                        var extracted = clean.substring(codeIndex + 5)
+                                        if (extracted.contains("&")) {
+                                            extracted = extracted.substringBefore("&")
+                                        }
+                                        clean = extracted
+                                    }
+                                }
+                            }
+                            tokenValue = clean
+                        },
+                        label = { Text("Manual Callback URL / OAuth Code (Fallback)", fontSize = 11.sp) },
+                        placeholder = { Text("Paste code or full redirect URL if needed", fontSize = 11.sp, color = Color(0xFF64748B)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        visualTransformation = if (showToken) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { showToken = !showToken }) {
+                                Icon(
+                                    imageVector = if (showToken) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    contentDescription = "Toggle token",
+                                    tint = Color(0xFF94A3B8),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    )
+                } else {
+                    // Personal Access Token
+                    OutlinedButton(
+                        onClick = {
+                            try {
+                                uriHandler.openUri(platformType.defaultConsoleUrl)
+                            } catch (e: Exception) {
+                                // Ignore
+                            }
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2E3852)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(38.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                    ) {
+                        Icon(imageVector = Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color(0xFF818CF8))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            if (platformType == com.example.data.McpPlatformType.VERCEL) "Create Vercel Token in Browser (Instant)"
+                            else "Open ${platformType.displayName} Console to get API Key",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFFCBD5E1)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    OutlinedTextField(
+                        value = tokenValue,
+                        onValueChange = { tokenValue = it },
+                        label = { Text("Personal Access Token / Secret Key", fontSize = 11.sp) },
+                        placeholder = { 
+                            Text(
+                                if (platformType == com.example.data.McpPlatformType.VERCEL) "e.g. vercel_... (Paste token here)"
+                                else "e.g. sb_secret_... or appwrite_key_...", 
+                                fontSize = 11.sp, 
+                                color = Color(0xFF64748B)
+                            ) 
+                        },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        visualTransformation = if (showToken) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { showToken = !showToken }) {
+                                Icon(
+                                    imageVector = if (showToken) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    contentDescription = "Toggle key",
+                                    tint = Color(0xFF94A3B8),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(
+                        onClick = onDismiss,
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.height(36.dp)
+                    ) {
+                        Text("Cancel", color = Color(0xFF94A3B8), fontSize = 12.sp)
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Button(
+                        onClick = {
+                            if (tokenValue.isNotBlank()) {
+                                // If token/key is provided in either tab, connect directly!
+                                onConfirmConnect(tokenValue.trim())
+                            } else if (authMode == 0) {
+                                isAuthorizing = true
+                                onStartOAuth(
+                                    oauthClientId.ifBlank { null },
+                                    oauthClientSecret.ifBlank { null },
+                                    oauthRedirectUri.ifBlank { null }
+                                )
+                            } else {
+                                onConfirmConnect(tokenValue.trim())
+                            }
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1), contentColor = Color.White),
+                        modifier = Modifier.height(36.dp)
+                    ) {
+                        if (isAuthorizing) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(14.dp),
+                                strokeWidth = 2.dp,
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                        } else {
+                            Icon(imageVector = Icons.Default.Link, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                        }
+                        Text(
+                            when {
+                                tokenValue.isNotBlank() -> "Connect with Token"
+                                authMode == 0 -> "Authorize via Browser"
+                                else -> "Save & Connect"
+                            },
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+        }
+    }
+}

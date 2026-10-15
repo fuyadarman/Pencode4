@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy - PenCode AI</title>
+    <style>
+        :root {
+            --bg-color: #0d1117;
+            --surface-color: #161b22;
+            --border-color: #30363d;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --accent-color: #58a6ff;
+            --accent-gradient: linear-gradient(135deg, #388bfd 0%, #1f6feb 100%);
+        }
+
+        @media (prefers-color-scheme: light) {
+            :root {
+                --bg-color: #f6f8fa;
+                --surface-color: #ffffff;
+                --border-color: #d0d7de;
+                --text-primary: #1f2328;
+                --text-secondary: #656d76;
+                --accent-color: #0969da;
+                --accent-gradient: linear-gradient(135deg, #0969da 0%, #0550ae 100%);
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            line-height: 1.6;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 860px;
+            margin: 0 auto;
+            background-color: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+
+        header {
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 24px;
+            margin-bottom: 32px;
+        }
+
+        .badge {
+            display: inline-block;
+            background: var(--accent-gradient);
+            color: #ffffff;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 20px;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        h1 {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .effective-date {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        h2 {
+            font-size: 20px;
+            font-weight: 600;
+            margin-top: 32px;
+            margin-bottom: 12px;
+            color: var(--accent-color);
+        }
+
+        p {
+            margin-bottom: 16px;
+            color: var(--text-primary);
+        }
+
+        ul {
+            margin-bottom: 16px;
+            padding-left: 24px;
+            color: var(--text-primary);
+        }
+
+        li {
+            margin-bottom: 8px;
+        }
+
+        .highlight-box {
+            background-color: rgba(56, 139, 253, 0.08);
+            border-left: 4px solid var(--accent-color);
+            padding: 16px 20px;
+            border-radius: 4px;
+            margin: 20px 0;
+            font-size: 15px;
+        }
+
+        footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border-color);
+            text-align: center;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        a {
+            color: var(--accent-color);
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="badge">Legal Policy</div>
+            <h1>Privacy Policy</h1>
+            <p class="effective-date">Last Updated: September 26, 2026 | Effective Immediately</p>
+        </header>
+
+        <section>
+            <p>Welcome to <strong>PenCode</strong> ("we", "our", or "us"). We are committed to protecting your privacy and ensuring your development workflow remains private, secure, and under your full control. This Privacy Policy explains how our mobile application handles user information, project files, and API communications.</p>
+
+            <div class="highlight-box">
+                <strong>Core Privacy Guarantee:</strong> PenCode operates primarily with local-first architecture. Your project source code, local files, and private keys remain on your device and are never sold, collected, or uploaded to our private servers.
+            </div>
+
+            <h2>1. Information We Collect and Process</h2>
+            <p>Because PenCode is an on-device autonomous AI coding environment, our data collection is minimal:</p>
+            <ul>
+                <li><strong>Local Project Files:</strong> All files, codebases, and databases created or imported into workspaces are stored locally in your device's app-sandboxed storage.</li>
+                <li><strong>API Keys and Credentials:</strong> When you provide your own API keys (such as Google Gemini, OpenAI, Anthropic, DeepSeek, OpenRouter, or Groq), these credentials are saved locally in private app storage. They are only transmitted directly to the respective API endpoints specified by you.</li>
+                <li><strong>Chat History & Agent Logs:</strong> Conversation logs, thoughts, and agent execution records are stored in a local SQLite/Room database on your device.</li>
+            </ul>
+
+            <h2>2. Third-Party AI Services & Cloud Connectors</h2>
+            <p>When you initiate agent tasks or use external features, PenCode communicates directly with third-party providers upon your instruction:</p>
+            <ul>
+                <li><strong>AI Inference APIs:</strong> Prompts, context chunks, and code snippets are sent directly to the AI model provider you select (e.g., Google, OpenAI, Anthropic, DeepSeek). These communications are governed by the respective provider's terms and privacy policies.</li>
+                <li><strong>Model Context Protocol (MCP) Servers:</strong> If you connect remote MCP servers, tool execution queries and arguments are routed strictly to the endpoints you designate.</li>
+                <li><strong>Image & Media Generation:</strong> When requesting image or logo generation, prompts are submitted to visual generation providers (such as Pollinations AI) to create and return the image asset.</li>
+            </ul>
+
+            <h2>3. Permissions Used by PenCode</h2>
+            <p>PenCode requests only standard Android permissions necessary for developer tooling:</p>
+            <ul>
+                <li><strong>INTERNET & ACCESS_NETWORK_STATE:</strong> Required to establish outbound HTTPS requests to AI inference providers, GitHub workflows, and remote MCP servers.</li>
+                <li><strong>STORAGE / MEDIA (Photo Picker):</strong> Used exclusively when you explicitly attach an image or project asset into the workspace.</li>
+                <li><strong>VIBRATE:</strong> Used for optional haptic feedback when AI tasks start or complete.</li>
+            </ul>
+
+            <h2>4. Data Retention & Deletion</h2>
+            <p>Since your project files, chats, and configurations are stored locally on your device:</p>
+            <ul>
+                <li>You can clear workspace data, delete projects, or remove API keys at any time directly through the app settings or workspace screen.</li>
+                <li>Uninstalling the app immediately deletes all locally stored project files, databases, and saved keys.</li>
+            </ul>
+
+            <h2>5. Security of Your Data</h2>
+            <p>We implement industry-standard practices to safeguard your data. Outbound network traffic is encrypted via HTTPS/TLS. Sensitive keys and tokens are confined within Android's private app sandbox isolation, inaccessible to other standard applications on your device.</p>
+
+            <h2>6. Children's Privacy</h2>
+            <p>PenCode is a developer tool and does not knowingly collect or solicit personal information from children under the age of 13. If you believe a child has provided us with personal information, please contact us immediately.</p>
+
+            <h2>7. Changes to This Privacy Policy</h2>
+            <p>We may update this Privacy Policy from time to time. Any changes will be posted on this page with an updated "Last Updated" date.</p>
+
+            <h2>8. Contact Information</h2>
+            <p>If you have any questions, suggestions, or concerns regarding this Privacy Policy or your data privacy, please contact us at:</p>
+            <p><strong>Email:</strong> <a href="mailto:fuyadrock@gmail.com">fuyadrock@gmail.com</a></p>
+            <p><strong>Application:</strong> PenCode AI Mobile Workspace</p>
+        </section>
+
+        <footer>
+            <p>&copy; 2026 PenCode. All rights reserved.</p>
+        </footer>
+    </div>
+</body>
+</html>

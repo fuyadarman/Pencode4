@@ -1,0 +1,132 @@
+package com.example.ui
+
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import coil.compose.SubcomposeAsyncImage
+import com.example.data.McpPlatformType
+
+fun resolveWebsiteFaviconUrl(serverUrl: String?, platformType: McpPlatformType): String {
+    val domain = try {
+        if (!serverUrl.isNullOrBlank()) {
+            val uri = android.net.Uri.parse(if (serverUrl.startsWith("http")) serverUrl else "https://$serverUrl")
+            val host = uri.host?.lowercase()
+            if (!host.isNullOrBlank()) {
+                val parts = host.split(".")
+                if (parts.size >= 2) {
+                    "${parts[parts.size - 2]}.${parts.last()}"
+                } else host
+            } else null
+        } else null
+    } catch (_: Exception) {
+        null
+    } ?: when (platformType) {
+        McpPlatformType.VERCEL -> "vercel.com"
+        McpPlatformType.CLOUDFLARE -> "cloudflare.com"
+        McpPlatformType.SUPABASE -> "supabase.com"
+        McpPlatformType.CUSTOM -> "json-rpc.org"
+    }
+
+    return "https://www.google.com/s2/favicons?domain=$domain&sz=128"
+}
+
+@Composable
+fun McpPlatformLogo(
+    platformType: McpPlatformType,
+    serverUrl: String? = null,
+    modifier: Modifier = Modifier,
+    size: Dp = 38.dp
+) {
+    com.example.ui.mcp.RealWebsiteMcpLogo(
+        platformType = platformType,
+        serverUrl = serverUrl,
+        modifier = modifier,
+        size = size
+    )
+}
+
+@Composable
+private fun CanvasLogoFallback(
+    platformType: McpPlatformType,
+    size: Dp
+) {
+    Canvas(modifier = Modifier.size(size * 0.65f)) {
+            val width = this.size.width
+            val height = this.size.height
+
+            when (platformType) {
+                McpPlatformType.SUPABASE -> {
+                    // Supabase emerald green lightning bolt (#3ECF8E)
+                    val green = Color(0xFF3ECF8E)
+                    val path = Path().apply {
+                        moveTo(width * 0.55f, 0f)
+                        lineTo(width * 0.1f, height * 0.55f)
+                        lineTo(width * 0.5f, height * 0.55f)
+                        lineTo(width * 0.45f, height)
+                        lineTo(width * 0.9f, height * 0.45f)
+                        lineTo(width * 0.5f, height * 0.45f)
+                        close()
+                    }
+                    drawPath(path = path, color = green)
+                }
+                McpPlatformType.CLOUDFLARE -> {
+                    // Cloudflare orange cloud (#F38020)
+                    val orange = Color(0xFFF38020)
+                    val path = Path().apply {
+                        moveTo(width * 0.2f, height * 0.75f)
+                        arcTo(
+                            rect = androidx.compose.ui.geometry.Rect(0f, height * 0.4f, width * 0.45f, height * 0.85f),
+                            startAngleDegrees = 90f,
+                            sweepAngleDegrees = 180f,
+                            forceMoveTo = false
+                        )
+                        arcTo(
+                            rect = androidx.compose.ui.geometry.Rect(width * 0.25f, height * 0.15f, width * 0.85f, height * 0.75f),
+                            startAngleDegrees = 180f,
+                            sweepAngleDegrees = 160f,
+                            forceMoveTo = false
+                        )
+                        lineTo(width * 0.95f, height * 0.75f)
+                        close()
+                    }
+                    drawPath(path = path, color = orange)
+                }
+                McpPlatformType.VERCEL -> {
+                    // Vercel white triangle logo
+                    val white = Color.White
+                    val path = Path().apply {
+                        moveTo(width * 0.5f, 0f)
+                        lineTo(width, height)
+                        lineTo(0f, height)
+                        close()
+                    }
+                    drawPath(path = path, color = white)
+                }
+                McpPlatformType.CUSTOM -> {
+                    // Node Connection Purple symbol
+                    val purple = Color(0xFF9D4EDD)
+                    val strokeW = width * 0.12f
+
+                    drawLine(purple, Offset(width * 0.2f, height * 0.5f), Offset(width * 0.8f, height * 0.2f), strokeWidth = strokeW)
+                    drawLine(purple, Offset(width * 0.2f, height * 0.5f), Offset(width * 0.8f, height * 0.8f), strokeWidth = strokeW)
+
+                    drawCircle(purple, radius = width * 0.18f, center = Offset(width * 0.2f, height * 0.5f))
+                    drawCircle(Color(0xFF00E5FF), radius = width * 0.15f, center = Offset(width * 0.8f, height * 0.2f))
+                    drawCircle(Color(0xFFFF007F), radius = width * 0.15f, center = Offset(width * 0.8f, height * 0.8f))
+                }
+            }
+        }
+}

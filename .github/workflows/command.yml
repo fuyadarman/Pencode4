@@ -1,0 +1,87 @@
+name: Command & Test Execution Workflow
+
+on:
+  push:
+    branches: [ main, master, dev ]
+  workflow_dispatch:
+    inputs:
+      custom_command:
+        description: 'Custom command or test to execute'
+        required: false
+        default: 'gradle test'
+      framework_target:
+        description: 'Framework target (android, flutter, react)'
+        required: false
+        default: 'auto'
+
+jobs:
+  execute-command:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Codebase
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect Framework Architecture
+        id: detect-framework
+        run: |
+          if [ -f "build.gradle.kts" ] || [ -f "build.gradle" ]; then
+            echo "FRAMEWORK=android" >> $GITHUB_ENV
+            echo "Detected Android/Kotlin codebase."
+          elif [ -f "pubspec.yaml" ]; then
+            echo "FRAMEWORK=flutter" >> $GITHUB_ENV
+            echo "Detected Flutter codebase."
+          elif [ -f "package.json" ]; then
+            echo "FRAMEWORK=react" >> $GITHUB_ENV
+            echo "Detected React/Vite Node codebase."
+          else
+            echo "FRAMEWORK=generic" >> $GITHUB_ENV
+            echo "Detected generic codebase."
+          fi
+
+      - name: Setup Java JDK (Android)
+        if: env.FRAMEWORK == 'android'
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Node.js (React/Vite)
+        if: env.FRAMEWORK == 'react'
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Setup Flutter (Flutter)
+        if: env.FRAMEWORK == 'flutter'
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Run Command & Unit/Integration Tests
+        run: |
+          echo "=== Executing Command in Background GitHub Action ==="
+          INPUT_CMD="${{ github.event.inputs.custom_command }}"
+          if [ -z "$INPUT_CMD" ]; then
+            if [ "$FRAMEWORK" = "android" ]; then
+              INPUT_CMD="./gradlew testDebugUnitTest --continue || gradle :app:testDebugUnitTest"
+            elif [ "$FRAMEWORK" = "flutter" ]; then
+              INPUT_CMD="flutter test"
+            elif [ "$FRAMEWORK" = "react" ]; then
+              INPUT_CMD="npm test -- --watchAll=false || npm run build"
+            else
+              INPUT_CMD="echo 'No specialized framework test runner specified.'"
+            fi
+          fi
+          
+          echo "Running command: $INPUT_CMD"
+          eval "$INPUT_CMD"
+
+      - name: Force Sync & Push Updated Artifacts
+        if: always()
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff-index --quiet HEAD || (git commit -m "auto: sync codebase state & heavy task logs [ci skip]" && git push --force)

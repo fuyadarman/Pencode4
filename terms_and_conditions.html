@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terms and Conditions - PenCode AI</title>
+    <style>
+        :root {
+            --bg-color: #0d1117;
+            --surface-color: #161b22;
+            --border-color: #30363d;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --accent-color: #2ea043;
+            --accent-gradient: linear-gradient(135deg, #2ea043 0%, #238636 100%);
+        }
+
+        @media (prefers-color-scheme: light) {
+            :root {
+                --bg-color: #f6f8fa;
+                --surface-color: #ffffff;
+                --border-color: #d0d7de;
+                --text-primary: #1f2328;
+                --text-secondary: #656d76;
+                --accent-color: #1a7f37;
+                --accent-gradient: linear-gradient(135deg, #1a7f37 0%, #116329 100%);
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            line-height: 1.6;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 860px;
+            margin: 0 auto;
+            background-color: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+
+        header {
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 24px;
+            margin-bottom: 32px;
+        }
+
+        .badge {
+            display: inline-block;
+            background: var(--accent-gradient);
+            color: #ffffff;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 20px;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        h1 {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .effective-date {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        h2 {
+            font-size: 20px;
+            font-weight: 600;
+            margin-top: 32px;
+            margin-bottom: 12px;
+            color: var(--accent-color);
+        }
+
+        p {
+            margin-bottom: 16px;
+            color: var(--text-primary);
+        }
+
+        ul {
+            margin-bottom: 16px;
+            padding-left: 24px;
+            color: var(--text-primary);
+        }
+
+        li {
+            margin-bottom: 8px;
+        }
+
+        .highlight-box {
+            background-color: rgba(46, 160, 67, 0.08);
+            border-left: 4px solid var(--accent-color);
+            padding: 16px 20px;
+            border-radius: 4px;
+            margin: 20px 0;
+            font-size: 15px;
+        }
+
+        footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border-color);
+            text-align: center;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        a {
+            color: var(--accent-color);
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="badge">Legal Terms</div>
+            <h1>Terms and Conditions</h1>
+            <p class="effective-date">Last Updated: September 26, 2026 | Effective Immediately</p>
+        </header>
+
+        <section>
+            <p>Welcome to <strong>PenCode</strong>. By installing, downloading, accessing, or using the PenCode mobile application ("Application", "Service"), you agree to be bound by these Terms and Conditions ("Terms"). If you do not agree with any part of these Terms, you may not use the Application.</p>
+
+            <div class="highlight-box">
+                <strong>Summary:</strong> PenCode provides an autonomous, interactive development environment on Android. You maintain 100% ownership of your code. You are responsible for the API keys you provide and the code generated or executed through your commands.
+            </div>
+
+            <h2>1. Ownership and Intellectual Property</h2>
+            <ul>
+                <li><strong>Your Code and Projects:</strong> You retain complete ownership, rights, and intellectual property over all software, codebases, assets, and text created, generated, or edited using PenCode. We claim no ownership over your work.</li>
+                <li><strong>Application IP:</strong> The PenCode application, interface design, branding, and original source code are the intellectual property of the developers and protected under applicable copyright laws.</li>
+            </ul>
+
+            <h2>2. Permitted Use and Restrictions</h2>
+            <p>You agree to use PenCode in compliance with all applicable local, national, and international laws and regulations. You specifically agree NOT to:</p>
+            <ul>
+                <li>Use the agent to generate malware, viruses, trojans, ransomware, or malicious exploits.</li>
+                <li>Conduct unauthorized network attacks, port scanning, or malicious automated operations via scripts or remote connectors.</li>
+                <li>Violate the acceptable use policies of third-party API providers (e.g. Google Generative AI, OpenAI, Anthropic) connected to the app.</li>
+                <li>Reverse engineer, decompile, or attempt to extract source code from the PenCode APK, except to the extent permitted by open-source licenses where applicable.</li>
+            </ul>
+
+            <h2>3. API Keys and Third-Party Costs</h2>
+            <ul>
+                <li><strong>BYOK (Bring Your Own Key):</strong> PenCode allows you to connect your personal API keys for AI inference models (e.g., Gemini, OpenAI, Claude, DeepSeek).</li>
+                <li><strong>Billing Responsibility:</strong> You are solely responsible for any billing, fees, token consumption, or subscription charges incurred with third-party providers resulting from usage initiated through PenCode.</li>
+                <li><strong>Key Security:</strong> You are responsible for safeguarding your personal credentials and API keys.</li>
+            </ul>
+
+            <h2>4. AI Outputs and Disclaimer of Accuracy</h2>
+            <p>PenCode utilizes advanced Large Language Models and automated tooling to read, write, and patch code. However:</p>
+            <ul>
+                <li>AI-generated code, text, and architecture suggestions are provided on an <strong>"as is"</strong> basis.</li>
+                <li>You acknowledge that AI models can occasionally produce bugs, errors, outdated library syntax, or security vulnerabilities.</li>
+                <li>It is your sole responsibility to review, test, and verify any generated code before using it in production or deploying it to live environments.</li>
+            </ul>
+
+            <h2>5. Disclaimer of Warranties</h2>
+            <p>The Application is provided on an "AS IS" and "AS AVAILABLE" basis without warranties of any kind, whether express or implied, including but not limited to fitness for a particular purpose, non-infringement, or uninterrupted availability.</p>
+
+            <h2>6. Limitation of Liability</h2>
+            <p>To the maximum extent permitted by applicable law, the developers and creators of PenCode shall not be liable for any direct, indirect, incidental, special, consequential, or punitive damages, including loss of data, profits, codebase corruption, or business interruption arising out of the use or inability to use the Application.</p>
+
+            <h2>7. Termination</h2>
+            <p>You may terminate your agreement with these Terms at any time by simply uninstalling the application from your device. We reserve the right to suspend or discontinue features or updates to the application at our discretion.</p>
+
+            <h2>8. Changes to These Terms</h2>
+            <p>We may revise these Terms and Conditions periodically. Updated terms will take effect immediately upon publication on this page.</p>
+
+            <h2>9. Contact Us</h2>
+            <p>If you have any questions, feedback, or legal inquiries regarding these Terms, please reach out to:</p>
+            <p><strong>Email:</strong> <a href="mailto:fuyadrock@gmail.com">fuyadrock@gmail.com</a></p>
+            <p><strong>Application:</strong> PenCode AI Mobile Workspace</p>
+        </section>
+
+        <footer>
+            <p>&copy; 2026 PenCode. All rights reserved.</p>
+        </footer>
+    </div>
+</body>
+</html>

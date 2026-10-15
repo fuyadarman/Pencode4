@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Left Bracket (Yellow/Gold Glowing) -->
+    <path
+        android:strokeWidth="10"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M 38,34 L 18,54 L 38,74">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="18"
+                android:startY="34"
+                android:endX="38"
+                android:endY="74"
+                android:type="linear">
+                <item android:color="#FFF176" android:offset="0.0"/>
+                <item android:color="#FFB300" android:offset="1.0"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Right Bracket (Green Glowing) -->
+    <path
+        android:strokeWidth="10"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M 70,34 L 90,54 L 70,74">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="70"
+                android:startY="34"
+                android:endX="90"
+                android:endY="74"
+                android:type="linear">
+                <item android:color="#69F0AE" android:offset="0.0"/>
+                <item android:color="#00E676" android:offset="1.0"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Real Slender Pen (Straight, Tip downwards, Back upwards) -->
+    <group
+        android:name="straight_slender_pen"
+        android:pivotX="54"
+        android:pivotY="54">
+
+        <!-- Pen Top Finial / Clicker Cap (Gold) -->
+        <path
+            android:fillColor="#FBC02D"
+            android:pathData="M 52,18 L 56,18 C 56.6,18 57,18.4 57,19 L 57,22 L 51,22 L 51,19 C 51,18.4 51.4,18 52,18 Z" />
+
+        <!-- Upper Barrel / Cap Body (Sleek Deep Midnight Gloss) -->
+        <path
+            android:fillColor="#15171E"
+            android:pathData="M 51,22 L 57,22 L 57,52 L 51,52 Z" />
+        
+        <!-- Metallic Body Specular Highlight (Left edge light) -->
+        <path
+            android:fillColor="#454D60"
+            android:pathData="M 51,22 L 52.5,22 L 52.5,52 L 51,52 Z" />
+        
+        <path
+            android:fillColor="#0B0C10"
+            android:pathData="M 55.5,22 L 57,22 L 57,52 L 55.5,52 Z" />
+
+        <!-- Center Trim Gold Ring -->
+        <path
+            android:fillColor="#FBC02D"
+            android:pathData="M 50.5,52 L 57.5,52 L 57.5,54.5 L 50.5,54.5 Z" />
+        
+        <path
+            android:fillColor="#FFF59D"
+            android:pathData="M 51.5,52 L 53,52 L 53,54.5 L 51.5,54.5 Z" />
+
+        <!-- Lower Grip Section (Tapered Sleek Body) -->
+        <path
+            android:fillColor="#1E222B"
+            android:pathData="M 51,54.5 L 57,54.5 L 56.2,74 L 51.8,74 Z" />
+
+        <!-- Grip highlight -->
+        <path
+            android:fillColor="#5A647A"
+            android:pathData="M 51,54.5 L 52.3,54.5 L 52.7,74 L 51.8,74 Z" />
+
+        <!-- Nib Section Collar (Gold) -->
+        <path
+            android:fillColor="#FBC02D"
+            android:pathData="M 51.5,74 L 56.5,74 L 56,76.5 L 52,76.5 Z" />
+
+        <!-- Fine Fountain / Ballpoint Nib (Gold Gradient, Pointing Straight Down) -->
+        <path
+            android:pathData="M 52,76.5 L 56,76.5 L 54,90 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:startX="52"
+                    android:startY="76.5"
+                    android:endX="56"
+                    android:endY="90"
+                    android:type="linear">
+                    <item android:color="#FFEE58" android:offset="0.0"/>
+                    <item android:color="#F57F17" android:offset="1.0"/>
+                </gradient>
+            </aapt:attr>
+        </path>
+
+        <!-- Nib Breathing Slit & Point -->
+        <path
+            android:strokeColor="#111111"
+            android:strokeWidth="0.8"
+            android:pathData="M 54,76.5 L 54,84" />
+        
+        <path
+            android:fillColor="#111111"
+            android:pathData="M 54,84 C 54.6,84 55,84.4 55,85 C 55,85.6 54.6,86 54,86 C 53.4,86 53,85.6 53,85 C 53,84.4 53.4,84 54,84 Z" />
+
+        <!-- Realistic Pen Clip (Gold on Upper Body) -->
+        <path
+            android:strokeColor="#FBC02D"
+            android:strokeWidth="1.8"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:pathData="M 57,24 L 59.5,24 L 59.5,44 C 59.5,46 58,47 57,47" />
+        
+        <path
+            android:strokeColor="#FFF59D"
+            android:strokeWidth="0.7"
+            android:strokeLineCap="round"
+            android:pathData="M 59.5,24 L 59.5,43" />
+    </group>
+
+</vector>

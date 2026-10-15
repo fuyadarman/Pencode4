@@ -1,0 +1,67 @@
+name: Build Device APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  build-apk:
+    name: Build Installable APK
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Source Code
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+        cache: 'gradle'
+
+    - name: Restore or Generate Keystores
+      run: |
+        if [ -f debug.keystore.base64 ] && [ -s debug.keystore.base64 ]; then
+          base64 -d debug.keystore.base64 > debug.keystore
+        elif [ ! -f debug.keystore ]; then
+          keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+        fi
+
+        if [ -f my-upload-key.jks.base64 ] && [ -s my-upload-key.jks.base64 ]; then
+          base64 -d my-upload-key.jks.base64 > my-upload-key.jks
+        elif [ ! -f my-upload-key.jks ]; then
+          keytool -genkey -v -keystore my-upload-key.jks -storepass fuyadheart6524 -alias upload -keypass fuyadheart6524 -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Mustasim Fuyad, OU=Pencode, O=pencode, L=Dinajpur, ST=rangpur, C=BD"
+        fi
+        cp my-upload-key.jks app/my-upload-key.jks 2>/dev/null || true
+
+    - name: Setup Placeholder Google Services JSON if missing
+      run: |
+        if [ ! -f app/google-services.json ]; then
+          pkg=$(grep -oE 'applicationId\s*=\s*"[^"]+"' app/build.gradle.kts | head -n1 | cut -d'"' -f2)
+          if [ -z "$pkg" ]; then pkg="com.example"; fi
+          echo '{"project_info":{"project_number":"123456789012","project_id":"placeholder-id","storage_bucket":"placeholder.appspot.com"},"client":[{"client_info":{"mobilesdk_app_id":"1:123456789012:android:1234567890abcdef","android_client_info":{"package_name":"'"$pkg"'"}},"api_key":[{"current_key":"placeholder_api_key"}],"services":{"appinvite_service":{"status":1}}}]}' > app/google-services.json
+        fi
+
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v4
+      with:
+        gradle-version: '9.3.1'
+
+    - name: Build Signed Release APK
+      env:
+        STORE_PASSWORD: fuyadheart6524
+        KEY_PASSWORD: fuyadheart6524
+        KEYSTORE_PATH: ${{ github.workspace }}/my-upload-key.jks
+        GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx3072m -XX:MaxMetaspaceSize=512m -Dorg.gradle.daemon=false -Dorg.gradle.parallel=true -Dorg.gradle.caching=true"
+      run: gradle assembleRelease --stacktrace
+
+    - name: Upload Device Installable APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: pencode-installable-apk
+        path: app/build/outputs/apk/release/*.apk
+        retention-days: 14

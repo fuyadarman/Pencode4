@@ -1,0 +1,307 @@
+package com.example.ui.agent
+
+import androidx.compose.animation.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.data.ProjectFileEntity
+import com.example.ui.AgentSkill
+import com.example.ui.AttachedFile
+import com.example.ui.CustomModelConfig
+import com.example.ui.theme.StitchTheme
+import com.example.ui.theme.stitchPressFeedback
+
+/**
+ * Modern Agent ChatBar matching the requested UI design:
+ * - Floating dark dock with 22.dp rounded corners
+ * - Clean text input ("Work with PenCode...")
+ * - Bottom row: [+] button, [Approve for me] toggle, Model selector pill, Mic icon, Stop/Send circle button
+ */
+@Composable
+fun ModernAgentChatBar(
+    chatInputText: String,
+    onUpdateChatInputText: (String) -> Unit,
+    isThinking: Boolean,
+    onSend: () -> Unit,
+    onStopAI: () -> Unit,
+    onAttachClick: () -> Unit,
+    selectedMcpServerIds: Set<String> = emptySet(),
+    onOpenSelectMcpDialog: () -> Unit = {},
+    attachedFiles: List<AttachedFile> = emptyList(),
+    onRemoveAttachedFile: (AttachedFile) -> Unit = {},
+    taggedFiles: List<ProjectFileEntity> = emptyList(),
+    onRemoveTaggedFile: (ProjectFileEntity) -> Unit = {},
+    taggedSkills: List<AgentSkill> = emptyList(),
+    onRemoveTaggedSkill: (AgentSkill) -> Unit = {},
+    currentReasoningEffort: com.example.agent.ReasoningEffort = com.example.agent.ReasoningEffort.NORMAL,
+    onSelectReasoningEffort: (com.example.agent.ReasoningEffort) -> Unit = {},
+    onOpenSelfLearningDialog: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    val canSend = chatInputText.isNotBlank() || attachedFiles.isNotEmpty() || taggedFiles.isNotEmpty() || taggedSkills.isNotEmpty()
+
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = com.example.ui.theme.AppTheme.bgSurface,
+        border = BorderStroke(
+            1.dp,
+            if (canSend) com.example.ui.theme.AppTheme.accentBlue.copy(alpha = 0.5f) else com.example.ui.theme.AppTheme.border
+        ),
+        tonalElevation = 6.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 8.dp)
+        ) {
+            // Attached / Tagged items chips row (if any)
+            if (attachedFiles.isNotEmpty() || taggedFiles.isNotEmpty() || taggedSkills.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(bottom = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    attachedFiles.forEach { file ->
+                        ModernAttachmentChip(
+                            label = file.name,
+                            icon = Icons.Default.AttachFile,
+                            accentColor = com.example.ui.theme.AppTheme.accentBlue,
+                            onRemove = { onRemoveAttachedFile(file) }
+                        )
+                    }
+                    taggedFiles.forEach { file ->
+                        ModernAttachmentChip(
+                            label = "@${file.path}",
+                            icon = Icons.Default.Description,
+                            accentColor = Color(0xFF7EE787),
+                            onRemove = { onRemoveTaggedFile(file) }
+                        )
+                    }
+                    taggedSkills.forEach { skill ->
+                        ModernAttachmentChip(
+                            label = "/${skill.id}",
+                            icon = Icons.Default.AutoAwesome,
+                            accentColor = Color(0xFFA371F7),
+                            onRemove = { onRemoveTaggedSkill(skill) }
+                        )
+                    }
+                }
+            }
+
+            // Upper area: Input Text Field
+            TextField(
+                value = chatInputText,
+                onValueChange = onUpdateChatInputText,
+                placeholder = {
+                    Text(
+                        text = "Describe your request (@ files, / skills)...",
+                        color = com.example.ui.theme.AppTheme.textMuted,
+                        fontSize = 13.sp
+                    )
+                },
+                textStyle = TextStyle(
+                    color = com.example.ui.theme.AppTheme.textPrimary,
+                    fontSize = 13.sp
+                ),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    disabledContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    disabledIndicatorColor = Color.Transparent,
+                    cursorColor = com.example.ui.theme.AppTheme.accentBlue
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 2.dp),
+                minLines = 1,
+                maxLines = 5
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Bottom row: Actions & Controls
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                // Left controls: Attach button and MCP Selection button
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    IconButton(
+                        onClick = onAttachClick,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AttachFile,
+                            contentDescription = "Attach File",
+                            tint = com.example.ui.theme.AppTheme.textSecondary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    // MCP Selection Button inside chatbar
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = com.example.ui.theme.AppTheme.bgSurfaceElevated,
+                        border = BorderStroke(
+                            1.dp,
+                            if (selectedMcpServerIds.isNotEmpty()) com.example.ui.theme.AppTheme.accentBlue else com.example.ui.theme.AppTheme.border
+                        ),
+                        modifier = Modifier.clickable(onClick = onOpenSelectMcpDialog)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Hub,
+                                contentDescription = "MCP",
+                                tint = if (selectedMcpServerIds.isNotEmpty()) com.example.ui.theme.AppTheme.accentBlue else com.example.ui.theme.AppTheme.textSecondary,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Text(
+                                text = if (selectedMcpServerIds.isNotEmpty()) "MCP (${selectedMcpServerIds.size})" else "MCP",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = com.example.ui.theme.AppTheme.textPrimary
+                            )
+                        }
+                    }
+
+                    // AI Reasoning Effort Selector
+                    ReasoningEffortSelector(
+                        currentEffort = currentReasoningEffort,
+                        onSelectEffort = onSelectReasoningEffort
+                    )
+                }
+
+                // Right action: Stop or Send Button
+                if (isThinking) {
+                    Button(
+                        onClick = onStopAI,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDA3633)),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(12.dp),
+                                color = Color.White,
+                                strokeWidth = 2.dp
+                            )
+                            Text("Stop", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                        }
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .then(
+                                if (canSend) {
+                                    Modifier
+                                        .background(Color(0xFF238636))
+                                        .border(BorderStroke(1.dp, Color(0xFF2EA043).copy(alpha = 0.6f)), RoundedCornerShape(8.dp))
+                                } else {
+                                    Modifier
+                                        .background(com.example.ui.theme.AppTheme.bgSurfaceElevated)
+                                        .border(BorderStroke(1.dp, com.example.ui.theme.AppTheme.border), RoundedCornerShape(8.dp))
+                                }
+                            )
+                            .then(
+                                if (canSend) {
+                                    Modifier.stitchPressFeedback(scaleDown = 0.90f, onClick = onSend)
+                                } else Modifier
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Send,
+                            contentDescription = "Send",
+                            tint = if (canSend) Color.White else com.example.ui.theme.AppTheme.textMuted,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ModernAttachmentChip(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    accentColor: Color,
+    onRemove: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = com.example.ui.theme.AppTheme.bgSurfaceElevated,
+        border = BorderStroke(1.dp, com.example.ui.theme.AppTheme.border)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = accentColor,
+                modifier = Modifier.size(12.dp)
+            )
+            Text(
+                text = label,
+                fontSize = 11.sp,
+                color = com.example.ui.theme.AppTheme.textPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 140.dp)
+            )
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = "Remove",
+                tint = com.example.ui.theme.AppTheme.textSecondary,
+                modifier = Modifier
+                    .size(12.dp)
+                    .clickable(onClick = onRemove)
+            )
+        }
+    }
+}
