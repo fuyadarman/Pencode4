@@ -44,7 +44,7 @@ object AdMobManager {
      * Master switch to enable/disable all AdMob ads across the app.
      * Set to true to enable Google AdMob ads.
      */
-    var isAdsEnabled: Boolean = true
+    var isAdsEnabled: Boolean = false
 
     private val isInitialized = AtomicBoolean(false)
     private var isAppOpenAdShowing = false

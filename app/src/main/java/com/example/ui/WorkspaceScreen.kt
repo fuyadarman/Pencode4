@@ -3337,6 +3337,7 @@ fun PreviewTabContent(
     var isInspectorModeActive by remember { mutableStateOf(false) }
     val currentOnElementSelected by rememberUpdatedState(onInspectorElementSelected)
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
+    var webViewCrashCount by remember { mutableStateOf(0) }
     var isGeneratingLivePreview by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
