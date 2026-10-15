@@ -211,7 +211,8 @@ private fun CreateScheduledTaskForm(
     var title by remember { mutableStateOf("") }
     var prompt by remember { mutableStateOf("") }
     var intervalMinutes by remember { mutableStateOf("60") }
-    var isRecurring by remember { mutableStateOf(true) }
+    var isRecurring by remember { mutableStateOf(false) }
+    var selectedDateTimeMillis by remember { mutableStateOf(System.currentTimeMillis() + (60 * 1000 * 30)) }
 
     Column(
         modifier = Modifier.fillMaxSize(),
@@ -249,6 +250,12 @@ private fun CreateScheduledTaskForm(
             )
         )
 
+        Text("Trigger Date & Time", color = Color(0xFF8B949E), fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
+        TaskDateTimeSchedulerPicker(
+            selectedTimeMillis = selectedDateTimeMillis,
+            onTimeSelected = { selectedDateTimeMillis = it }
+        )
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -256,7 +263,7 @@ private fun CreateScheduledTaskForm(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(checked = isRecurring, onCheckedChange = { isRecurring = it })
-                Text("Repeat", color = Color.White, fontSize = 12.sp)
+                Text("Repeat Recurringly", color = Color.White, fontSize = 12.sp)
             }
 
             if (isRecurring) {
@@ -294,7 +301,7 @@ private fun CreateScheduledTaskForm(
                         val task = ScheduledAgentTask(
                             title = title.trim(),
                             prompt = prompt.trim(),
-                            triggerTimeMillis = System.currentTimeMillis() + (minutes * 60 * 1000),
+                            triggerTimeMillis = selectedDateTimeMillis,
                             intervalMinutes = if (isRecurring) minutes else null,
                             isRecurring = isRecurring
                         )

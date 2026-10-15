@@ -108,11 +108,15 @@ object BrowserTransferEngine {
                             }
                         }
                         if (!el) {
-                            el = document.querySelector('a[href]:not([href^="#"]):not([href^="javascript:"]), a[download], img[src]');
+                            el = document.querySelector('video, audio, source, a[href]:not([href^="#"]):not([href^="javascript:"]), a[download], img[src]');
                         }
-                        if (!el) return JSON.stringify({ error: 'Element not found on page' });
+                        if (!el) return JSON.stringify({ error: 'No media or downloadable element found on page' });
 
                         var url = el.getAttribute('href') || el.src || el.currentSrc || el.getAttribute('data-url') || '';
+                        if (!url && (el.tagName === 'VIDEO' || el.tagName === 'AUDIO')) {
+                            var srcChild = el.querySelector('source');
+                            if (srcChild) url = srcChild.src || srcChild.getAttribute('src') || '';
+                        }
                         var downloadAttr = el.getAttribute('download') || '';
                         
                         // Handle relative URLs

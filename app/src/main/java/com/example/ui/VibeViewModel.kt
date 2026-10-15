@@ -2226,6 +2226,13 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     fun saveAllowBackgroundExecution(allowed: Boolean) {
         _allowBackgroundExecution.value = allowed
         sharedPrefs.edit().putBoolean("allow_background_execution", allowed).apply()
+        try {
+            if (allowed && _isThinking.value) {
+                com.example.agent.service.AiAgentBackgroundService.start(getApplication(), "AI Agent active in background...")
+            } else if (!allowed) {
+                com.example.agent.service.AiAgentBackgroundService.stop(getApplication())
+            }
+        } catch (_: Exception) {}
     }
 
     fun loadCustomModels() {
@@ -2523,7 +2530,8 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     val interruptionReason: StateFlow<String> = _interruptionReason.asStateFlow()
 
     fun isContinuationKeyword(prompt: String): Boolean {
-        return com.example.agent.TaskInterruptionResumeManager.isExplicitResumePrompt(prompt)
+        return com.example.agent.AgentContinuousResumptionEngine.isContinuationPrompt(prompt) ||
+                com.example.agent.TaskInterruptionResumeManager.isExplicitResumePrompt(prompt)
     }
 
     suspend fun buildIntelligentContinuationPrompt(project: ProjectEntity): String {
@@ -3601,6 +3609,12 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             val isExplicitContinuation = isContinuationKeyword(userPrompt.trim())
             val isSideQuestion = !isExplicitContinuation && com.example.agent.TaskInterruptionResumeManager.isSideQuestionDuringTask(userPrompt, currentCheckpoint)
 
+            if (_allowBackgroundExecution.value) {
+                try {
+                    com.example.agent.service.AiAgentBackgroundService.start(getApplication(), "AI Agent working on ${project.name}...")
+                } catch (_: Exception) {}
+            }
+
             if (isExplicitContinuation) {
                 _isInterrupted.value = false
                 _interruptionReason.value = ""
@@ -3610,6 +3624,16 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 com.example.agent.TaskCheckpointEngine.pauseTaskForQuestion(project.name, projectDir, repository, userPrompt)
                 _isInterrupted.value = true
                 _interruptionReason.value = com.example.agent.TaskInterruptionResumeManager.buildPausedTaskNotice(currentCheckpoint)
+            } else if (currentCheckpoint != null && currentCheckpoint.status != "completed" && currentCheckpoint.goal.isNotBlank()) {
+                _isInterrupted.value = false
+                finalPrompt = com.example.agent.AgentContinuousResumptionEngine.buildResumptionPrompt(
+                    userPrompt = userPrompt,
+                    checkpoint = currentCheckpoint,
+                    completedTodos = _todoList.value.filter { it.isCompleted }.map { it.task },
+                    pendingTodos = _todoList.value.filter { !it.isCompleted }.map { it.task },
+                    recentEdits = _editHistory.value.takeLast(10).map { "${it.tool.uppercase()} on '${it.path}'" }
+                )
+                com.example.agent.TaskCheckpointEngine.startOrUpdateTask(project.name, projectDir, repository, finalPrompt, isContinuation = true)
             } else {
                 _isInterrupted.value = false
                 com.example.agent.TaskCheckpointEngine.startOrUpdateTask(project.name, projectDir, repository, userPrompt, isContinuation = false)
@@ -3617,8 +3641,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             attachments.forEach { file ->
                 if (file.isImage && file.contentAsBase64 != null) {
                     finalPrompt += "\n\n[IMAGE_BASE64: data:${file.mimeType};base64,${file.contentAsBase64}]"
-                } else if (!file.isImage && file.contentAsText != null) {
-                    finalPrompt += "\n\n[Attached File: ${file.name}]\n${file.contentAsText}\n[/Attached File]"
+                } else if (!file.contentAsText.isNullOrBlank()) {
+                    finalPrompt += "\n\n${file.contentAsText}"
                 }
             }
 
@@ -4404,6 +4428,19 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 )
                                 _aiActionLogs.value = _aiActionLogs.value + logEntry
 
+                                try {
+                                    val liveLogs = com.example.browser.BrowserConsoleSyncEngine.fetchLatestConsoleLogs(com.example.browser.LivePreviewBrowserManager.getActiveWebView())
+                                    if (liveLogs.isNotEmpty()) {
+                                        val current = _webConsoleLogs.value.toMutableList()
+                                        liveLogs.forEach { entry ->
+                                            if (current.none { it.message == entry.message && Math.abs(it.timestamp - entry.timestamp) < 2000 }) {
+                                                current.add(WebConsoleLog(entry.message, entry.level, entry.source ?: "browser", entry.line, entry.timestamp))
+                                            }
+                                        }
+                                        _webConsoleLogs.value = current
+                                    }
+                                } catch (_: Exception) {}
+
                                 val result = com.example.agent.AgentErrorLogsEngine.readPreviewErrors(
                                     logs = _webConsoleLogs.value,
                                     args = args
@@ -4522,6 +4559,19 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     details = "Preview web console"
                                 )
                                 _aiActionLogs.value = _aiActionLogs.value + logEntry
+
+                                try {
+                                    val liveLogs = com.example.browser.BrowserConsoleSyncEngine.fetchLatestConsoleLogs(com.example.browser.LivePreviewBrowserManager.getActiveWebView())
+                                    if (liveLogs.isNotEmpty()) {
+                                        val current = _webConsoleLogs.value.toMutableList()
+                                        liveLogs.forEach { entry ->
+                                            if (current.none { it.message == entry.message && Math.abs(it.timestamp - entry.timestamp) < 2000 }) {
+                                                current.add(WebConsoleLog(entry.message, entry.level, entry.source ?: "browser", entry.line, entry.timestamp))
+                                            }
+                                        }
+                                        _webConsoleLogs.value = current
+                                    }
+                                } catch (_: Exception) {}
 
                                 val result = com.example.agent.AgentWorkspaceLogsReader.readConsoleLogs(
                                     logs = _webConsoleLogs.value,
@@ -5034,6 +5084,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                     
                     com.example.agent.AgentResponseStreamManager.endStreaming()
                     _isThinking.value = false
+                    try {
+                        com.example.agent.service.AiAgentBackgroundService.stop(getApplication())
+                    } catch (_: Exception) {}
                     projectActionLogsMap[project.name] = _aiActionLogs.value
                     projectTodoListMap[project.name] = _todoList.value
                     projectEditHistoryMap[project.name] = _editHistory.value

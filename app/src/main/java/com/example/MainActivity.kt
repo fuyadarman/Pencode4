@@ -36,14 +36,17 @@ import androidx.compose.ui.unit.dp
 class MainActivity : ComponentActivity() {
 
     private var mainViewModel: VibeViewModel? = null
-
     private var pendingOAuthUri: android.net.Uri? = null
+    private var appUpdateManager: com.example.update.InAppUpdateManager? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         try {
             com.example.crash.AppCrashGuard.install(applicationContext)
             com.example.admob.AdMobManager.initialize(applicationContext)
+            appUpdateManager = com.example.update.InAppUpdateManager(this).apply {
+                initAndCheckForUpdates()
+            }
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -514,6 +517,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        try {
+            appUpdateManager?.onDestroy()
+        } catch (_: Exception) {}
         LocalHttpServer.stop()
     }
 }

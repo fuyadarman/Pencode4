@@ -1122,33 +1122,14 @@ fun ChatTabContent(
         contract = androidx.activity.result.contract.ActivityResultContracts.GetMultipleContents()
     ) { uris ->
         coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val activeProjName = files.firstOrNull()?.projectName
             val newAttachments = uris.mapNotNull { uri ->
-                val type = context.contentResolver.getType(uri) ?: ""
-                val isImage = type.startsWith("image/")
-                var name = "Unknown_File"
-                try {
-                    context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-                        val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-                        if (cursor.moveToFirst() && nameIndex != -1) {
-                            name = cursor.getString(nameIndex) ?: "Unknown_File"
-                        }
-                    }
-                } catch (e: Exception) { }
-                
-                try {
-                    val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                    if (bytes != null && bytes.isNotEmpty()) {
-                        if (isImage && bytes.size <= 5_000_000) {
-                            val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.DEFAULT)
-                            com.example.ui.AttachedFile(uri, name, type, true, contentAsBase64 = base64)
-                        } else if (!isImage && bytes.size <= 2_000_000) {
-                            val text = String(bytes, Charsets.UTF_8)
-                            com.example.ui.AttachedFile(uri, name, type, false, contentAsText = text)
-                        } else null
-                    } else null
-                } catch (e: Exception) {
-                    null
-                }
+                com.example.chat.ChatAttachmentManager.processAttachmentUri(
+                    context = context,
+                    uri = uri,
+                    projectName = activeProjName,
+                    repository = null
+                )
             }
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                 newAttachments.forEach { onAddAttachedFile(it) }
@@ -3721,6 +3702,35 @@ fun PreviewTabContent(
                         )
 
                         DropdownMenuItem(
+                            text = { Text("Download Page Media (Video/Audio/Images)", fontSize = 12.sp, color = Color(0xFF38BDF8)) },
+                            leadingIcon = { Icon(Icons.Default.Download, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(16.dp)) },
+                            onClick = {
+                                showHamburgerMenu = false
+                                previewScope.launch {
+                                    val detected = com.example.browser.UniversalMediaDownloadDetector.scanPageForMedia(webViewRef)
+                                    if (detected.isEmpty()) {
+                                        android.widget.Toast.makeText(context, "No media files or videos found on current page", android.widget.Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        android.widget.Toast.makeText(context, "Detected ${detected.size} media item(s). Downloading to workspace...", android.widget.Toast.LENGTH_SHORT).show()
+                                        val activeProj = files.firstOrNull()?.projectName ?: "default"
+                                        val projectDir = java.io.File(context.filesDir, "projects/$activeProj/downloads").apply { mkdirs() }
+                                        detected.take(3).forEach { media ->
+                                            try {
+                                                val safeName = media.title.replace("[^a-zA-Z0-9._-]".toRegex(), "_") + ".${media.extension.ifBlank { "dat" }}"
+                                                val outFile = java.io.File(projectDir, safeName)
+                                                if (media.url.startsWith("http")) {
+                                                    val bytes = okhttp3.OkHttpClient().newCall(okhttp3.Request.Builder().url(media.url).build()).execute().body?.bytes()
+                                                    if (bytes != null) outFile.writeBytes(bytes)
+                                                }
+                                            } catch (_: Exception) {}
+                                        }
+                                        android.widget.Toast.makeText(context, "Saved detected media to workspace downloads/", android.widget.Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            }
+                        )
+
+                        DropdownMenuItem(
                             text = { Text("Open in External Browser", fontSize = 12.sp, color = Color(0xFF3FB950)) },
                             leadingIcon = { Icon(Icons.Default.OpenInBrowser, contentDescription = null, tint = Color(0xFF3FB950), modifier = Modifier.size(16.dp)) },
                             onClick = {
@@ -3858,7 +3868,7 @@ fun PreviewTabContent(
                 .background(Color.White)
         ) {
             val activeProjectName = remember(files) { files.firstOrNull()?.projectName ?: "default" }
-            key(activeProjectName, refreshTrigger, hasWebDist, isUniversalPreviewApplicable, effectiveHtmlContent?.hashCode()) {
+            key(activeProjectName) {
                 if (!hasWebDist && isReactViteFramework && customUrl == null) {
                     // Show a beautiful, native-looking compilation required card
                     AndroidView(
@@ -4277,8 +4287,7 @@ fun PreviewTabContent(
                             }
                         },
                         onRelease = { webView ->
-                            com.example.browser.LivePreviewBrowserManager.unregisterActiveWebView(webView)
-                            com.example.ui.preview.WebPreviewPerformanceGuard.safelyReleaseWebView(webView)
+                            // Retain WebView across tab switches so page state and inputs do not reload
                             webViewRef = null
                         },
                         modifier = Modifier.fillMaxSize()

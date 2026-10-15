@@ -131,23 +131,8 @@ object AgentModelExecutionSafeguard {
         recentThoughts: List<String>,
         currentThought: String?
     ): ProConvergenceDecision {
-        // If files have already been modified and the model has spent 3 consecutive turns
-        // only thinking or re-reading without further modifications -> Force clean completion!
-        if (hasModifiedFiles && consecutiveTurnsWithoutEdits >= 3) {
-            return ProConvergenceDecision.ForceAutoComplete(
-                summary = "All requested code changes have been applied and finalized. Task completed successfully.",
-                reason = "AI applied code modifications and completed verification. Auto-finalizing to prevent infinite re-reading loop."
-            )
-        }
-
-        // Hard turn ceiling for pro models: If turn exceeds 18 and modifications exist, finalize
-        if (turn >= 18 && hasModifiedFiles) {
-            return ProConvergenceDecision.ForceAutoComplete(
-                summary = "Task completed: Requested features and modifications have been implemented.",
-                reason = "Reached turn ceiling with successful code modifications."
-            )
-        }
-
+        // Do not prematurely hijack the agent or fake task completion while it is still working.
+        // The agent will naturally call 'complete' when its entire task is finished.
         return ProConvergenceDecision.Proceed
     }
 
