@@ -49,6 +49,7 @@ object WebPreviewPerformanceGuard {
         if (result.contains("three", ignoreCase = true) || result.contains("<canvas", ignoreCase = true)) {
             result = enhanceWebGLPreviewHtml(result)
         }
+        result = WebPreviewErrorBoundary.enrichHtmlWithErrorSafety(result)
         return result
     }
 

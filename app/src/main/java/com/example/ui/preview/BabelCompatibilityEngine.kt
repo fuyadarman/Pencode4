@@ -20,18 +20,14 @@ object BabelCompatibilityEngine {
         val stagePresetRegex = Regex("""data-presets\s*=\s*["']([^"']*)["']""", RegexOption.IGNORE_CASE)
         content = stagePresetRegex.replace(content) { matchResult ->
             val originalPresets = matchResult.groups[1]?.value ?: ""
-            // Replace stage-2 / stage-3 with env
-            var sanitized = originalPresets
+            // Replace deprecated stage-2 / stage-3 with env, keep react and env intact
+            val sanitized = originalPresets
                 .replace(Regex("""\bstage-[23]\b""", RegexOption.IGNORE_CASE), "env")
                 .split(",")
                 .map { it.trim() }
+                .filter { it.isNotBlank() }
                 .distinct()
                 .joinToString(",")
-            
-            // Map 'react' to 'react-classic' if not already
-            if (sanitized.contains("react") && !sanitized.contains("react-classic")) {
-                sanitized = sanitized.replace(Regex("""\breact\b"""), "react-classic")
-            }
             "data-presets=\"$sanitized\""
         }
 

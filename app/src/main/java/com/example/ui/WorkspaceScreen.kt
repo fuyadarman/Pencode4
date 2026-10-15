@@ -552,12 +552,9 @@ fun WorkspaceScreen(
                             val isKotlinOrFlutter = remember(files) {
                                 files.any { file ->
                                     val p = file.path.lowercase()
-                                    p.endsWith("build.gradle") ||
-                                    p.endsWith("build.gradle.kts") ||
-                                    p.endsWith("pubspec.yaml") ||
-                                    p.endsWith("androidmanifest.xml") ||
-                                    p.endsWith(".kt") ||
-                                    p.endsWith(".dart")
+                                    p.endsWith(".kt") || p.endsWith(".dart") || p.endsWith(".java") ||
+                                    p.endsWith("build.gradle") || p.endsWith("build.gradle.kts") ||
+                                    p.endsWith("pubspec.yaml")
                                 }
                             }
                             if (isKotlinOrFlutter) {
@@ -3209,10 +3206,20 @@ fun PreviewTabContent(
     val isUniversalPreviewApplicable = remember(files) {
         com.example.preview.universal.UniversalPreviewGenerator.isUniversalPreviewApplicable(files)
     }
-    val universalPreviewHtml = remember(files, webPreviewRefreshTrigger) {
+    var universalPreviewHtml by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(files, webPreviewRefreshTrigger, isUniversalPreviewApplicable) {
         if (isUniversalPreviewApplicable) {
-            com.example.preview.universal.UniversalPreviewGenerator.generateInteractivePreviewHtml(files)
-        } else null
+            val html = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                try {
+                    com.example.preview.universal.UniversalPreviewGenerator.generateInteractivePreviewHtml(files)
+                } catch (e: Exception) {
+                    null
+                }
+            }
+            universalPreviewHtml = html
+        } else {
+            universalPreviewHtml = null
+        }
     }
     val effectiveHtmlContent = remember(htmlFile?.content, universalPreviewHtml, isUniversalPreviewApplicable) {
         if (isUniversalPreviewApplicable) universalPreviewHtml else (htmlFile?.content ?: universalPreviewHtml)
@@ -3865,11 +3872,11 @@ fun PreviewTabContent(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .background(Color.White)
+                .background(Color(0xFF0D1117))
         ) {
             val activeProjectName = remember(files) { files.firstOrNull()?.projectName ?: "default" }
             key(activeProjectName) {
-                if (!hasWebDist && isReactViteFramework && customUrl == null) {
+                if (!hasWebDist && isReactViteFramework && customUrl == null && !isUniversalPreviewApplicable) {
                     // Show a beautiful, native-looking compilation required card
                     AndroidView(
                         factory = { context ->
@@ -3908,7 +3915,6 @@ fun PreviewTabContent(
                     val initialProcessedHtml = remember(effectiveHtmlContent) {
                         effectiveHtmlContent?.let { com.example.ui.preview.WebPreviewPerformanceGuard.preprocessHtmlSafely(it) } ?: ""
                     }
-                    var lastLoadedHtml by remember { mutableStateOf(initialProcessedHtml) }
                     var isPageLoading by remember { mutableStateOf(true) }
                     var pageProgress by remember { mutableStateOf(0) }
 
@@ -3922,7 +3928,7 @@ fun PreviewTabContent(
                     LaunchedEffect(webPreviewRefreshTrigger) {
                         if (webPreviewRefreshTrigger > 0 && customUrl == null && effectiveHtmlContent != null && (isUniversalPreviewApplicable || !hasWebDist)) {
                             val currentContent = com.example.ui.preview.WebPreviewPerformanceGuard.preprocessHtmlSafely(effectiveHtmlContent)
-                            lastLoadedHtml = currentContent
+                            webViewRef?.tag = currentContent
                             webViewRef?.loadDataWithBaseURL(
                                 com.example.ui.preview.WebPreviewLifecycleManager.VIRTUAL_BASE_URL,
                                 currentContent,
@@ -3941,7 +3947,7 @@ fun PreviewTabContent(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(if (currentViewport.widthDp != null) Color(0xFF090D14) else Color.White),
+                            .background(Color(0xFF0D1117)),
                         contentAlignment = Alignment.TopCenter
                     ) {
                         Box(
@@ -3958,12 +3964,13 @@ fun PreviewTabContent(
                                         Modifier.fillMaxWidth()
                                     }
                                 )
-                                .background(Color.White)
+                                .background(Color(0xFF0D1117))
                         ) {
                             AndroidView(
                                 factory = { context ->
                                     WebView(context).apply {
                                         setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
+                                        setBackgroundColor(android.graphics.Color.parseColor("#0D1117"))
                                         // Enable Real Browser Cookies & Storage
                                         try {
                                             val cm = android.webkit.CookieManager.getInstance()
@@ -4034,6 +4041,19 @@ fun PreviewTabContent(
                                     webViewClient = object : WebViewClient() {
                                         override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                                             return false
+                                        }
+
+                                        override fun onReceivedError(
+                                            view: WebView?,
+                                            request: WebResourceRequest?,
+                                            error: android.webkit.WebResourceError?
+                                        ) {
+                                            super.onReceivedError(view, request, error)
+                                            com.example.ui.preview.WebPreviewErrorBoundary.handleWebViewError(view, request, error, onWebError)
+                                        }
+
+                                        override fun onRenderProcessGone(view: WebView?, detail: android.webkit.RenderProcessGoneDetail?): Boolean {
+                                            return true
                                         }
 
                                         override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
@@ -4267,8 +4287,9 @@ fun PreviewTabContent(
                             if (!isThinking) {
                                 if (customUrl == null && effectiveHtmlContent != null && (isUniversalPreviewApplicable || !hasWebDist)) {
                                     val currentContent = com.example.ui.preview.WebPreviewPerformanceGuard.preprocessHtmlSafely(effectiveHtmlContent)
-                                    if (lastLoadedHtml != currentContent) {
-                                        lastLoadedHtml = currentContent
+                                    val currentTag = webView.tag as? String
+                                    if (currentTag != currentContent) {
+                                        webView.tag = currentContent
                                         webView.loadDataWithBaseURL(
                                             com.example.ui.preview.WebPreviewLifecycleManager.VIRTUAL_BASE_URL,
                                             currentContent,
@@ -4279,16 +4300,17 @@ fun PreviewTabContent(
                                     }
                                 } else if (customUrl == null && effectiveHtmlContent == null && !hasWebDist) {
                                     val startHtml = com.example.browser.RealBrowserStartPageGenerator.generateStartPageHtml()
-                                    if (lastLoadedHtml != startHtml) {
-                                        lastLoadedHtml = startHtml
+                                    val currentTag = webView.tag as? String
+                                    if (currentTag != startHtml) {
+                                        webView.tag = startHtml
                                         webView.loadDataWithBaseURL("https://browser-home/", startHtml, "text/html", "UTF-8", null)
                                     }
                                 }
                             }
                         },
                         onRelease = { webView ->
-                            // Retain WebView across tab switches so page state and inputs do not reload
                             webViewRef = null
+                            com.example.ui.preview.WebPreviewLifecycleManager.releaseWebView(webView)
                         },
                         modifier = Modifier.fillMaxSize()
                     )
