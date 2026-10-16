@@ -83,9 +83,15 @@ object RealBrowserTabManager {
         val activeId = _activeTabId.value
         _tabs.value = _tabs.value.map { tab ->
             if (tab.id == activeId) {
+                val cleanTitle = when {
+                    !title.isNullOrBlank() && !title.startsWith("data:") && !title.startsWith("about:") -> title
+                    url.isNotBlank() && !url.startsWith("data:") && !url.startsWith("about:") -> url
+                    else -> if (tab.title.isNotBlank() && tab.title != "New Tab" && !tab.title.startsWith("data:")) tab.title else "Live Preview"
+                }
+                val cleanUrl = if (url.startsWith("data:") || url.startsWith("about:")) "" else url
                 tab.copy(
-                    url = url,
-                    title = if (!title.isNullOrBlank()) title else if (url.isNotBlank()) url else "New Tab",
+                    url = cleanUrl,
+                    title = cleanTitle,
                     canGoBack = canGoBack,
                     canGoForward = canGoForward,
                     isLoading = isLoading

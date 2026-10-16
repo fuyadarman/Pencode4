@@ -90,22 +90,7 @@ object AgentContinuousResumptionEngine {
             4. Only when ALL requirements are completely satisfied, explicitly call 'complete' with a clear summary.
             """.trimIndent()
         } else {
-            """
-            [MERGED TASK CONTINUATION & NEW INSTRUCTION]
-            A previous task was in progress:
-            • Previous Goal: "$goal"
-            • Files Modified:
-            $filesList
-            • Last Completed State: $lastStep
-
-            NEW USER INSTRUCTION TO INCORPORATE:
-            "$userPrompt"
-
-            DIRECTIVE:
-            1. Do NOT discard or undo previously applied code changes.
-            2. Build upon the existing progress while incorporating the user's new instruction above.
-            3. Apply any required code edits directly and call 'complete' only when finished.
-            """.trimIndent()
+            userPrompt
         }
     }
 }

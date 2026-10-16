@@ -319,4 +319,49 @@ Call 'complete' with Markdown summary when finished.
 
         return sb.toString()
     }
+
+    fun resolveActiveTemplateInfo(templateKey: String?): String = when (templateKey) {
+        "android_kotlin" -> """
+            ACTIVE TEMPLATE: Native Android Kotlin (Jetpack Compose).
+            - CRITICAL constraint: You must ONLY write Native Android Kotlin code, XML layout files, and Gradle build configurations!
+            - DO NOT use React, HTML, CSS, or JavaScript.
+        """.trimIndent()
+        "flutter" -> """
+            ACTIVE TEMPLATE: Flutter (Dart).
+            - CRITICAL constraint: You must ONLY write Flutter Dart code (lib/main.dart) and pubspec.yaml configurations!
+            - DO NOT use HTML, CSS, React, React CDN, or Jetpack Compose!
+        """.trimIndent()
+        "react" -> """
+            ACTIVE TEMPLATE: React CDN (Web).
+            - CRITICAL constraint: The project is built using React & ReactDOM directly loaded from a CDN.
+            - DO NOT use Three.js unless explicitly asked!
+            - Build components as standard modern React CDN files.
+        """.trimIndent()
+        "vanilla" -> """
+            ACTIVE TEMPLATE: Vanilla JS (Web).
+            - CRITICAL constraint: The project uses pure Vanilla JS (standard HTML, CSS, and pure Native JavaScript).
+            - DO NOT use React, ReactDOM, or Three.js! If you write React or JSX in a Vanilla JS project, it will fail to compile. This is a strict constraint.
+        """.trimIndent()
+        "vanilla_three" -> """
+            ACTIVE TEMPLATE: Vanilla Three.js (3D Web Canvas).
+            - CRITICAL constraint: The project uses Three.js via CDN window.THREE or script imports for 3D games, objects, and 3D web design.
+            - Build clean, interactive 3D Web animations using THREE.Scene, THREE.PerspectiveCamera, THREE.WebGLRenderer, lights, geometries, materials, and animation loops.
+        """.trimIndent()
+        "chrome_extension" -> """
+            ACTIVE TEMPLATE: Chrome Extension (Manifest V3).
+            - CRITICAL constraint: This is a modern Google Chrome Extension adhering to Manifest V3 specifications.
+            - Structure includes:
+              * manifest.json: Declarative permissions, host_permissions, background service worker, action popup, options page, and content scripts.
+              * popup/: HTML, CSS, and JS for extension popup when the user clicks the toolbar icon.
+              * background/: Service worker (service_worker.js) for background tasks, alarms, listeners, context menus, and storage.
+              * content/: Content scripts and styling injected into web pages.
+              * options/: Settings and preferences management page.
+              * index.html: In-app live test & interactive preview hub.
+            - Follow Chrome Extension Manifest V3 best practices (use chrome.storage.local/sync, chrome.runtime.sendMessage, chrome.tabs.sendMessage, chrome.action).
+        """.trimIndent()
+        else -> """
+            ACTIVE TEMPLATE: ${templateKey ?: "Empty Workspace"}.
+            - Respect the existing framework/files in the workspace.
+        """.trimIndent()
+    }
 }

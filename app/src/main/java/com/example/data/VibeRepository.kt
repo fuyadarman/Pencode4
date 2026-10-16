@@ -287,7 +287,8 @@ class VibeRepository(private val dao: VibeDao, private val context: Context) {
         val dbFiles = try {
             dao.getFilesForProject(projectName).filter { 
                 !it.path.startsWith("agent-skills/") && !it.path.startsWith("skills/") && !it.path.startsWith(".skills/") &&
-                it.path != "task.json" && !it.path.endsWith("/task.json")
+                it.path != "task.json" && !it.path.endsWith("/task.json") &&
+                it.path != "checkpoint.txt" && !it.path.endsWith("/checkpoint.txt")
             }
         } catch (t: Throwable) {
             android.util.Log.e("VibeRepository", "Error reading DB files for project $projectName", t)

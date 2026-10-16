@@ -3615,6 +3615,14 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 } catch (_: Exception) {}
             }
 
+            val backgroundCheckpointContext = com.example.agent.CheckpointTextManager.getBackgroundTriggerContext(projectDir)
+            com.example.agent.CheckpointTextManager.startPromptSession(
+                projectName = project.name,
+                projectDir = projectDir,
+                repository = repository,
+                prompt = userPrompt
+            )
+
             if (isExplicitContinuation) {
                 _isInterrupted.value = false
                 _interruptionReason.value = ""
@@ -3624,16 +3632,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 com.example.agent.TaskCheckpointEngine.pauseTaskForQuestion(project.name, projectDir, repository, userPrompt)
                 _isInterrupted.value = true
                 _interruptionReason.value = com.example.agent.TaskInterruptionResumeManager.buildPausedTaskNotice(currentCheckpoint)
-            } else if (currentCheckpoint != null && currentCheckpoint.status != "completed" && currentCheckpoint.goal.isNotBlank()) {
-                _isInterrupted.value = false
-                finalPrompt = com.example.agent.AgentContinuousResumptionEngine.buildResumptionPrompt(
-                    userPrompt = userPrompt,
-                    checkpoint = currentCheckpoint,
-                    completedTodos = _todoList.value.filter { it.isCompleted }.map { it.task },
-                    pendingTodos = _todoList.value.filter { !it.isCompleted }.map { it.task },
-                    recentEdits = _editHistory.value.takeLast(10).map { "${it.tool.uppercase()} on '${it.path}'" }
-                )
-                com.example.agent.TaskCheckpointEngine.startOrUpdateTask(project.name, projectDir, repository, finalPrompt, isContinuation = true)
             } else {
                 _isInterrupted.value = false
                 com.example.agent.TaskCheckpointEngine.startOrUpdateTask(project.name, projectDir, repository, userPrompt, isContinuation = false)
@@ -3646,43 +3644,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 }
             }
 
-            // Save full project version snapshot (keeping latest 3) before AI modifies project
-            val currentFilesToBackup = repository.getFilesForProject(project.name)
-            RestoreManager.saveBackup(getApplication(), project.name, finalPrompt, currentFilesToBackup)
-            loadBackupsForCurrentProject(project.name)
-
-            // 1. Save user prompt to Chat Database
-            var userMsg: ChatMessageEntity? = null
-            if (!isRegenerate) {
-                val activeConfig = _customModels.value.find { it.id == _selectedModelId.value }
-                val activeModel = _currentRunningModelName.value.ifBlank {
-                    activeConfig?.let { if (it.modelId.isNotBlank()) it.modelId else it.alias } ?: ""
-                }
-                val displayUserContent = when {
-                    finalPrompt.contains("[PLAN_MODE_ACTIVE]") -> {
-                        val userPromptRegex = Regex("""request:\s*\"([^\"]+)\"""")
-                        val match = userPromptRegex.find(finalPrompt)
-                        match?.groupValues?.getOrNull(1) ?: finalPrompt.replace(Regex("""\[/?PLAN_MODE_ACTIVE\]"""), "").trim()
-                    }
-                    finalPrompt.contains("[EXECUTE_PLAN_MODE]") -> {
-                        val planTitleRegex = Regex("""proposed plan \"([^\"]+)\"""")
-                        val titleMatch = planTitleRegex.find(finalPrompt)
-                        val title = titleMatch?.groupValues?.getOrNull(1) ?: "Approved Plan"
-                        "Build & execute plan: $title"
-                    }
-                    else -> finalPrompt
-                }
-                val initialUserMsg = ChatMessageEntity(
-                    projectName = project.name,
-                    role = "user",
-                    content = displayUserContent,
-                    timestamp = System.currentTimeMillis(),
-                    modelName = activeModel
-                )
-                val insertedId = repository.insertChatMessage(initialUserMsg)
-                userMsg = initialUserMsg.copy(id = insertedId.toInt())
-            }
-            _chatMessages.value = repository.getChatsForProject(project.name)
+            val userMsg = preparePromptAndInitialUserMessage(project, finalPrompt, isRegenerate)
 
             // 2. Clear previous logs and initialize thinking state
             runningProjectName = project.name
@@ -3700,57 +3662,26 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 
             // Re-enable conversation history with highly optimized, token-bounded session memory ledger
             val historyEntities = repository.getChatsForProject(project.name)
-            val history = com.example.agent.AgentHistoryBuilder.buildHistory(
+            var lastThought: String? = null
+            var currentExecutingToolName = ""
+            var currentExecutingArgsJson = "{}"
+            val rawHistory = com.example.agent.AgentHistoryBuilder.buildHistory(
                 historyEntities = historyEntities,
                 moshi = moshi,
                 editRecords = _editHistory.value
             )
+            val history: MutableList<Content> = com.example.agent.CheckpointTextManager.createCheckpointAwareHistory(
+                initialHistory = rawHistory,
+                projectName = project.name,
+                projectDir = projectDir,
+                repository = repository,
+                getThought = { lastThought },
+                getCurrentTool = { currentExecutingToolName },
+                getCurrentArgs = { currentExecutingArgsJson }
+            )
             val currentPromptEntity = historyEntities.lastOrNull { it.role == "user" }
 
-            val activeTemplateInfo = when (project.templateKey) {
-                "android_kotlin" -> """
-                    ACTIVE TEMPLATE: Native Android Kotlin (Jetpack Compose).
-                    - CRITICAL constraint: You must ONLY write Native Android Kotlin code, XML layout files, and Gradle build configurations!
-                    - DO NOT use React, HTML, CSS, or JavaScript.
-                """.trimIndent()
-                "flutter" -> """
-                    ACTIVE TEMPLATE: Flutter (Dart).
-                    - CRITICAL constraint: You must ONLY write Flutter Dart code (lib/main.dart) and pubspec.yaml configurations!
-                    - DO NOT use HTML, CSS, React, React CDN, or Jetpack Compose!
-                """.trimIndent()
-                "react" -> """
-                    ACTIVE TEMPLATE: React CDN (Web).
-                    - CRITICAL constraint: The project is built using React & ReactDOM directly loaded from a CDN.
-                    - DO NOT use Three.js unless explicitly asked!
-                    - Build components as standard modern React CDN files.
-                """.trimIndent()
-                "vanilla" -> """
-                    ACTIVE TEMPLATE: Vanilla JS (Web).
-                    - CRITICAL constraint: The project uses pure Vanilla JS (standard HTML, CSS, and pure Native JavaScript).
-                    - DO NOT use React, ReactDOM, or Three.js! If you write React or JSX in a Vanilla JS project, it will fail to compile. This is a strict constraint.
-                """.trimIndent()
-                "vanilla_three" -> """
-                    ACTIVE TEMPLATE: Vanilla Three.js (3D Web Canvas).
-                    - CRITICAL constraint: The project uses Three.js via CDN window.THREE or script imports for 3D games, objects, and 3D web design.
-                    - Build clean, interactive 3D Web animations using THREE.Scene, THREE.PerspectiveCamera, THREE.WebGLRenderer, lights, geometries, materials, and animation loops.
-                """.trimIndent()
-                "chrome_extension" -> """
-                    ACTIVE TEMPLATE: Chrome Extension (Manifest V3).
-                    - CRITICAL constraint: This is a modern Google Chrome Extension adhering to Manifest V3 specifications.
-                    - Structure includes:
-                      * manifest.json: Declarative permissions, host_permissions, background service worker, action popup, options page, and content scripts.
-                      * popup/: HTML, CSS, and JS for extension popup when the user clicks the toolbar icon.
-                      * background/: Service worker (service_worker.js) for background tasks, alarms, listeners, context menus, and storage.
-                      * content/: Content scripts and styling injected into web pages.
-                      * options/: Settings and preferences management page.
-                      * index.html: In-app live test & interactive preview hub.
-                    - Follow Chrome Extension Manifest V3 best practices (use chrome.storage.local/sync, chrome.runtime.sendMessage, chrome.tabs.sendMessage, chrome.action).
-                """.trimIndent()
-                else -> """
-                    ACTIVE TEMPLATE: ${project.templateKey ?: "Empty Workspace"}.
-                    - Respect the existing framework/files in the workspace.
-                """.trimIndent()
-            }
+            val activeTemplateInfo = com.example.agent.AgentInstructionEngine.resolveActiveTemplateInfo(project.templateKey)
 
             val activeSkills = _agentSkills.value.filter { it.isInstalled && it.isEnabled }
             val activeSkillsPrompt = buildString {
@@ -3871,7 +3802,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             var actionsCount = 0
             var maxActionSteps = _maxActionSteps.value
             var agentMessageSaved = false
-            var lastThought: String? = null
+            lastThought = null
             var consecutiveThinkOnlyCount = 0
             var lastEditError: String? = null
             var consecutiveFailedEdits = 0
@@ -3888,47 +3819,15 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             var lastDiagnosedError: String? = null
 
             val handleComplete: suspend (String) -> Unit = { finishMsg: String ->
-                com.example.agent.TaskCheckpointEngine.recordComplete(
-                    projectName = project.name,
+                executeTaskCompletion(
+                    project = project,
                     projectDir = projectDir,
-                    repository = repository,
-                    summary = finishMsg
-                )
-                if (filesModifiedThisPrompt) {
-                    val issueSummary = lastDiagnosedError ?: userPrompt.take(150)
-                    com.example.agent.HybridSelfLearningEngine.autoLearnFromFix(
-                        context = getApplication(),
-                        issueSummary = issueSummary,
-                        fixSummary = finishMsg.take(250),
-                        targetComponent = project.name
-                    )
-                    com.example.agent.VectorMemoryController.recordVectorMemory(
-                        projectName = project.name,
-                        topic = "Solution Pattern: ${project.name}",
-                        content = "Task: $issueSummary | Solution: ${finishMsg.take(250)}",
-                        tags = listOf(project.name.lowercase(), "auto_learned", "solution"),
-                        context = getApplication()
-                    )
-                }
-                com.example.agent.AgentTaskFinalizer.finalizeTask(
-                    projectName = project.name,
                     finishMsg = finishMsg,
-                    repository = repository,
-                    moshi = moshi,
-                    currentLogs = _aiActionLogs.value,
-                    hasCodeChanges = checkHasCodeChangesThisTurn(editsAtPromptStart),
-                    allowBuildPush = _allowBuildPush.value,
-                    onAddLog = { log -> _aiActionLogs.value = _aiActionLogs.value + log },
-                    onUpdateStatus = { st -> _agentStatus.value = st },
-                    onUpdateChats = { ch -> _chatMessages.value = ch },
-                    onTriggerBuildPush = { fw, autoAccept ->
-                        _detectedFramework.value = fw
-                        if (autoAccept) acceptGithubPushPrompt() else _showGithubPushPrompt.value = true
-                    },
-                    onHideBuildPushPrompt = { _showGithubPushPrompt.value = false }
+                    filesModifiedThisPrompt = filesModifiedThisPrompt,
+                    lastDiagnosedError = lastDiagnosedError,
+                    userPrompt = userPrompt,
+                    editsAtPromptStart = editsAtPromptStart
                 )
-                _isInterrupted.value = false
-                _interruptionReason.value = ""
                 loopCompleted = true
                 agentMessageSaved = true
             }
@@ -3990,8 +3889,12 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                         """.trimIndent()
                     }
 
-                    val dynamicSystemInstruction = if (pacingNotice.isNotBlank() || sideQuestionGuidance.isNotBlank() || planModeStrictPrompt.isNotBlank()) {
-                        "$systemInstruction\n\n$pacingNotice$sideQuestionGuidance$planModeStrictPrompt"
+                    val backgroundCheckpointPrompt = if (!backgroundCheckpointContext.isNullOrBlank()) {
+                        "\n\n$backgroundCheckpointContext"
+                    } else ""
+
+                    val dynamicSystemInstruction = if (pacingNotice.isNotBlank() || sideQuestionGuidance.isNotBlank() || planModeStrictPrompt.isNotBlank() || backgroundCheckpointPrompt.isNotBlank()) {
+                        "$systemInstruction\n\n$pacingNotice$sideQuestionGuidance$planModeStrictPrompt$backgroundCheckpointPrompt"
                     } else {
                         systemInstruction
                     }
@@ -4034,6 +3937,12 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 
                     if (thoughtText.isNotBlank()) {
                         lastThought = thoughtText
+                        com.example.agent.CheckpointTextManager.recordThought(
+                            projectName = project.name,
+                            projectDir = projectDir,
+                            repository = repository,
+                            thought = thoughtText
+                        )
                         val currentLogs = _aiActionLogs.value.toMutableList()
                         val isReasoningThought = com.example.agent.AgentReasoningDetector.isReasoningText(thoughtText)
                         val stepTitle = com.example.agent.AgentBatchExecutionManager.formatFormulatingLogicTitle(turn, plannedActionCount, isReasoning = isReasoningThought)
@@ -4202,6 +4111,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                         for (call in toolCalls) {
                             val tool = call.tool
                             val args = call.arguments
+                            currentExecutingToolName = tool
+                            currentExecutingArgsJson = com.example.agent.CheckpointTextManager.formatToolArguments(args, moshi)
 
                             if (tool == "complete") {
                                 val completionCheck = com.example.agent.AgentModelExecutionSafeguard.validateTaskCompletion(
@@ -5004,162 +4915,268 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                         _interruptionReason.value = "Task stopped before calling 'complete'."
                     }
                 }
-                kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
-                    timerJob.cancel()
-                    val finalSecs = maxOf(1L, (System.currentTimeMillis() - executionStartTime) / 1000)
-                    _executionElapsedTimeSeconds.value = finalSecs
-
-                    val finalSys = _liveSystemTokens.value
-                    val finalUsr = _liveUserTokens.value
-                    val finalTool = _liveToolTokens.value
-                    val finalIn = _liveTotalInputTokens.value
-                    val finalOut = _liveTotalOutputTokens.value
-                    val activeModelVal = _currentRunningModelName.value
-
-                    if (userMsg != null) {
-                        val updatedUserMsg = userMsg.copy(
-                            modelName = activeModelVal,
-                            executionTimeSeconds = finalSecs,
-                            systemTokens = finalSys,
-                            userTokens = finalUsr,
-                            toolTokens = finalTool,
-                            historyTokens = 420,
-                            skillTokens = finalTool,
-                            totalInputTokens = finalIn,
-                            totalOutputTokens = finalOut
-                        )
-                        repository.insertChatMessage(updatedUserMsg)
-                    }
-
-                    if (!agentMessageSaved) {
-                        val logsJson = com.example.agent.LargeProjectMemoryGuard.safeSerializeLogs(_aiActionLogs.value, moshi)
-                        
-                        val isInterruptedTask = _isInterrupted.value
-                        val rawContent = if (!isInterruptedTask) {
-                            lastThought?.ifBlank { null } ?: "Task completed successfully!"
-                        } else {
-                            val reason = _interruptionReason.value.ifBlank {
-                                _aiActionLogs.value.lastOrNull { it.status == "failed" && !it.details.isNullOrBlank() }?.let { "${it.title}: ${it.details}" }
-                                    ?: "AI task stopped before completion."
-                            }
-                            "Task interrupted: $reason"
-                        }
-                        val content = rawContent.replace(Regex("(?i)</?tool_call>"), "")
-                            .replace(Regex("(?i)</?function_call>"), "")
-                            .trim()
-                        
-                        val agentMsg = ChatMessageEntity(
-                            projectName = project.name,
-                            role = "assistant",
-                            content = if (content.isNotBlank()) content else "Task completed successfully!",
-                            timestamp = System.currentTimeMillis(),
-                            aiActionLogsJson = logsJson,
-                            modelName = activeModelVal,
-                            executionTimeSeconds = finalSecs,
-                            systemTokens = finalSys,
-                            userTokens = finalUsr,
-                            toolTokens = finalTool,
-                            historyTokens = 420,
-                            skillTokens = finalTool,
-                            totalInputTokens = finalIn,
-                            totalOutputTokens = finalOut
-                        )
-                        repository.insertChatMessage(agentMsg)
-
-                        // Ingest completed turn outcome into Jcode Semantic Memory Store
-                        try {
-                            val modifiedPaths = _editHistory.value.takeLast(10).map { (it as EditRecord).path }.distinct()
-                            val promptContent = currentPromptEntity?.content ?: ""
-                            com.example.agent.harness.JcodeHarnessManager.recordTurnMemory(
-                                projectName = project.name,
-                                userPrompt = promptContent,
-                                assistantSummary = agentMsg.content,
-                                filesModified = modifiedPaths,
-                                context = getApplication<Application>()
-                            )
-                        } catch (e: Exception) {
-                            Log.w("VibeViewModel", "Failed recording semantic turn memory: ${e.message}")
-                        }
-                    }
-                    
-                    com.example.agent.AgentResponseStreamManager.endStreaming()
-                    _isThinking.value = false
-                    try {
-                        com.example.agent.service.AiAgentBackgroundService.stop(getApplication())
-                    } catch (_: Exception) {}
-                    projectActionLogsMap[project.name] = _aiActionLogs.value
-                    projectTodoListMap[project.name] = _todoList.value
-                    projectEditHistoryMap[project.name] = _editHistory.value
-                    projectAgentStatusMap[project.name] = _agentStatus.value
-                    if (runningProjectName == project.name) {
-                        runningProjectName = null
-                    }
-                    // AI complete call: Clear old errors and reload preview tab cleanly once AI task completes
-                    _detectedWebErrors.value = emptyList()
-                    _webConsoleLogs.value = emptyList()
-                    _webPreviewRefreshTrigger.value += 1
-                    com.example.ui.preview.WebConsoleSyncManager.notifyReloadTriggered()
-                    if (!_isInterrupted.value) {
-                        checkAndTriggerAutoFixOnAgentFinish()
-                    }
-
-                    // Auto-trigger framework detection and Github push prompting on task completion
-                    try {
-                        val hasFileModifications = checkHasCodeChangesThisTurn(editsAtPromptStart)
-                        if (hasFileModifications) {
-                            val projectDir = repository.getProjectDir(project.name)
-                            val pFiles = _projectFiles.value
-                            val isKotlin = java.io.File(projectDir, "build.gradle.kts").exists() || java.io.File(projectDir, "build.gradle").exists() || pFiles.any { it.path.endsWith("build.gradle.kts") || it.path.endsWith("build.gradle") }
-                            val isFlutter = java.io.File(projectDir, "pubspec.yaml").exists() || pFiles.any { it.path.endsWith("pubspec.yaml") }
-                            val isNextJs = java.io.File(projectDir, "next.config.js").exists() || java.io.File(projectDir, "next.config.mjs").exists() || pFiles.any { it.path.contains("next.config") }
-                            val isReactVite = java.io.File(projectDir, "vite.config.js").exists() || java.io.File(projectDir, "vite.config.ts").exists() || pFiles.any { it.path.contains("vite.config") || (it.path.endsWith("package.json") && it.content.contains("vite", ignoreCase = true)) }
-                            val isWebPackage = java.io.File(projectDir, "package.json").exists() || pFiles.any { it.path.endsWith("package.json") }
-
-                            if (isKotlin) {
-                                _detectedFramework.value = "Kotlin/Android"
-                                if (_allowBuildPush.value) {
-                                    acceptGithubPushPrompt()
-                                } else {
-                                    _showGithubPushPrompt.value = true
-                                }
-                            } else if (isFlutter) {
-                                _detectedFramework.value = "Flutter"
-                                if (_allowBuildPush.value) {
-                                    acceptGithubPushPrompt()
-                                } else {
-                                    _showGithubPushPrompt.value = true
-                                }
-                            } else if (isNextJs) {
-                                _detectedFramework.value = "Next.js"
-                                if (_allowBuildPush.value) {
-                                    acceptGithubPushPrompt()
-                                } else {
-                                    _showGithubPushPrompt.value = true
-                                }
-                            } else if (isReactVite) {
-                                _detectedFramework.value = "React Vite"
-                                if (_allowBuildPush.value) {
-                                    acceptGithubPushPrompt()
-                                } else {
-                                    _showGithubPushPrompt.value = true
-                                }
-                            } else if (isWebPackage) {
-                                _detectedFramework.value = "Web App"
-                                if (_allowBuildPush.value) {
-                                    acceptGithubPushPrompt()
-                                } else {
-                                    _showGithubPushPrompt.value = true
-                                }
-                            }
-                        } else {
-                            _showGithubPushPrompt.value = false
-                        }
-                    } catch (e: Exception) {
-                        Log.e("VibeViewModel", "Error in post-thinking framework detection", e)
-                    }
-                }
+                performPromptFinallyCleanup(
+                    project = project,
+                    timerJob = timerJob,
+                    executionStartTime = executionStartTime,
+                    userMsg = userMsg,
+                    agentMessageSaved = agentMessageSaved,
+                    lastThought = lastThought,
+                    currentPromptEntity = currentPromptEntity,
+                    editsAtPromptStart = editsAtPromptStart
+                )
             }
         }
+    }
+
+    private suspend fun performPromptFinallyCleanup(
+        project: ProjectEntity,
+        timerJob: kotlinx.coroutines.Job,
+        executionStartTime: Long,
+        userMsg: ChatMessageEntity?,
+        agentMessageSaved: Boolean,
+        lastThought: String?,
+        currentPromptEntity: ChatMessageEntity?,
+        editsAtPromptStart: Int
+    ) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+            timerJob.cancel()
+            val finalSecs = maxOf(1L, (System.currentTimeMillis() - executionStartTime) / 1000)
+            _executionElapsedTimeSeconds.value = finalSecs
+
+            val finalSys = _liveSystemTokens.value
+            val finalUsr = _liveUserTokens.value
+            val finalTool = _liveToolTokens.value
+            val finalIn = _liveTotalInputTokens.value
+            val finalOut = _liveTotalOutputTokens.value
+            val activeModelVal = _currentRunningModelName.value
+
+            if (userMsg != null) {
+                val updatedUserMsg = userMsg.copy(
+                    modelName = activeModelVal,
+                    executionTimeSeconds = finalSecs,
+                    systemTokens = finalSys,
+                    userTokens = finalUsr,
+                    toolTokens = finalTool,
+                    historyTokens = 420,
+                    skillTokens = finalTool,
+                    totalInputTokens = finalIn,
+                    totalOutputTokens = finalOut
+                )
+                repository.insertChatMessage(updatedUserMsg)
+            }
+
+            if (!agentMessageSaved) {
+                val logsJson = com.example.agent.LargeProjectMemoryGuard.safeSerializeLogs(_aiActionLogs.value, moshi)
+                
+                val isInterruptedTask = _isInterrupted.value
+                val rawContent = if (!isInterruptedTask) {
+                    lastThought?.ifBlank { null } ?: "Task completed successfully!"
+                } else {
+                    val reason = _interruptionReason.value.ifBlank {
+                        _aiActionLogs.value.lastOrNull { it.status == "failed" && !it.details.isNullOrBlank() }?.let { "${it.title}: ${it.details}" }
+                            ?: "AI task stopped before completion."
+                    }
+                    "Task interrupted: $reason"
+                }
+                val content = rawContent.replace(Regex("(?i)</?tool_call>"), "")
+                    .replace(Regex("(?i)</?function_call>"), "")
+                    .trim()
+                
+                val agentMsg = ChatMessageEntity(
+                    projectName = project.name,
+                    role = "assistant",
+                    content = if (content.isNotBlank()) content else "Task completed successfully!",
+                    timestamp = System.currentTimeMillis(),
+                    aiActionLogsJson = logsJson,
+                    modelName = activeModelVal,
+                    executionTimeSeconds = finalSecs,
+                    systemTokens = finalSys,
+                    userTokens = finalUsr,
+                    toolTokens = finalTool,
+                    historyTokens = 420,
+                    skillTokens = finalTool,
+                    totalInputTokens = finalIn,
+                    totalOutputTokens = finalOut
+                )
+                repository.insertChatMessage(agentMsg)
+
+                // Ingest completed turn outcome into Jcode Semantic Memory Store
+                try {
+                    val modifiedPaths = _editHistory.value.takeLast(10).map { (it as EditRecord).path }.distinct()
+                    val promptContent = currentPromptEntity?.content ?: ""
+                    com.example.agent.harness.JcodeHarnessManager.recordTurnMemory(
+                        projectName = project.name,
+                        userPrompt = promptContent,
+                        assistantSummary = agentMsg.content,
+                        filesModified = modifiedPaths,
+                        context = getApplication<Application>()
+                    )
+                } catch (e: Exception) {
+                    Log.w("VibeViewModel", "Failed recording semantic turn memory: ${e.message}")
+                }
+            }
+            
+            com.example.agent.AgentResponseStreamManager.endStreaming()
+            _isThinking.value = false
+            try {
+                com.example.agent.service.AiAgentBackgroundService.stop(getApplication())
+            } catch (_: Exception) {}
+            projectActionLogsMap[project.name] = _aiActionLogs.value
+            projectTodoListMap[project.name] = _todoList.value
+            projectEditHistoryMap[project.name] = _editHistory.value
+            projectAgentStatusMap[project.name] = _agentStatus.value
+            if (runningProjectName == project.name) {
+                runningProjectName = null
+            }
+            // AI complete call: Clear old errors and reload preview tab cleanly once AI task completes
+            _detectedWebErrors.value = emptyList()
+            _webConsoleLogs.value = emptyList()
+            _webPreviewRefreshTrigger.value += 1
+            com.example.ui.preview.WebConsoleSyncManager.notifyReloadTriggered()
+            if (!_isInterrupted.value) {
+                checkAndTriggerAutoFixOnAgentFinish()
+            }
+
+            // Auto-trigger framework detection and Github push prompting on task completion
+            detectFrameworkAndTriggerPush(project, editsAtPromptStart)
+        }
+    }
+
+    private suspend fun executeTaskCompletion(
+        project: ProjectEntity,
+        projectDir: java.io.File,
+        finishMsg: String,
+        filesModifiedThisPrompt: Boolean,
+        lastDiagnosedError: String?,
+        userPrompt: String,
+        editsAtPromptStart: Int
+    ) {
+        com.example.agent.CheckpointTextManager.clearCheckpoint(
+            projectName = project.name,
+            projectDir = projectDir,
+            repository = repository
+        )
+        com.example.agent.TaskCheckpointEngine.recordComplete(
+            projectName = project.name,
+            projectDir = projectDir,
+            repository = repository,
+            summary = finishMsg
+        )
+        if (filesModifiedThisPrompt) {
+            val issueSummary = lastDiagnosedError ?: userPrompt.take(150)
+            com.example.agent.HybridSelfLearningEngine.autoLearnFromFix(
+                context = getApplication(),
+                issueSummary = issueSummary,
+                fixSummary = finishMsg.take(250),
+                targetComponent = project.name
+            )
+            com.example.agent.VectorMemoryController.recordVectorMemory(
+                projectName = project.name,
+                topic = "Solution Pattern: ${project.name}",
+                content = "Task: $issueSummary | Solution: ${finishMsg.take(250)}",
+                tags = listOf(project.name.lowercase(), "auto_learned", "solution"),
+                context = getApplication()
+            )
+        }
+        com.example.agent.AgentTaskFinalizer.finalizeTask(
+            projectName = project.name,
+            finishMsg = finishMsg,
+            repository = repository,
+            moshi = moshi,
+            currentLogs = _aiActionLogs.value,
+            hasCodeChanges = checkHasCodeChangesThisTurn(editsAtPromptStart),
+            allowBuildPush = _allowBuildPush.value,
+            onAddLog = { log -> _aiActionLogs.value = _aiActionLogs.value + log },
+            onUpdateStatus = { st -> _agentStatus.value = st },
+            onUpdateChats = { ch -> _chatMessages.value = ch },
+            onTriggerBuildPush = { fw, autoAccept ->
+                _detectedFramework.value = fw
+                if (autoAccept) acceptGithubPushPrompt() else _showGithubPushPrompt.value = true
+            },
+            onHideBuildPushPrompt = { _showGithubPushPrompt.value = false }
+        )
+        _isInterrupted.value = false
+        _interruptionReason.value = ""
+    }
+
+    private fun detectFrameworkAndTriggerPush(project: ProjectEntity, editsAtPromptStart: Int) {
+        try {
+            val hasFileModifications = checkHasCodeChangesThisTurn(editsAtPromptStart)
+            if (hasFileModifications) {
+                val projectDir = repository.getProjectDir(project.name)
+                val pFiles = _projectFiles.value
+                val isKotlin = java.io.File(projectDir, "build.gradle.kts").exists() || java.io.File(projectDir, "build.gradle").exists() || pFiles.any { it.path.endsWith("build.gradle.kts") || it.path.endsWith("build.gradle") }
+                val isFlutter = java.io.File(projectDir, "pubspec.yaml").exists() || pFiles.any { it.path.endsWith("pubspec.yaml") }
+                val isNextJs = java.io.File(projectDir, "next.config.js").exists() || java.io.File(projectDir, "next.config.mjs").exists() || pFiles.any { it.path.contains("next.config") }
+                val isReactVite = java.io.File(projectDir, "vite.config.js").exists() || java.io.File(projectDir, "vite.config.ts").exists() || pFiles.any { it.path.contains("vite.config") || (it.path.endsWith("package.json") && it.content.contains("vite", ignoreCase = true)) }
+                val isWebPackage = java.io.File(projectDir, "package.json").exists() || pFiles.any { it.path.endsWith("package.json") }
+
+                if (isKotlin) {
+                    _detectedFramework.value = "Kotlin/Android"
+                    if (_allowBuildPush.value) acceptGithubPushPrompt() else _showGithubPushPrompt.value = true
+                } else if (isFlutter) {
+                    _detectedFramework.value = "Flutter"
+                    if (_allowBuildPush.value) acceptGithubPushPrompt() else _showGithubPushPrompt.value = true
+                } else if (isNextJs) {
+                    _detectedFramework.value = "Next.js"
+                    if (_allowBuildPush.value) acceptGithubPushPrompt() else _showGithubPushPrompt.value = true
+                } else if (isReactVite) {
+                    _detectedFramework.value = "React Vite"
+                    if (_allowBuildPush.value) acceptGithubPushPrompt() else _showGithubPushPrompt.value = true
+                } else if (isWebPackage) {
+                    _detectedFramework.value = "Web App"
+                    if (_allowBuildPush.value) acceptGithubPushPrompt() else _showGithubPushPrompt.value = true
+                }
+            } else {
+                _showGithubPushPrompt.value = false
+            }
+        } catch (e: Exception) {
+            Log.e("VibeViewModel", "Error in post-thinking framework detection", e)
+        }
+    }
+
+    private suspend fun preparePromptAndInitialUserMessage(
+        project: ProjectEntity,
+        finalPrompt: String,
+        isRegenerate: Boolean
+    ): ChatMessageEntity? {
+        val currentFilesToBackup = repository.getFilesForProject(project.name)
+        RestoreManager.saveBackup(getApplication(), project.name, finalPrompt, currentFilesToBackup)
+        loadBackupsForCurrentProject(project.name)
+
+        var userMsg: ChatMessageEntity? = null
+        if (!isRegenerate) {
+            val activeConfig = _customModels.value.find { it.id == _selectedModelId.value }
+            val activeModel = _currentRunningModelName.value.ifBlank {
+                activeConfig?.let { if (it.modelId.isNotBlank()) it.modelId else it.alias } ?: ""
+            }
+            val displayUserContent = when {
+                finalPrompt.contains("[PLAN_MODE_ACTIVE]") -> {
+                    val userPromptRegex = Regex("""request:\s*\"([^\"]+)\"""")
+                    val match = userPromptRegex.find(finalPrompt)
+                    match?.groupValues?.getOrNull(1) ?: finalPrompt.replace(Regex("""\[/?PLAN_MODE_ACTIVE\]"""), "").trim()
+                }
+                finalPrompt.contains("[EXECUTE_PLAN_MODE]") -> {
+                    val planTitleRegex = Regex("""proposed plan \"([^\"]+)\"""")
+                    val titleMatch = planTitleRegex.find(finalPrompt)
+                    val title = titleMatch?.groupValues?.getOrNull(1) ?: "Approved Plan"
+                    "Build & execute plan: $title"
+                }
+                else -> finalPrompt
+            }
+            val initialUserMsg = ChatMessageEntity(
+                projectName = project.name,
+                role = "user",
+                content = displayUserContent,
+                timestamp = System.currentTimeMillis(),
+                modelName = activeModel
+            )
+            val insertedId = repository.insertChatMessage(initialUserMsg)
+            userMsg = initialUserMsg.copy(id = insertedId.toInt())
+        }
+        _chatMessages.value = repository.getChatsForProject(project.name)
+        return userMsg
     }
 
     private fun generateFileTree(files: List<ProjectFileEntity>): String {

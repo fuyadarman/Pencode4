@@ -3363,8 +3363,12 @@ fun PreviewTabContent(
 
     // Sync when AI agent or multi-tab navigates
     LaunchedEffect(livePendingUrl) {
-        val target = livePendingUrl
-        if (!target.isNullOrBlank()) {
+        val target = livePendingUrl ?: return@LaunchedEffect
+        if (target.isBlank() || target == defaultPreviewUrl || target == "about:blank" || target == "browser-home") {
+            customUrl = null
+            urlInputText = defaultPreviewUrl
+            refreshTrigger++
+        } else {
             customUrl = target
             urlInputText = target
             webViewRef?.loadUrl(target)
@@ -3389,6 +3393,18 @@ fun PreviewTabContent(
             activeTabId = activeBrowserTabId,
             onTabSelected = { tabId ->
                 com.example.browser.RealBrowserTabManager.switchTab(tabId)
+                val selectedTab = browserTabs.find { it.id == tabId }
+                if (selectedTab != null) {
+                    if (selectedTab.url.isBlank() || selectedTab.url == defaultPreviewUrl) {
+                        customUrl = null
+                        urlInputText = defaultPreviewUrl
+                        refreshTrigger++
+                    } else {
+                        customUrl = selectedTab.url
+                        urlInputText = selectedTab.url
+                        webViewRef?.loadUrl(selectedTab.url)
+                    }
+                }
             },
             onTabClosed = { tabId ->
                 com.example.browser.RealBrowserTabManager.closeTab(tabId)
@@ -3965,13 +3981,14 @@ fun PreviewTabContent(
                                         Modifier.fillMaxWidth()
                                     }
                                 )
-                                .background(Color(0xFF0D1117))
+                                 .background(Color.White)
                         ) {
-                            AndroidView(
+                            androidx.compose.runtime.key(webViewCrashCount, currentViewport) {
+                                AndroidView(
                                 factory = { context ->
                                     WebView(context).apply {
-                                        setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
-                                        setBackgroundColor(android.graphics.Color.parseColor("#0D1117"))
+                                        setLayerType(android.view.View.LAYER_TYPE_NONE, null)
+                                        setBackgroundColor(android.graphics.Color.WHITE)
                                         // Enable Real Browser Cookies & Storage
                                         try {
                                             val cm = android.webkit.CookieManager.getInstance()
@@ -4041,7 +4058,17 @@ fun PreviewTabContent(
 
                                     webViewClient = object : WebViewClient() {
                                         override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                                            return false
+                                            val url = request?.url?.toString() ?: return false
+                                            if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("about:") || url.startsWith("data:")) {
+                                                return false
+                                            }
+                                            return try {
+                                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, request.url)
+                                                context.startActivity(intent)
+                                                true
+                                            } catch (_: Exception) {
+                                                true
+                                            }
                                         }
 
                                         override fun onReceivedError(
@@ -4054,6 +4081,12 @@ fun PreviewTabContent(
                                         }
 
                                         override fun onRenderProcessGone(view: WebView?, detail: android.webkit.RenderProcessGoneDetail?): Boolean {
+                                            try {
+                                                (view?.parent as? android.view.ViewGroup)?.removeView(view)
+                                                view?.destroy()
+                                            } catch (_: Exception) {}
+                                            webViewRef = null
+                                            webViewCrashCount++
                                             return true
                                         }
 
@@ -4315,6 +4348,7 @@ fun PreviewTabContent(
                         },
                         modifier = Modifier.fillMaxSize()
                     )
+                }
 
                     if (isPageLoading) {
                         LinearProgressIndicator(
