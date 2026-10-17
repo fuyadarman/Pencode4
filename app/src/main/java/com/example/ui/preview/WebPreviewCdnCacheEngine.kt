@@ -65,16 +65,19 @@ object WebPreviewCdnCacheEngine {
      */
     fun shouldIntercept(url: String): Boolean {
         if (!url.startsWith("http://") && !url.startsWith("https://")) return false
-        if (url.startsWith("https://virtual-app/")) return false
+        if (url.startsWith("https://localhost/")) return false
 
         val lowerUrl = url.lowercase()
+        // Only intercept requests directed to designated CDN hosts
         val isCdnHost = CDN_HOSTS.any { lowerUrl.contains(it) }
-        val isStaticAsset = lowerUrl.endsWith(".js") || lowerUrl.endsWith(".css") ||
-                lowerUrl.endsWith(".wasm") || lowerUrl.endsWith(".woff2") ||
-                lowerUrl.contains("three") || lowerUrl.contains("babel") ||
-                lowerUrl.contains("tailwind")
+        if (!isCdnHost) return false
 
-        return isCdnHost || isStaticAsset
+        val targetCacheDir = cacheDir
+        val cacheKey = hashUrl(url)
+        val cachedFile = if (targetCacheDir != null) File(targetCacheDir, "$cacheKey.cached") else null
+        if (cachedFile != null && cachedFile.exists() && cachedFile.length() > 0) return true
+
+        return lowerUrl.contains("three") || lowerUrl.contains("babel") || lowerUrl.contains("tailwind")
     }
 
     /**
@@ -94,6 +97,12 @@ object WebPreviewCdnCacheEngine {
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to read cached file for $url: ${e.message}")
             }
+        }
+
+        // Only fetch if specifically for three.js or babel to avoid hanging WebView
+        val lowerUrl = url.lowercase()
+        if (!lowerUrl.contains("three") && !lowerUrl.contains("babel")) {
+            return null
         }
 
         // 2. Fetch with Fast Timeout & Cache

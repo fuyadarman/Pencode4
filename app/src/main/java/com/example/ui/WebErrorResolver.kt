@@ -26,8 +26,8 @@ object WebErrorResolver {
         if (hashIdx != -1) clean = clean.substring(0, hashIdx)
 
         // Strip protocols and origins
-        clean = clean.removePrefix("https://virtual-app/")
-            .removePrefix("http://virtual-app/")
+        clean = clean.removePrefix("https://localhost/")
+            .removePrefix("http://localhost/")
             .removePrefix("http://localhost:8080/")
             .removePrefix("http://127.0.0.1:8080/")
             .removePrefix("file:///")

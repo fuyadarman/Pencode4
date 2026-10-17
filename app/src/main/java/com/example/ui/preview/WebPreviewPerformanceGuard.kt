@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicLong
  * Prevents ANRs (Application Not Responding) when loading complex WebGL / Three.js
  * or large web projects by:
  * 1. Throttling console logs & error floods from high-FPS render loops.
- * 2. Instant 404 responses for non-existent virtual-app assets (bypassing DNS timeout stalls).
+ * 2. Instant 404 responses for non-existent local assets (bypassing DNS timeout stalls).
  * 3. Safe stream decoding for large binary / 3D models / textures.
  * 4. Bypassing heavy Babel preprocessing for vanilla JavaScript / Three.js.
  * 5. Clean teardown and release of WebGL contexts.
@@ -135,9 +135,9 @@ object WebPreviewPerformanceGuard {
     }
 
     /**
-     * Returns an immediate HTTP 404 response for virtual-app paths that do not exist.
+     * Returns an immediate HTTP 404 response for local paths that do not exist.
      * This avoids letting WebView fall back to system DNS lookup for the fictitious
-     * "virtual-app" domain, which freezes Chromium IO threads for seconds per missing asset.
+     * "localhost" domain, which freezes Chromium IO threads for seconds per missing asset.
      */
     fun createFast404Response(path: String): WebResourceResponse {
         val headers = HashMap<String, String>()

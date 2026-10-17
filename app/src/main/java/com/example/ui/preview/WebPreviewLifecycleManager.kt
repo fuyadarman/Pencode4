@@ -6,7 +6,7 @@ import android.webkit.WebView
  * WebPreviewLifecycleManager
  * 
  * Manages the lifecycle, timing, and URL classification of the Preview Tab WebView:
- * 1. Accurately distinguishes between internal virtual-app preview URLs and external navigations.
+ * 1. Accurately distinguishes between internal local preview URLs and external navigations.
  * 2. Provides stable history URLs for loadDataWithBaseURL to prevent WebView from defaulting
  *    to "about:blank" and entering infinite loading states.
  * 3. Ensures JavaScript timers and Chromium rendering pipelines are actively resumed
@@ -15,12 +15,12 @@ import android.webkit.WebView
  */
 object WebPreviewLifecycleManager {
 
-    const val VIRTUAL_BASE_URL = "https://virtual-app/"
-    const val VIRTUAL_HISTORY_URL = "https://virtual-app/index.html"
+    const val VIRTUAL_BASE_URL = "https://localhost/"
+    const val VIRTUAL_HISTORY_URL = "https://localhost/index.html"
 
     /**
      * Determines whether a given URL is an internal virtual preview URL or an external navigation.
-     * Prevents internal fallback URLs ("about:blank", "data:", "https://virtual-app/") from being
+     * Prevents internal fallback URLs ("about:blank", "data:", "https://localhost/") from being
      * mistakenly stored as user-navigated custom URLs.
      */
     fun isInternalVirtualUrl(url: String?): Boolean {

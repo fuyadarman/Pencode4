@@ -549,44 +549,30 @@ fun WorkspaceScreen(
                             )
                         }
                         WorkspaceTab.PREVIEW -> {
-                            val isKotlinOrFlutter = remember(files) {
-                                files.any { file ->
-                                    val p = file.path.lowercase()
-                                    p.endsWith(".kt") || p.endsWith(".dart") || p.endsWith(".java") ||
-                                    p.endsWith("build.gradle") || p.endsWith("build.gradle.kts") ||
-                                    p.endsWith("pubspec.yaml")
-                                }
-                            }
-                            if (isKotlinOrFlutter) {
-                                com.example.ui.preview.KotlinFlutterPreviewDisabledView(
-                                    onGoToBuildTab = { onTabSelected(WorkspaceTab.ANDROID_BUILD) }
-                                )
-                            } else {
-                                PreviewTabContent(
-                                    files = files,
-                                    consoleLogs = webConsoleLogs,
-                                    onConsoleLog = onAddWebConsoleLog,
-                                    onClearLogs = onClearWebConsoleLogs,
-                                    onWebError = onWebError,
-                                    onClearErrors = onClearErrors,
-                                    onInspectorElementSelected = { identifier, outerHTML ->
-                                        val file = com.example.ui.preview.WebPreviewElementInspector.resolveElementAttachment(
-                                            files = files,
-                                            identifier = identifier,
-                                            outerHTML = outerHTML
-                                        )
-                                        onAddAttachedFile(file)
-                                        if (chatInputText.isBlank()) {
-                                            onUpdateChatInputText("Please modify or style the selected element `$identifier`:")
-                                        }
-                                        onTabSelected(WorkspaceTab.CHAT)
-                                    },
-                                    webPreviewRefreshTrigger = webPreviewRefreshTrigger,
-                                    detectedWebErrors = detectedWebErrors,
-                                    onFixErrors = onFixErrors,
-                                    isThinking = isThinking
-                                )
-                            }
+                            PreviewTabContent(
+                                files = files,
+                                consoleLogs = webConsoleLogs,
+                                onConsoleLog = onAddWebConsoleLog,
+                                onClearLogs = onClearWebConsoleLogs,
+                                onWebError = onWebError,
+                                onClearErrors = onClearErrors,
+                                onInspectorElementSelected = { identifier, outerHTML ->
+                                    val file = com.example.ui.preview.WebPreviewElementInspector.resolveElementAttachment(
+                                        files = files,
+                                        identifier = identifier,
+                                        outerHTML = outerHTML
+                                    )
+                                    onAddAttachedFile(file)
+                                    if (chatInputText.isBlank()) {
+                                        onUpdateChatInputText("Please modify or style the selected element `$identifier`:")
+                                    }
+                                    onTabSelected(WorkspaceTab.CHAT)
+                                },
+                                webPreviewRefreshTrigger = webPreviewRefreshTrigger,
+                                detectedWebErrors = detectedWebErrors,
+                                onFixErrors = onFixErrors,
+                                isThinking = isThinking
+                            )
                         }
                         WorkspaceTab.TERMINAL -> {
                             TerminalTabContent(
@@ -1140,7 +1126,11 @@ fun ChatTabContent(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(com.example.ui.theme.AppTheme.bgApp)
+    ) {
         if (messages.isEmpty() && !isThinking) {
             Box(
                 modifier = Modifier
@@ -3342,14 +3332,27 @@ fun PreviewTabContent(
     val context = androidx.compose.ui.platform.LocalContext.current
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
 
-    val defaultPreviewUrl = remember(isReactViteFramework, hasWebDist) {
-        if (isReactViteFramework && hasWebDist) "http://localhost:5173" else "http://localhost:8080/index.html"
+    val defaultPreviewUrl = remember(isReactViteFramework, hasWebDist, effectiveHtmlContent) {
+        when {
+            isReactViteFramework && hasWebDist -> "http://localhost:5173"
+            effectiveHtmlContent != null -> com.example.ui.preview.WebPreviewLifecycleManager.VIRTUAL_BASE_URL
+            else -> "https://www.google.com/"
+        }
     }
     var currentViewport by remember { mutableStateOf(PreviewViewport.DESKTOP) }
     var showHamburgerMenu by remember { mutableStateOf(false) }
 
-    var customUrl by remember { mutableStateOf<String?>(null) }
-    var urlInputText by remember { mutableStateOf(defaultPreviewUrl) }
+    val initialActiveTab = remember { com.example.browser.RealBrowserTabManager.getActiveTab() }
+    var customUrl by remember { 
+        mutableStateOf<String?>(
+            if (!initialActiveTab?.url.isNullOrBlank() && !com.example.ui.preview.WebPreviewLifecycleManager.isInternalVirtualUrl(initialActiveTab?.url)) {
+                initialActiveTab?.url
+            } else null
+        ) 
+    }
+    var urlInputText by remember { 
+        mutableStateOf(customUrl ?: (if (effectiveHtmlContent != null) defaultPreviewUrl else "https://www.google.com/")) 
+    }
     var canGoBack by remember { mutableStateOf(false) }
     var canGoForward by remember { mutableStateOf(false) }
     val previewScope = rememberCoroutineScope()
@@ -3375,9 +3378,21 @@ fun PreviewTabContent(
         }
     }
 
+    // Sync state when active tab is switched in the Real Browser tab bar
+    LaunchedEffect(activeBrowserTabId) {
+        val tab = com.example.browser.RealBrowserTabManager.getActiveTab()
+        if (tab != null && !tab.url.isNullOrBlank() && !com.example.ui.preview.WebPreviewLifecycleManager.isInternalVirtualUrl(tab.url)) {
+            customUrl = tab.url
+            urlInputText = tab.url
+            if (webViewRef?.url != tab.url) {
+                webViewRef?.loadUrl(tab.url)
+            }
+        }
+    }
+
     // Sync input text when project changes and no external site is loaded
     LaunchedEffect(defaultPreviewUrl) {
-        if (customUrl == null) {
+        if (customUrl == null && (urlInputText.isBlank() || urlInputText.contains("localhost:8080"))) {
             urlInputText = defaultPreviewUrl
         }
     }
@@ -3410,10 +3425,10 @@ fun PreviewTabContent(
                 com.example.browser.RealBrowserTabManager.closeTab(tabId)
             },
             onNewTab = {
-                com.example.browser.RealBrowserTabManager.openNewTab()
-                customUrl = null
-                urlInputText = ""
-                webViewRef?.loadDataWithBaseURL("https://browser-home/", com.example.browser.RealBrowserStartPageGenerator.generateStartPageHtml(), "text/html", "UTF-8", null)
+                com.example.browser.RealBrowserTabManager.openNewTab("https://www.google.com/", "Google")
+                customUrl = "https://www.google.com/"
+                urlInputText = "https://www.google.com/"
+                webViewRef?.loadUrl("https://www.google.com/")
             }
         )
 
@@ -3893,43 +3908,7 @@ fun PreviewTabContent(
         ) {
             val activeProjectName = remember(files) { files.firstOrNull()?.projectName ?: "default" }
             key(activeProjectName) {
-                if (!hasWebDist && isReactViteFramework && customUrl == null && !isUniversalPreviewApplicable) {
-                    // Show a beautiful, native-looking compilation required card
-                    AndroidView(
-                        factory = { context ->
-                            WebView(context).apply {
-                                settings.apply {
-                                    javaScriptEnabled = true
-                                    domStorageEnabled = true
-                                    databaseEnabled = true
-                                    allowFileAccess = true
-                                    allowContentAccess = true
-                                    useWideViewPort = true
-                                    loadWithOverviewMode = true
-                                }
-                                loadDataWithBaseURL(
-                                    com.example.ui.preview.WebPreviewLifecycleManager.VIRTUAL_BASE_URL,
-                                    instructionHtml,
-                                    "text/html",
-                                    "UTF-8",
-                                    com.example.ui.preview.WebPreviewLifecycleManager.VIRTUAL_BASE_URL + "instruction.html"
-                                )
-                            }
-                        },
-                        update = { /* no-op */ },
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else if (effectiveHtmlContent == null && !hasWebDist && customUrl == null) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color(0xFF08080C)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("No preview available. Add code to preview, or type any URL above.", color = Color.Gray)
-                    }
-                } else {
-                    val initialProcessedHtml = remember(effectiveHtmlContent) {
+                val initialProcessedHtml = remember(effectiveHtmlContent) {
                         effectiveHtmlContent?.let { com.example.ui.preview.WebPreviewPerformanceGuard.preprocessHtmlSafely(it) } ?: ""
                     }
                     var isPageLoading by remember { mutableStateOf(true) }
@@ -3987,7 +3966,8 @@ fun PreviewTabContent(
                                 AndroidView(
                                 factory = { context ->
                                     WebView(context).apply {
-                                        setLayerType(android.view.View.LAYER_TYPE_NONE, null)
+                                        val layer = if (webViewCrashCount == 0) android.view.View.LAYER_TYPE_HARDWARE else android.view.View.LAYER_TYPE_SOFTWARE
+                                        setLayerType(layer, null)
                                         setBackgroundColor(android.graphics.Color.WHITE)
                                         // Enable Real Browser Cookies & Storage
                                         try {
@@ -4097,21 +4077,30 @@ fun PreviewTabContent(
                                             onClearLogs()
                                             com.example.ui.preview.WebConsoleSyncManager.notifyReloadTriggered()
                                             if (url != null) {
-                                                if (com.example.ui.preview.WebPreviewLifecycleManager.isInternalVirtualUrl(url)) {
-                                                    // Virtual internal URL
-                                                } else {
+                                                val isInternal = com.example.ui.preview.WebPreviewLifecycleManager.isInternalVirtualUrl(url)
+                                                if (!isInternal) {
                                                     customUrl = url
                                                     urlInputText = url
                                                 }
                                                 canGoBack = view?.canGoBack() == true
                                                 canGoForward = view?.canGoForward() == true
-                                                com.example.browser.RealBrowserTabManager.updateActiveTab(
-                                                    url = url,
-                                                    title = view?.title ?: url,
-                                                    canGoBack = canGoBack,
-                                                    canGoForward = canGoForward,
-                                                    isLoading = true
-                                                )
+                                                if (!isInternal) {
+                                                    com.example.browser.RealBrowserTabManager.updateActiveTab(
+                                                        url = url,
+                                                        title = view?.title?.ifBlank { url } ?: url,
+                                                        canGoBack = canGoBack,
+                                                        canGoForward = canGoForward,
+                                                        isLoading = true
+                                                    )
+                                                } else if (effectiveHtmlContent != null) {
+                                                    com.example.browser.RealBrowserTabManager.updateActiveTab(
+                                                        url = "",
+                                                        title = "Live Preview",
+                                                        canGoBack = canGoBack,
+                                                        canGoForward = canGoForward,
+                                                        isLoading = true
+                                                    )
+                                                }
                                             }
                                         }
 
@@ -4120,15 +4109,27 @@ fun PreviewTabContent(
                                             isPageLoading = false
                                             canGoBack = view?.canGoBack() == true
                                             canGoForward = view?.canGoForward() == true
-                                            if (url != null && !com.example.ui.preview.WebPreviewLifecycleManager.isInternalVirtualUrl(url)) {
-                                                urlInputText = url
-                                                com.example.browser.RealBrowserTabManager.updateActiveTab(
-                                                    url = url,
-                                                    title = view?.title ?: url,
-                                                    canGoBack = canGoBack,
-                                                    canGoForward = canGoForward,
-                                                    isLoading = false
-                                                )
+                                            if (url != null) {
+                                                val isInternal = com.example.ui.preview.WebPreviewLifecycleManager.isInternalVirtualUrl(url)
+                                                if (!isInternal) {
+                                                    urlInputText = url
+                                                    customUrl = url
+                                                    com.example.browser.RealBrowserTabManager.updateActiveTab(
+                                                        url = url,
+                                                        title = view?.title?.ifBlank { url } ?: url,
+                                                        canGoBack = canGoBack,
+                                                        canGoForward = canGoForward,
+                                                        isLoading = false
+                                                    )
+                                                } else if (effectiveHtmlContent != null) {
+                                                    com.example.browser.RealBrowserTabManager.updateActiveTab(
+                                                        url = "",
+                                                        title = "Live Preview",
+                                                        canGoBack = canGoBack,
+                                                        canGoForward = canGoForward,
+                                                        isLoading = false
+                                                    )
+                                                }
                                             }
                                             com.example.ui.preview.WebPreviewElementInspector.injectInspectorScript(view, isInspectorModeActive)
                                             previewScope.launch {
@@ -4144,8 +4145,8 @@ fun PreviewTabContent(
                                         request: WebResourceRequest?
                                     ): WebResourceResponse? {
                                         val urlString = request?.url?.toString() ?: return null
-                                        if (urlString.startsWith("https://virtual-app/")) {
-                                            var path = urlString.removePrefix("https://virtual-app/")
+                                        if (urlString.startsWith("https://localhost/")) {
+                                            var path = urlString.removePrefix("https://localhost/")
                                             if (path.contains("?")) {
                                                 path = path.substringBefore("?")
                                             }
@@ -4344,7 +4345,7 @@ fun PreviewTabContent(
                         },
                         onRelease = { webView ->
                             webViewRef = null
-                            com.example.ui.preview.WebPreviewLifecycleManager.releaseWebView(webView)
+                            com.example.browser.LivePreviewBrowserManager.unregisterActiveWebView(webView)
                         },
                         modifier = Modifier.fillMaxSize()
                     )
@@ -4365,7 +4366,6 @@ fun PreviewTabContent(
                 }
                 }
             }
-        }
 
         if (showLogs) {
             Surface(

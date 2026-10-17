@@ -29,67 +29,26 @@ object WebPreviewErrorBoundary {
 
         var content = html
 
-        // 1. Ensure body / html has dark background by default to prevent white flash
-        val baseStyle = """
-            <style id="__preview_failsafe_bg__">
-                html, body {
-                    background-color: #0D1117 !important;
-                    color-scheme: dark;
-                }
-            </style>
-        """.trimIndent()
-
-        // 2. Client-side resilient error listener & empty DOM detector
+        // 1. Non-intrusive runtime error listener that logs errors without destroying page display
         val errorBoundaryScript = """
             <script id="__preview_error_boundary__">
             (function() {
-                var hasRenderedContent = false;
-                
                 window.addEventListener('error', function(e) {
                     console.error('[PreviewRuntime Error]', e.message, 'at', e.filename, ':', e.lineno);
-                    checkBlankStateAfterError(e.message || 'Script execution error');
                 });
 
                 window.addEventListener('unhandledrejection', function(e) {
                     console.error('[PreviewRuntime Promise Rejection]', e.reason);
-                    checkBlankStateAfterError(e.reason ? (e.reason.message || e.reason) : 'Promise rejection');
                 });
-
-                function checkBlankStateAfterError(errText) {
-                    setTimeout(function() {
-                        var root = document.getElementById('root') || document.getElementById('app') || document.body;
-                        if (!root || root.children.length === 0 || root.innerText.trim() === '') {
-                            showDiagnosticErrorView(errText);
-                        }
-                    }, 400);
-                }
-
-                function showDiagnosticErrorView(detail) {
-                    var existing = document.getElementById('__preview_error_banner__');
-                    if (existing) return;
-                    
-                    var banner = document.createElement('div');
-                    banner.id = '__preview_error_banner__';
-                    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:#0d1117;color:#f0f6fc;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;padding:24px;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999999;text-align:center;';
-                    banner.innerHTML = '<div style="background:#161b22;border:1px solid #f85149;border-radius:12px;padding:24px;max-width:440px;box-shadow:0 8px 24px rgba(0,0,0,0.5);">' +
-                        '<div style="font-size:36px;margin-bottom:12px;">⚠️</div>' +
-                        '<h3 style="margin:0 0 8px 0;color:#ff7b72;font-size:17px;font-weight:600;">Preview Render Issue</h3>' +
-                        '<p style="margin:0 0 16px 0;font-size:13px;color:#8b949e;line-height:1.5;">The web preview halted due to a JavaScript or module error:</p>' +
-                        '<div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:12px;font-family:monospace;font-size:11.5px;color:#f0f6fc;text-align:left;max-height:120px;overflow-y:auto;word-break:break-all;margin-bottom:16px;">' + detail + '</div>' +
-                        '<button onclick="location.reload()" style="background:#238636;color:#ffffff;border:none;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;">Reload Preview</button>' +
-                        '</div>';
-                    document.body.appendChild(banner);
-                }
             })();
             </script>
         """.trimIndent()
 
-        // 3. Inject into <head> or at top of <html>
         val headMatch = Regex("""(<head[^>]*>)""", RegexOption.IGNORE_CASE).find(content)
         if (headMatch != null) {
-            content = content.replaceFirst(headMatch.value, "${headMatch.value}\n$baseStyle\n$errorBoundaryScript")
+            content = content.replaceFirst(headMatch.value, "${headMatch.value}\n$errorBoundaryScript")
         } else {
-            content = "$baseStyle\n$errorBoundaryScript\n$content"
+            content = "$errorBoundaryScript\n$content"
         }
 
         return content
