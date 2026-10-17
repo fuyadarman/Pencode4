@@ -31,18 +31,49 @@ object BabelCompatibilityEngine {
             "data-presets=\"$sanitized\""
         }
 
-        // 2. Inject configuration script immediately after babel.min.js or in <head>
+        // 2. Inject ImportMap for react and react/jsx-runtime if absent
+        if (!content.contains("type=\"importmap\"", ignoreCase = true) && !content.contains("type='importmap'", ignoreCase = true)) {
+            val importMapScript = """
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.2.0",
+    "react/": "https://esm.sh/react@18.2.0/",
+    "react/jsx-runtime": "https://esm.sh/react@18.2.0/jsx-runtime",
+    "react/jsx-dev-runtime": "https://esm.sh/react@18.2.0/jsx-dev-runtime",
+    "react-dom": "https://esm.sh/react-dom@18.2.0",
+    "react-dom/": "https://esm.sh/react-dom@18.2.0/",
+    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client"
+  }
+}
+</script>
+            """.trimIndent()
+            val headMatch = Regex("""(<head[^>]*>)""", RegexOption.IGNORE_CASE).find(content)
+            if (headMatch != null) {
+                content = content.replaceFirst(headMatch.value, "${headMatch.value}\n$importMapScript")
+            } else {
+                content = "$importMapScript\n$content"
+            }
+        }
+
+        // 3. Inject configuration script immediately after babel.min.js or in <head>
         val babelConfigScript = """
 <script>
 (function() {
     function configureBabel() {
         if (!window.Babel) return;
         try {
-            // Register 'react-classic' preset to use classic runtime for React CDN
-            if (window.Babel.availablePresets && window.Babel.availablePresets['react']) {
+            var reactPreset = window.Babel.availablePresets ? window.Babel.availablePresets['react'] : null;
+            if (reactPreset) {
+                // Override default 'react' preset to use classic runtime and prevent missing react/jsx-runtime errors
+                window.Babel.registerPreset('react', {
+                    presets: [
+                        [reactPreset, { runtime: 'classic', pragma: 'React.createElement', pragmaFrag: 'React.Fragment' }]
+                    ]
+                });
                 window.Babel.registerPreset('react-classic', {
                     presets: [
-                        [window.Babel.availablePresets['react'], { runtime: 'classic' }]
+                        [reactPreset, { runtime: 'classic', pragma: 'React.createElement', pragmaFrag: 'React.Fragment' }]
                     ]
                 });
             }
@@ -72,7 +103,7 @@ object BabelCompatibilityEngine {
                 matchResult.value + "\n" + babelConfigScript
             }
         } else {
-            val headRegex = Regex("""(<head>)""", RegexOption.IGNORE_CASE)
+            val headRegex = Regex("""(<head[^>]*>)""", RegexOption.IGNORE_CASE)
             if (headRegex.containsMatchIn(content)) {
                 content = headRegex.replace(content) { matchResult ->
                     matchResult.value + "\n" + babelConfigScript
@@ -80,11 +111,27 @@ object BabelCompatibilityEngine {
             }
         }
 
-        // 3. Ensure script tags of type text/babel has data-type="module" to allow ES imports
+        // 4. Ensure script tags of type text/babel has data-type="module" to allow ES imports
         val babelScriptRegex = Regex("""<script\s+type\s*=\s*["']text/babel["'](?![^>]*data-type\s*=)([^>]*)>""", RegexOption.IGNORE_CASE)
         content = babelScriptRegex.replace(content) { matchResult ->
             val attrs = matchResult.groups[1]?.value ?: ""
             "<script type=\"text/babel\" data-type=\"module\"$attrs>"
+        }
+
+        // 5. Convert tsx/jsx scripts without text/babel type to text/babel with data-type="module"
+        val tsxScriptRegex = Regex("""<script\s+([^>]*src\s*=\s*["'][^"']*\.(?:[tj]sx|ts)["'][^>]*)>""", RegexOption.IGNORE_CASE)
+        content = tsxScriptRegex.replace(content) { matchResult ->
+            val attrs = matchResult.groups[1]?.value ?: ""
+            if (!attrs.contains("text/babel", ignoreCase = true)) {
+                if (attrs.contains("type=", ignoreCase = true)) {
+                    val replaced = attrs.replace(Regex("""type\s*=\s*["'][^"']*["']""", RegexOption.IGNORE_CASE), "type=\"text/babel\" data-type=\"module\"")
+                    "<script $replaced>"
+                } else {
+                    "<script type=\"text/babel\" data-type=\"module\" $attrs>"
+                }
+            } else {
+                matchResult.value
+            }
         }
 
         return content

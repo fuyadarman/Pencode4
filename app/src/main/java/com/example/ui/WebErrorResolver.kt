@@ -26,9 +26,11 @@ object WebErrorResolver {
         if (hashIdx != -1) clean = clean.substring(0, hashIdx)
 
         // Strip protocols and origins
-        clean = clean.removePrefix("https://localhost/")
-            .removePrefix("http://localhost/")
+        clean = clean.removePrefix("https://localhost/8080/")
             .removePrefix("http://localhost:8080/")
+            .removePrefix("https://localhost:8080/")
+            .removePrefix("https://localhost/")
+            .removePrefix("http://localhost/")
             .removePrefix("http://127.0.0.1:8080/")
             .removePrefix("file:///")
 
@@ -39,6 +41,12 @@ object WebErrorResolver {
 
         while (clean.startsWith("/")) {
             clean = clean.substring(1)
+        }
+
+        if (clean.startsWith("8080/")) {
+            clean = clean.removePrefix("8080/")
+        } else if (clean == "8080") {
+            clean = ""
         }
 
         if (clean.startsWith("./")) {

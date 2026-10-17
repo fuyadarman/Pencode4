@@ -4178,8 +4178,15 @@ fun PreviewTabContent(
                                         request: WebResourceRequest?
                                     ): WebResourceResponse? {
                                         val urlString = request?.url?.toString() ?: return null
-                                        if (urlString.startsWith("https://localhost/")) {
-                                            var path = urlString.removePrefix("https://localhost/")
+                                        if (urlString.startsWith("https://localhost/") || urlString.startsWith("http://localhost:") || urlString.startsWith("https://localhost:")) {
+                                            var path = when {
+                                                urlString.startsWith("https://localhost/8080/") -> urlString.removePrefix("https://localhost/8080/")
+                                                urlString.startsWith("http://localhost:8080/") -> urlString.removePrefix("http://localhost:8080/")
+                                                urlString.startsWith("https://localhost:8080/") -> urlString.removePrefix("https://localhost:8080/")
+                                                urlString.startsWith("https://localhost/") -> urlString.removePrefix("https://localhost/")
+                                                urlString.startsWith("http://localhost/") -> urlString.removePrefix("http://localhost/")
+                                                else -> urlString.substringAfter("localhost").substringAfter("/")
+                                            }
                                             if (path.contains("?")) {
                                                 path = path.substringBefore("?")
                                             }
@@ -4191,7 +4198,12 @@ fun PreviewTabContent(
                                             } catch (e: Exception) {
                                                 // ignore
                                             }
-                                            val cleanPath = path.removePrefix("/")
+                                            var cleanPath = path.removePrefix("/")
+                                            if (cleanPath.startsWith("8080/")) {
+                                                cleanPath = cleanPath.removePrefix("8080/")
+                                            } else if (cleanPath == "8080") {
+                                                cleanPath = ""
+                                            }
                                             
                                             fun getMimeTypeAndEncoding(nameOrPath: String): Pair<String, String?> {
                                                 val clean = nameOrPath.lowercase()

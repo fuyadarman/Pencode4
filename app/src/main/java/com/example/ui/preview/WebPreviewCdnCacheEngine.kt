@@ -65,7 +65,7 @@ object WebPreviewCdnCacheEngine {
      */
     fun shouldIntercept(url: String): Boolean {
         if (!url.startsWith("http://") && !url.startsWith("https://")) return false
-        if (url.startsWith("https://localhost/")) return false
+        if (url.startsWith("https://localhost/8080")) return false
 
         val lowerUrl = url.lowercase()
         // Only intercept requests directed to designated CDN hosts
