@@ -27,8 +27,9 @@ object WebErrorResolver {
 
         // Strip protocols and origins
         clean = clean.removePrefix("https://localhost/8080/")
+            .removePrefix("https://localhost/8080")
             .removePrefix("http://localhost:8080/")
-            .removePrefix("https://localhost:8080/")
+            .removePrefix("http://localhost:8080")
             .removePrefix("https://localhost/")
             .removePrefix("http://localhost/")
             .removePrefix("http://127.0.0.1:8080/")

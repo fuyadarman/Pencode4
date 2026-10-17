@@ -15,12 +15,12 @@ import android.webkit.WebView
  */
 object WebPreviewLifecycleManager {
 
-    const val VIRTUAL_BASE_URL = "https://localhost/8080/"
+    const val VIRTUAL_BASE_URL = "https://localhost/8080"
     const val VIRTUAL_HISTORY_URL = "https://localhost/8080/index.html"
 
     /**
      * Determines whether a given URL is an internal virtual preview URL or an external navigation.
-     * Prevents internal fallback URLs ("about:blank", "data:", "https://localhost/8080/") from being
+     * Prevents internal fallback URLs ("about:blank", "data:", "https://localhost/8080") from being
      * mistakenly stored as user-navigated custom URLs.
      */
     fun isInternalVirtualUrl(url: String?): Boolean {

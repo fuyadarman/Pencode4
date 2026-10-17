@@ -4178,11 +4178,14 @@ fun PreviewTabContent(
                                         request: WebResourceRequest?
                                     ): WebResourceResponse? {
                                         val urlString = request?.url?.toString() ?: return null
-                                        if (urlString.startsWith("https://localhost/") || urlString.startsWith("http://localhost:") || urlString.startsWith("https://localhost:")) {
+                                        if (urlString.startsWith("https://localhost/8080") || urlString.startsWith("https://localhost/") || urlString.startsWith("http://localhost:") || urlString.startsWith("https://localhost:")) {
                                             var path = when {
                                                 urlString.startsWith("https://localhost/8080/") -> urlString.removePrefix("https://localhost/8080/")
+                                                urlString == "https://localhost/8080" -> ""
+                                                urlString.startsWith("https://localhost/8080") -> urlString.removePrefix("https://localhost/8080").removePrefix("/")
                                                 urlString.startsWith("http://localhost:8080/") -> urlString.removePrefix("http://localhost:8080/")
-                                                urlString.startsWith("https://localhost:8080/") -> urlString.removePrefix("https://localhost:8080/")
+                                                urlString == "http://localhost:8080" -> ""
+                                                urlString.startsWith("http://localhost:8080") -> urlString.removePrefix("http://localhost:8080").removePrefix("/")
                                                 urlString.startsWith("https://localhost/") -> urlString.removePrefix("https://localhost/")
                                                 urlString.startsWith("http://localhost/") -> urlString.removePrefix("http://localhost/")
                                                 else -> urlString.substringAfter("localhost").substringAfter("/")
@@ -4302,6 +4305,15 @@ fun PreviewTabContent(
                                                     isIndex
                                                 )
                                                 return createWebResponse(mimeType, encoding, stream)
+                                            }
+                                            if ((cleanPath.isEmpty() || cleanPath == "index.html") && effectiveHtmlContent != null) {
+                                                val stream = com.example.ui.preview.WebPreviewPerformanceGuard.createSafeContentStream(
+                                                    "index.html",
+                                                    effectiveHtmlContent,
+                                                    false,
+                                                    true
+                                                )
+                                                return createWebResponse("text/html", "UTF-8", stream)
                                             }
                                             return com.example.ui.preview.WebPreviewPerformanceGuard.createFast404Response(cleanPath)
                                         }
