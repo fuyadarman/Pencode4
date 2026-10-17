@@ -64,6 +64,7 @@ object LivePreviewBrowserManager {
             // Load any pending URL queued by AI Agent or tab switch
             val pending = _pendingUrl.value
             if (!pending.isNullOrBlank() && pending != currentWebUrl) {
+                _pendingUrl.value = null
                 webView.loadUrl(pending)
             }
         } else {

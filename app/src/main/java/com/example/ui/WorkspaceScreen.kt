@@ -34,6 +34,8 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -549,30 +551,7 @@ fun WorkspaceScreen(
                             )
                         }
                         WorkspaceTab.PREVIEW -> {
-                            PreviewTabContent(
-                                files = files,
-                                consoleLogs = webConsoleLogs,
-                                onConsoleLog = onAddWebConsoleLog,
-                                onClearLogs = onClearWebConsoleLogs,
-                                onWebError = onWebError,
-                                onClearErrors = onClearErrors,
-                                onInspectorElementSelected = { identifier, outerHTML ->
-                                    val file = com.example.ui.preview.WebPreviewElementInspector.resolveElementAttachment(
-                                        files = files,
-                                        identifier = identifier,
-                                        outerHTML = outerHTML
-                                    )
-                                    onAddAttachedFile(file)
-                                    if (chatInputText.isBlank()) {
-                                        onUpdateChatInputText("Please modify or style the selected element `$identifier`:")
-                                    }
-                                    onTabSelected(WorkspaceTab.CHAT)
-                                },
-                                webPreviewRefreshTrigger = webPreviewRefreshTrigger,
-                                detectedWebErrors = detectedWebErrors,
-                                onFixErrors = onFixErrors,
-                                isThinking = isThinking
-                            )
+                            // Handled by the persistent preview container below to preserve webview state
                         }
                         WorkspaceTab.TERMINAL -> {
                             TerminalTabContent(
@@ -609,6 +588,58 @@ fun WorkspaceScreen(
                                 },
                                 detectedAndroidBuildErrors = detectedAndroidBuildErrors,
                                 onFixBuildErrors = onFixAndroidBuildErrors
+                            )
+                        }
+                    }
+
+                    // Persistent Preview Tab Container:
+                    // Stays mounted so the WebView is NEVER destroyed or forced to reload when switching tabs!
+                    var hasPreviewEverBeenOpened by remember { mutableStateOf(false) }
+                    if (currentTab == WorkspaceTab.PREVIEW) {
+                        hasPreviewEverBeenOpened = true
+                    }
+
+                    if (hasPreviewEverBeenOpened) {
+                        val isPreviewActive = currentTab == WorkspaceTab.PREVIEW
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .then(
+                                    if (isPreviewActive) {
+                                        Modifier.zIndex(1f)
+                                    } else {
+                                        Modifier
+                                            .zIndex(-1f)
+                                            .graphicsLayer {
+                                                alpha = 0f
+                                                translationX = 99999f
+                                            }
+                                    }
+                                )
+                        ) {
+                            PreviewTabContent(
+                                files = files,
+                                consoleLogs = webConsoleLogs,
+                                onConsoleLog = onAddWebConsoleLog,
+                                onClearLogs = onClearWebConsoleLogs,
+                                onWebError = onWebError,
+                                onClearErrors = onClearErrors,
+                                onInspectorElementSelected = { identifier, outerHTML ->
+                                    val file = com.example.ui.preview.WebPreviewElementInspector.resolveElementAttachment(
+                                        files = files,
+                                        identifier = identifier,
+                                        outerHTML = outerHTML
+                                    )
+                                    onAddAttachedFile(file)
+                                    if (chatInputText.isBlank()) {
+                                        onUpdateChatInputText("Please modify or style the selected element `$identifier`:")
+                                    }
+                                    onTabSelected(WorkspaceTab.CHAT)
+                                },
+                                webPreviewRefreshTrigger = webPreviewRefreshTrigger,
+                                detectedWebErrors = detectedWebErrors,
+                                onFixErrors = onFixErrors,
+                                isThinking = isThinking
                             )
                         }
                     }
@@ -3374,7 +3405,9 @@ fun PreviewTabContent(
         } else {
             customUrl = target
             urlInputText = target
-            webViewRef?.loadUrl(target)
+            if (webViewRef?.url != target) {
+                webViewRef?.loadUrl(target)
+            }
         }
     }
 

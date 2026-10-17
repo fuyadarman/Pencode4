@@ -109,11 +109,24 @@ object WebPreviewErrorBoundary {
         val failingUrl = request?.url?.toString() ?: ""
         val errorDescription = error?.description?.toString() ?: "Unknown WebView Error"
         val isMainFrame = request?.isForMainFrame == true
+        val errorCode = error?.errorCode ?: 0
+
+        // Ignore cancelled requests, aborted navigations, or benign redirect cancellations
+        if (errorCode == -1 ||
+            errorDescription.contains("ERR_ABORTED", ignoreCase = true) ||
+            errorDescription.contains("ERR_UNKNOWN_URL_SCHEME", ignoreCase = true)
+        ) {
+            return
+        }
 
         onWebError("WebView Error: $errorDescription on $failingUrl", failingUrl, 0)
 
-        // Only display error card for main frame navigations to avoid breaking minor asset fails
+        // Only display error card for genuine main frame failures if the view has no valid loaded page
         if (isMainFrame && view != null) {
+            val currentViewUrl = view.url
+            if (!currentViewUrl.isNullOrBlank() && currentViewUrl != "about:blank" && currentViewUrl != failingUrl) {
+                return
+            }
             val errorHtml = """
                 <!DOCTYPE html>
                 <html>
