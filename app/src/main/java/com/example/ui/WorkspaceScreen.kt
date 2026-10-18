@@ -3570,16 +3570,14 @@ fun PreviewTabContent(
                             keyboardActions = androidx.compose.foundation.text.KeyboardActions(
                                 onGo = {
                                     val raw = urlInputText.trim()
-                                    if (raw.isBlank() || raw == defaultPreviewUrl || raw == "http://localhost:8080" || raw == "http://localhost:5173") {
-                                        customUrl = null
-                                        urlInputText = defaultPreviewUrl
-                                        refreshTrigger++
+                                    val targetUrl = if (raw.isBlank() || raw == defaultPreviewUrl || raw == "http://localhost:8080" || raw == "http://localhost:5173") {
+                                        defaultPreviewUrl
                                     } else {
-                                        val normalized = com.example.util.WebUrlHelper.normalizeUrl(raw)
-                                        customUrl = normalized
-                                        urlInputText = normalized
-                                        webViewRef?.loadUrl(normalized)
+                                        com.example.util.WebUrlHelper.normalizeUrl(raw)
                                     }
+                                    customUrl = if (targetUrl == defaultPreviewUrl) null else targetUrl
+                                    urlInputText = targetUrl
+                                    webViewRef?.loadUrl(targetUrl)
                                 }
                             ),
                             decorationBox = { innerTextField ->
@@ -3602,7 +3600,7 @@ fun PreviewTabContent(
                                 onClick = {
                                     customUrl = null
                                     urlInputText = defaultPreviewUrl
-                                    refreshTrigger++
+                                    webViewRef?.loadUrl(defaultPreviewUrl)
                                 },
                                 modifier = Modifier.size(20.dp)
                             ) {
@@ -3619,16 +3617,14 @@ fun PreviewTabContent(
                         IconButton(
                             onClick = {
                                 val raw = urlInputText.trim()
-                                if (raw.isBlank() || raw == defaultPreviewUrl) {
-                                    customUrl = null
-                                    urlInputText = defaultPreviewUrl
-                                    refreshTrigger++
+                                val targetUrl = if (raw.isBlank() || raw == defaultPreviewUrl || raw == "http://localhost:8080" || raw == "http://localhost:5173") {
+                                    defaultPreviewUrl
                                 } else {
-                                    val normalized = com.example.util.WebUrlHelper.normalizeUrl(raw)
-                                    customUrl = normalized
-                                    urlInputText = normalized
-                                    webViewRef?.loadUrl(normalized)
+                                    com.example.util.WebUrlHelper.normalizeUrl(raw)
                                 }
+                                customUrl = if (targetUrl == defaultPreviewUrl) null else targetUrl
+                                urlInputText = targetUrl
+                                webViewRef?.loadUrl(targetUrl)
                             },
                             modifier = Modifier.size(24.dp)
                         ) {
@@ -3958,13 +3954,7 @@ fun PreviewTabContent(
                         if (webPreviewRefreshTrigger > 0 && customUrl == null && effectiveHtmlContent != null && (isUniversalPreviewApplicable || !hasWebDist)) {
                             val currentContent = com.example.ui.preview.WebPreviewPerformanceGuard.preprocessHtmlSafely(effectiveHtmlContent)
                             webViewRef?.tag = currentContent
-                            webViewRef?.loadDataWithBaseURL(
-                                com.example.ui.preview.WebPreviewLifecycleManager.VIRTUAL_BASE_URL,
-                                currentContent,
-                                "text/html",
-                                "UTF-8",
-                                com.example.ui.preview.WebPreviewLifecycleManager.VIRTUAL_HISTORY_URL
-                            )
+                            webViewRef?.loadUrl(com.example.ui.preview.WebPreviewLifecycleManager.VIRTUAL_BASE_URL)
                         }
                     }
                     val previewContext = androidx.compose.ui.platform.LocalContext.current
@@ -4338,24 +4328,8 @@ fun PreviewTabContent(
 
                                 if (customUrl != null) {
                                     loadUrl(customUrl!!)
-                                } else if (isUniversalPreviewApplicable && effectiveHtmlContent != null) {
-                                    loadDataWithBaseURL(
-                                        com.example.ui.preview.WebPreviewLifecycleManager.VIRTUAL_BASE_URL,
-                                        initialProcessedHtml,
-                                        "text/html",
-                                        "UTF-8",
-                                        com.example.ui.preview.WebPreviewLifecycleManager.VIRTUAL_HISTORY_URL
-                                    )
-                                } else if (hasWebDist) {
+                                } else if (effectiveHtmlContent != null || hasWebDist) {
                                     loadUrl(com.example.ui.preview.WebPreviewLifecycleManager.VIRTUAL_BASE_URL)
-                                } else if (effectiveHtmlContent != null) {
-                                    loadDataWithBaseURL(
-                                        com.example.ui.preview.WebPreviewLifecycleManager.VIRTUAL_BASE_URL,
-                                        initialProcessedHtml,
-                                        "text/html",
-                                        "UTF-8",
-                                        com.example.ui.preview.WebPreviewLifecycleManager.VIRTUAL_HISTORY_URL
-                                    )
                                 } else {
                                     val startHtml = com.example.browser.RealBrowserStartPageGenerator.generateStartPageHtml()
                                     loadDataWithBaseURL(
@@ -4382,13 +4356,7 @@ fun PreviewTabContent(
                                     val currentTag = webView.tag as? String
                                     if (currentTag != currentContent) {
                                         webView.tag = currentContent
-                                        webView.loadDataWithBaseURL(
-                                            com.example.ui.preview.WebPreviewLifecycleManager.VIRTUAL_BASE_URL,
-                                            currentContent,
-                                            "text/html",
-                                            "UTF-8",
-                                            com.example.ui.preview.WebPreviewLifecycleManager.VIRTUAL_HISTORY_URL
-                                        )
+                                        webView.loadUrl(com.example.ui.preview.WebPreviewLifecycleManager.VIRTUAL_BASE_URL)
                                     }
                                 } else if (customUrl == null && effectiveHtmlContent == null && !hasWebDist) {
                                     val startHtml = com.example.browser.RealBrowserStartPageGenerator.generateStartPageHtml()
