@@ -32,8 +32,8 @@ fun resolveWebsiteFaviconUrl(serverUrl: String?, platformType: McpPlatformType):
             } else null
         } else null
     } catch (_: Exception) {
-        null
     } ?: when (platformType) {
+        McpPlatformType.GITHUB -> "github.com"
         McpPlatformType.VERCEL -> "vercel.com"
         McpPlatformType.CLOUDFLARE -> "cloudflare.com"
         McpPlatformType.SUPABASE -> "supabase.com"
@@ -68,6 +68,9 @@ private fun CanvasLogoFallback(
             val height = this.size.height
 
             when (platformType) {
+                McpPlatformType.GITHUB -> {
+                    drawCircle(Color.White, radius = width * 0.4f, center = Offset(width * 0.5f, height * 0.5f))
+                }
                 McpPlatformType.SUPABASE -> {
                     // Supabase emerald green lightning bolt (#3ECF8E)
                     val green = Color(0xFF3ECF8E)

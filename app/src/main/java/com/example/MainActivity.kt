@@ -174,6 +174,21 @@ class MainActivity : ComponentActivity() {
                         var showHomeSettingsDialog by remember { mutableStateOf(false) }
                         var showAddNewModelDialog by remember { mutableStateOf(false) }
 
+                        val githubAuthManager = remember { com.example.auth.github.GitHubAuthManager.getInstance(this@MainActivity) }
+                        val githubAuthState by githubAuthManager.authState.collectAsState()
+
+                        LaunchedEffect(githubAuthState.isConnected, githubAuthState.accessToken, githubAuthState.selectedRepo) {
+                            if (githubAuthState.isConnected && githubAuthState.accessToken.isNotBlank()) {
+                                if (viewModel.githubToken.value.isBlank()) {
+                                    viewModel.saveGithubToken(githubAuthState.accessToken)
+                                }
+                                if (githubAuthState.selectedRepo.isNotBlank() && viewModel.githubRepo.value.isBlank()) {
+                                    viewModel.saveGithubRepo(githubAuthState.selectedRepo)
+                                    viewModel.saveGithubBranch(githubAuthState.selectedBranch)
+                                }
+                            }
+                        }
+
                         if (currentProject == null) {
                             HomeScreen(
                                 projects = projectsList,

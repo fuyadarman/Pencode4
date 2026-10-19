@@ -30,6 +30,13 @@ enum class McpPlatformType(
         "https://vercel.com/account/tokens",
         "https://cdn.simpleicons.org/vercel/FFFFFF"
     ),
+    GITHUB(
+        "GitHub",
+        "https://api.github.com/mcp",
+        "GitHub Repositories, Workflows, Pull Requests & CI/CD",
+        "https://github.com/apps/pencode",
+        "https://cdn.simpleicons.org/github/FFFFFF"
+    ),
     CUSTOM(
         "Custom MCP",
         "https://my-mcp-server.com/mcp",

@@ -50,6 +50,21 @@ fun McpManagementDialog(
     val scope = rememberCoroutineScope()
 
     val context = androidx.compose.ui.platform.LocalContext.current
+    val authManager = remember { com.example.auth.github.GitHubAuthManager.getInstance(context) }
+    val authState by authManager.authState.collectAsState()
+    var showGitHubOAuthDialog by remember { mutableStateOf(false) }
+
+    if (showGitHubOAuthDialog) {
+        com.example.auth.github.GitHubOAuthDialog(
+            isOpen = showGitHubOAuthDialog,
+            onDismiss = { showGitHubOAuthDialog = false },
+            onAuthSuccess = { token, _ ->
+                onAddServer("GitHub Platform MCP", "https://api.github.com", "GITHUB", token)
+                val activeServerId = servers.find { it.platform == "GITHUB" }?.id ?: "builtin-mcp-github"
+                scope.launch { onTestConnect(activeServerId) }
+            }
+        )
+    }
 
     if (selectedOAuthServer != null) {
         val target = selectedOAuthServer!!
@@ -328,10 +343,21 @@ fun McpManagementDialog(
                                 isEnabledInWorkspace = server.enabledWorkspaces.contains(workspaceId),
                                 onToggleWorkspace = { enabled -> onToggleWorkspace(server.id, enabled) },
                                 onConnectTest = {
-                                    scope.launch { onTestConnect(server.id) }
+                                    if (server.platform == "GITHUB" && !authState.isConnected) {
+                                        showGitHubOAuthDialog = true
+                                    } else {
+                                        if (server.platform == "GITHUB" && authState.isConnected) {
+                                            onAddServer(server.name, server.url, "GITHUB", authState.accessToken)
+                                        }
+                                        scope.launch { onTestConnect(server.id) }
+                                    }
                                 },
                                 onOAuthConnect = {
-                                    selectedOAuthServer = server
+                                    if (server.platform == "GITHUB") {
+                                        showGitHubOAuthDialog = true
+                                    } else {
+                                        selectedOAuthServer = server
+                                    }
                                 },
                                 onDelete = { onDeleteServer(server.id) }
                             )

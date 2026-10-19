@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -47,6 +48,7 @@ object McpRealLogoResolver {
             else extractedDomain
         } else {
             when (platformType) {
+                McpPlatformType.GITHUB -> "github.com"
                 McpPlatformType.VERCEL -> "vercel.com"
                 McpPlatformType.CLOUDFLARE -> "cloudflare.com"
                 McpPlatformType.SUPABASE -> "supabase.com"
@@ -60,6 +62,7 @@ object McpRealLogoResolver {
 
     fun getSecondaryFaviconUrl(serverUrl: String?, platformType: McpPlatformType): String {
         val domain = when (platformType) {
+            McpPlatformType.GITHUB -> "github.com"
             McpPlatformType.VERCEL -> "vercel.com"
             McpPlatformType.CLOUDFLARE -> "cloudflare.com"
             McpPlatformType.SUPABASE -> "supabase.com"
@@ -85,6 +88,7 @@ fun RealWebsiteMcpLogo(
     }
 
     val bgTint = when (platformType) {
+        McpPlatformType.GITHUB -> Color(0xFF161B22)
         McpPlatformType.SUPABASE -> Color(0xFF0D281E)
         McpPlatformType.CLOUDFLARE -> Color(0xFF2E1C0C)
         McpPlatformType.VERCEL -> Color(0xFF0F1117)
@@ -92,6 +96,7 @@ fun RealWebsiteMcpLogo(
     }
 
     val borderTint = when (platformType) {
+        McpPlatformType.GITHUB -> Color(0xFF38BDF8).copy(alpha = 0.4f)
         McpPlatformType.SUPABASE -> Color(0xFF3ECF8E).copy(alpha = 0.4f)
         McpPlatformType.CLOUDFLARE -> Color(0xFFF38020).copy(alpha = 0.4f)
         McpPlatformType.VERCEL -> Color(0xFF94A3B8).copy(alpha = 0.35f)
@@ -148,6 +153,9 @@ private fun FallbackCanvasLogo(
         val height = this.size.height
 
         when (platformType) {
+            McpPlatformType.GITHUB -> {
+                drawCircle(Color.White, radius = width * 0.4f, center = Offset(width * 0.5f, height * 0.5f))
+            }
             McpPlatformType.SUPABASE -> {
                 val green = Color(0xFF3ECF8E)
                 val path = Path().apply {

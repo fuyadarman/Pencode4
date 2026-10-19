@@ -145,6 +145,14 @@ class McpManager(private val context: Context) {
                 platform = "VERCEL",
                 status = "Disconnected",
                 availableTools = getPresetToolsForPlatform("VERCEL", "Vercel MCP")
+            ),
+            McpServer(
+                id = "builtin-mcp-github",
+                name = "GitHub Platform MCP",
+                url = "https://api.github.com",
+                platform = "GITHUB",
+                status = "Disconnected",
+                availableTools = getPresetToolsForPlatform("GITHUB", "GitHub Platform MCP")
             )
         )
         _servers.value = presets
@@ -496,6 +504,7 @@ class McpManager(private val context: Context) {
                     parametersJsonSchema = """{"type":"object","properties":{"key":{"type":"string"},"value":{"type":"string"},"target":{"type":"string","enum":["production","preview","development"]}},"required":["key","value"]}"""
                 )
             )
+            "GITHUB" -> com.example.data.mcp.GitHubMcpServerProvider(context).getDeclaredTools()
             else -> emptyList()
         }
     }
@@ -517,6 +526,21 @@ class McpManager(private val context: Context) {
             } 
         } ?: _servers.value.firstOrNull { it.status.startsWith("Connected") }
           ?: return@withContext "Error: MCP Server '$serverId' not found or no connected MCP server available."
+
+        if (server.platform == "GITHUB" || toolName.startsWith("github_")) {
+            val githubProvider = com.example.data.mcp.GitHubMcpServerProvider(context)
+            val parsedArgs = try {
+                if (!argumentsJson.isNullOrBlank()) {
+                    val jsonObj = org.json.JSONObject(argumentsJson)
+                    val map = mutableMapOf<String, Any?>()
+                    jsonObj.keys().forEach { k -> map[k] = jsonObj.opt(k) }
+                    map
+                } else emptyMap()
+            } catch (e: Exception) {
+                emptyMap<String, Any?>()
+            }
+            return@withContext githubProvider.executeTool(toolName, parsedArgs)
+        }
 
         val metadata = cachedMetadata[server.id] ?: authManager.discoverOAuthMetadata(server.url).getOrNull()
         val tokenEp = metadata?.tokenEndpoint

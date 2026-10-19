@@ -1053,7 +1053,8 @@ fun ChatTabContent(
     onOpenSkillsDialog: () -> Unit = {},
     isControlBrowserActive: Boolean = false,
     onToggleControlBrowser: (Boolean) -> Unit = {},
-    onSwitchToPreviewTab: () -> Unit = {}
+    onSwitchToPreviewTab: () -> Unit = {},
+    onSaveSettings: (String, String, String, String, Boolean) -> Unit = { _, _, _, _, _ -> }
 ) {
     var taggedFiles by remember { mutableStateOf<List<ProjectFileEntity>>(emptyList()) }
     var taggedSkills by remember { mutableStateOf<List<com.example.ui.AgentSkill>>(emptyList()) }
@@ -2061,7 +2062,11 @@ fun ChatTabContent(
                             }
                         },
                         isControlBrowserActive = isControlBrowserActive,
-                        onToggleControlBrowser = onToggleControlBrowser
+                        onToggleControlBrowser = onToggleControlBrowser,
+                        onSelectCustomModel = { modelId, provider, baseUrl, apiKey ->
+                            onSaveSettings(provider, apiKey, baseUrl, modelId, true)
+                        },
+                        currentModelDisplayName = selectedModelId.ifBlank { "Gemini" }
                     )
                 }
             }
@@ -4835,6 +4840,11 @@ fun AndroidBuildTabContent(
     var expandArtifacts by remember { mutableStateOf(true) }
     var isWorkflowsExpanded by remember { mutableStateOf(false) }
     var selectedWorkflowIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    val authManager = remember { com.example.auth.github.GitHubAuthManager.getInstance(context) }
+    val authState by authManager.authState.collectAsState()
+    var showOAuthDialog by remember { mutableStateOf(false) }
+    var showRepoPicker by remember { mutableStateOf(false) }
+    var showManualFields by remember { mutableStateOf(false) }
 
     val logsScrollState = rememberScrollState()
 
@@ -4925,69 +4935,125 @@ fun AndroidBuildTabContent(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Configure your GitHub credentials and repository to enable automatic pushing and build tracking via GitHub Actions.",
+                        text = "Connect your GitHub account or configure repository credentials to enable automated pushing, workflows, and build tracking.",
                         color = com.example.ui.theme.AppTheme.textSecondary,
                         fontSize = 11.sp,
                         lineHeight = 15.sp
                     )
 
-                    OutlinedTextField(
-                        value = tempRepo,
-                        onValueChange = { tempRepo = it },
-                        label = { Text("only github repo name", fontSize = 11.sp) },
-                        placeholder = { Text("e.g. repo-name", fontSize = 11.sp) },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = com.example.ui.theme.AppTheme.textPrimary,
-                            unfocusedTextColor = com.example.ui.theme.AppTheme.textPrimary,
-                            focusedBorderColor = Color(0xFFEC4899),
-                            unfocusedBorderColor = com.example.ui.theme.AppTheme.border,
-                            focusedContainerColor = com.example.ui.theme.AppTheme.inputBg,
-                            unfocusedContainerColor = com.example.ui.theme.AppTheme.inputBg
-                        ),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(8.dp)
-                    )
+                    if (authState.isConnected) {
+                        Card(
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E2235)),
+                            border = BorderStroke(1.dp, Color(0xFF10B981).copy(alpha = 0.5f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(18.dp))
+                                        Text(
+                                            text = "Authorized as @${authState.username}",
+                                            color = Color.White,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                    TextButton(
+                                        onClick = { showOAuthDialog = true },
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text("Account", fontSize = 11.sp, color = Color(0xFF38BDF8))
+                                    }
+                                }
 
-                    OutlinedTextField(
-                        value = tempToken,
-                        onValueChange = { tempToken = it },
-                        label = { Text("GitHub Access Token", fontSize = 11.sp) },
-                        placeholder = { Text("ghp_xxxxxxxxxxxx", fontSize = 11.sp) },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = com.example.ui.theme.AppTheme.textPrimary,
-                            unfocusedTextColor = com.example.ui.theme.AppTheme.textPrimary,
-                            focusedBorderColor = Color(0xFFEC4899),
-                            unfocusedBorderColor = com.example.ui.theme.AppTheme.border,
-                            focusedContainerColor = com.example.ui.theme.AppTheme.inputBg,
-                            unfocusedContainerColor = com.example.ui.theme.AppTheme.inputBg
-                        ),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(8.dp)
-                    )
-
-                    val buildTabUriHandler = androidx.compose.ui.platform.LocalUriHandler.current
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Start,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Need a token? ",
-                            color = Color(0xFF80809B),
-                            fontSize = 11.sp
-                        )
-                        Text(
-                            text = "Create one on GitHub",
-                            color = Color(0xFF38BDF8),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.clickable {
-                                try {
-                                    buildTabUriHandler.openUri("https://github.com/settings/tokens/new")
-                                } catch (e: Exception) {
-                                    // Ignore
+                                Button(
+                                    onClick = { showRepoPicker = true },
+                                    modifier = Modifier.fillMaxWidth().height(42.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Icon(Icons.Default.FolderOpen, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = if (tempRepo.isNotBlank()) "Selected Repo: $tempRepo (Click to Change)" else "Select a Repository (${authState.userRepos.size} available)",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
                                 }
                             }
+                        }
+                    } else {
+                        Button(
+                            onClick = { showOAuthDialog = true },
+                            modifier = Modifier.fillMaxWidth().height(46.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF24292E)),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(Icons.Default.LockOpen, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Authorize GitHub Account (No GHP Token Needed)", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showManualFields = !showManualFields }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = if (showManualFields) "Hide Manual Entry" else "Advanced: Manual GHP Token & Custom Repo",
+                            color = Color(0xFF94A3B8),
+                            fontSize = 11.sp
+                        )
+                        Icon(
+                            imageVector = if (showManualFields) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = null,
+                            tint = Color(0xFF94A3B8),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+
+                    if (showManualFields || !authState.isConnected) {
+                        OutlinedTextField(
+                            value = tempRepo,
+                            onValueChange = { tempRepo = it },
+                            label = { Text("only github repo name", fontSize = 11.sp) },
+                            placeholder = { Text("e.g. repo-name", fontSize = 11.sp) },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = com.example.ui.theme.AppTheme.textPrimary,
+                                unfocusedTextColor = com.example.ui.theme.AppTheme.textPrimary,
+                                focusedBorderColor = Color(0xFFEC4899),
+                                unfocusedBorderColor = com.example.ui.theme.AppTheme.border,
+                                focusedContainerColor = com.example.ui.theme.AppTheme.inputBg,
+                                unfocusedContainerColor = com.example.ui.theme.AppTheme.inputBg
+                            ),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp)
+                        )
+
+                        OutlinedTextField(
+                            value = tempToken,
+                            onValueChange = { tempToken = it },
+                            label = { Text("GitHub Access Token", fontSize = 11.sp) },
+                            placeholder = { Text("ghp_xxxxxxxxxxxx", fontSize = 11.sp) },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = com.example.ui.theme.AppTheme.textPrimary,
+                                unfocusedTextColor = com.example.ui.theme.AppTheme.textPrimary,
+                                focusedBorderColor = Color(0xFFEC4899),
+                                unfocusedBorderColor = com.example.ui.theme.AppTheme.border,
+                                focusedContainerColor = com.example.ui.theme.AppTheme.inputBg,
+                                unfocusedContainerColor = com.example.ui.theme.AppTheme.inputBg
+                            ),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp)
                         )
                     }
 
@@ -5046,12 +5112,23 @@ fun AndroidBuildTabContent(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Text(
-                        text = githubRepo,
-                        color = com.example.ui.theme.AppTheme.textPrimary,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = githubRepo,
+                            color = com.example.ui.theme.AppTheme.textPrimary,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (authState.isConnected) {
+                            TextButton(
+                                onClick = { showRepoPicker = true },
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                                modifier = Modifier.height(24.dp)
+                            ) {
+                                Text("Switch Repo", fontSize = 10.sp, color = Color(0xFF38BDF8))
+                            }
+                        }
+                    }
                     Text(
                         text = "Branch: $githubBranch",
                         color = com.example.ui.theme.AppTheme.textSecondary,
@@ -5664,6 +5741,37 @@ fun AndroidBuildTabContent(
                     }
                 }
             }
+        }
+
+        if (showOAuthDialog) {
+            com.example.auth.github.GitHubOAuthDialog(
+                isOpen = showOAuthDialog,
+                onDismiss = { showOAuthDialog = false },
+                onAuthSuccess = { token, _ ->
+                    tempToken = token
+                    onSaveToken(token)
+                    showRepoPicker = true
+                }
+            )
+        }
+
+        if (showRepoPicker) {
+            com.example.ui.build.GitHubRepoSelectorDialog(
+                isOpen = showRepoPicker,
+                authManager = authManager,
+                onDismiss = { showRepoPicker = false },
+                onRepoSelected = { repoName, branch ->
+                    tempRepo = repoName
+                    tempBranch = branch
+                    val token = authState.accessToken.ifBlank { tempToken }
+                    if (token.isNotBlank()) {
+                        onSaveRepo(repoName)
+                        onSaveToken(token)
+                        onSaveBranch(branch)
+                        isEditingConfig = false
+                    }
+                }
+            )
         }
 
         // AdMob Banner Ad at the bottom of Build tab

@@ -1,0 +1,11 @@
+name = "pencode-auth-worker"
+main = "worker.js"
+compatibility_date = "2024-04-01"
+
+[vars]
+GITHUB_CLIENT_ID = "Iv23liJ1YMYgjNpHUToe"
+GITHUB_APP_ID = "5369463"
+
+# Secrets to set via wrangler or Cloudflare Dashboard:
+# wrangler secret put GITHUB_CLIENT_SECRET
+# wrangler secret put GITHUB_PRIVATE_KEY

@@ -34,6 +34,7 @@ fun ProfessionalMcpServerCard(
 ) {
     val platformType = McpPlatformType.fromString(server.platform)
     val platformBadgeColor = when (platformType) {
+        McpPlatformType.GITHUB -> Color(0xFF38BDF8)
         McpPlatformType.SUPABASE -> Color(0xFF3ECF8E)
         McpPlatformType.CLOUDFLARE -> Color(0xFFF38020)
         McpPlatformType.VERCEL -> Color(0xFFE2E8F0)

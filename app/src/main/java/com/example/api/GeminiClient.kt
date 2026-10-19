@@ -703,6 +703,7 @@ object GeminiClient {
                 
                 val url = when {
                     baseUrl.contains("/chat/completions") || baseUrl.contains("/completions") -> baseUrl
+                    baseUrl.contains("models.inference.ai.azure.com") || baseUrl.contains("models.github.ai") -> "$baseUrl/chat/completions"
                     baseUrl.endsWith("/v1") -> "$baseUrl/chat/completions"
                     baseUrl.startsWith("http://") || baseUrl.startsWith("https://") -> {
                         val path = try { java.net.URI(baseUrl).path } catch (e: Exception) { "" }
@@ -746,11 +747,15 @@ object GeminiClient {
                 if (provider == "openrouter") {
                     requestBuilder.header("HTTP-Referer", "https://ai.studio/build")
                     requestBuilder.header("X-Title", "AI Studio Android")
+                } else if (provider == "opencode" || provider == "opencode_zen" || baseUrl.contains("opencode.ai")) {
+                    requestBuilder.header("User-Agent", "opencode/1.0.0")
+                    requestBuilder.header("x-opencode-session", "ses_${java.util.UUID.randomUUID().toString().replace("-", "")}")
                 }
 
                 var currentRequest = requestBuilder.build()
 
                 val modelDisplayName = if (modelId.isNotBlank()) modelId else when (provider.lowercase()) {
+                    "github_models", "github" -> "GitHub Models"
                     "cline" -> "Cline"
                     "opencode_zen", "opencode" -> "OpenCode Zen"
                     "ollama_cloud", "ollama" -> "Ollama"

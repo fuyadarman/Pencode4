@@ -54,6 +54,8 @@ object ProviderModelScanner {
                     if (provider == "openrouter" || provider == "cline") {
                         requestBuilder.header("HTTP-Referer", "https://ai.studio/build")
                         requestBuilder.header("X-Title", "AI Studio Android")
+                    } else if (provider == "opencode" || provider == "opencode_zen" || baseUrl.contains("opencode.ai")) {
+                        requestBuilder.header("User-Agent", "opencode/1.0.0")
                     }
 
                     val request = requestBuilder.get().build()
