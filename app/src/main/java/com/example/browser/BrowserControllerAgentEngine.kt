@@ -158,7 +158,21 @@ object BrowserControllerAgentEngine {
                                 try { el = document.getElementById(sel); } catch(e) {}
                             }
                             if (!el) {
-                                try { el = document.querySelector('[name="' + sel + '"], [aria-label="' + sel + '"]'); } catch(e) {}
+                                try { el = document.querySelector('[name="' + sel + '"], [aria-label="' + sel + '"], [placeholder="' + sel + '"]'); } catch(e) {}
+                            }
+                            if (!el) {
+                                try {
+                                    var lower = sel.toLowerCase();
+                                    var candidates = Array.from(document.querySelectorAll('button, a, input, [role="button"], [role="link"], span, div'));
+                                    for (var i = 0; i < candidates.length; i++) {
+                                        var c = candidates[i];
+                                        var txt = (c.innerText || c.value || c.getAttribute('aria-label') || '').trim().toLowerCase();
+                                        if (txt === lower || (txt.length > 0 && lower.length > 2 && txt.indexOf(lower) !== -1)) {
+                                            el = c;
+                                            break;
+                                        }
+                                    }
+                                } catch(e) {}
                             }
                             if (!el) return 'Element not found: ' + sel;
                             el.scrollIntoView({ behavior: 'smooth', block: 'center' });

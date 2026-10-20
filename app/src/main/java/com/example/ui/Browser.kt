@@ -190,15 +190,39 @@ class BackgroundBrowser(private val context: Context) {
         
         val js = """
             (function() {
-                var el = document.querySelector('$selector');
+                var el = null;
+                try { el = document.querySelector('$selector'); } catch(e) {}
+                if (!el) {
+                    try {
+                        var xpathResult = document.evaluate('$selector', document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                        el = xpathResult.singleNodeValue;
+                    } catch(e) {}
+                }
+                if (!el) {
+                    try { el = document.getElementById('$selector'); } catch(e) {}
+                }
+                if (!el) {
+                    try { el = document.querySelector('[name="$selector"], [aria-label="$selector"], [placeholder="$selector"]'); } catch(e) {}
+                }
+                if (!el) {
+                    try {
+                        var lower = '$selector'.toLowerCase();
+                        var candidates = Array.from(document.querySelectorAll('button, a, input, [role="button"], [role="link"], span, div'));
+                        for (var i = 0; i < candidates.length; i++) {
+                            var c = candidates[i];
+                            var txt = (c.innerText || c.value || c.getAttribute('aria-label') || '').trim().toLowerCase();
+                            if (txt === lower || (txt.length > 0 && lower.length > 2 && txt.indexOf(lower) !== -1)) {
+                                el = c;
+                                break;
+                            }
+                        }
+                    } catch(e) {}
+                }
                 if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    el.focus();
                     el.click();
                     return 'clicked';
-                }
-                var xpathResult = document.evaluate('$selector', document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-                if (xpathResult.singleNodeValue) {
-                    xpathResult.singleNodeValue.click();
-                    return 'clicked via xpath';
                 }
                 return 'not_found';
             })()

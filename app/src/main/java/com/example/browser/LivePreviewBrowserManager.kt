@@ -125,11 +125,32 @@ object LivePreviewBrowserManager {
         val safeSel = selector.replace("'", "\\'")
         val js = """
             (function() {
-                var el = document.querySelector('$safeSel');
+                var el = null;
+                try { el = document.querySelector('$safeSel'); } catch(e) {}
                 if (!el) {
                     try {
                         var xpath = document.evaluate('$safeSel', document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
                         el = xpath.singleNodeValue;
+                    } catch(e) {}
+                }
+                if (!el) {
+                    try { el = document.getElementById('$safeSel'); } catch(e) {}
+                }
+                if (!el) {
+                    try { el = document.querySelector('[name="$safeSel"], [aria-label="$safeSel"], [placeholder="$safeSel"]'); } catch(e) {}
+                }
+                if (!el) {
+                    try {
+                        var lower = '$safeSel'.toLowerCase();
+                        var candidates = Array.from(document.querySelectorAll('button, a, input, [role="button"], [role="link"], span, div'));
+                        for (var i = 0; i < candidates.length; i++) {
+                            var c = candidates[i];
+                            var txt = (c.innerText || c.value || c.getAttribute('aria-label') || '').trim().toLowerCase();
+                            if (txt === lower || (txt.length > 0 && lower.length > 2 && txt.indexOf(lower) !== -1)) {
+                                el = c;
+                                break;
+                            }
+                        }
                     } catch(e) {}
                 }
                 if (!el) return 'not_found';
