@@ -691,19 +691,24 @@ object GeminiClient {
                     provider == "groq" -> "https://api.groq.com/openai"
                     provider == "cohere" -> "https://api.cohere.com"
                     provider == "openrouter" -> "https://openrouter.ai/api"
-                    provider == "ollama_cloud" || provider == "ollama" -> "https://api.ollama.com"
+                    provider == "ollama_cloud" || provider == "ollama" -> "https://ollama.com/v1"
                     else -> "https://api.openai.com"
                 }
 
-                val baseUrl = if (!rawBase.startsWith("http://") && !rawBase.startsWith("https://")) {
-                    "https://${rawBase.trimEnd('/')}"
+                val sanitizedRaw = rawBase.replace("api.ollama.com", "ollama.com")
+                val baseUrl = if (!sanitizedRaw.startsWith("http://") && !sanitizedRaw.startsWith("https://")) {
+                    "https://${sanitizedRaw.trimEnd('/')}"
                 } else {
-                    rawBase.trimEnd('/')
+                    sanitizedRaw.trimEnd('/')
                 }
                 
                 val url = when {
                     baseUrl.contains("/chat/completions") || baseUrl.contains("/completions") -> baseUrl
                     baseUrl.contains("models.inference.ai.azure.com") || baseUrl.contains("models.github.ai") -> "$baseUrl/chat/completions"
+                    baseUrl.contains("ollama.com") -> {
+                        if (baseUrl.endsWith("/v1")) "$baseUrl/chat/completions"
+                        else "$baseUrl/v1/chat/completions"
+                    }
                     baseUrl.endsWith("/v1") -> "$baseUrl/chat/completions"
                     baseUrl.startsWith("http://") || baseUrl.startsWith("https://") -> {
                         val path = try { java.net.URI(baseUrl).path } catch (e: Exception) { "" }

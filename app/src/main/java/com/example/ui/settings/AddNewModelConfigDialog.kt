@@ -166,7 +166,7 @@ fun AddNewModelConfigDialog(
                                         "groq" -> "https://api.groq.com/openai"
                                         "cohere" -> "https://api.cohere.com"
                                         "openrouter" -> "https://openrouter.ai/api/v1"
-                                        "ollama_cloud" -> "https://api.ollama.com"
+                                        "ollama_cloud" -> "https://ollama.com/v1"
                                         "cloudflare" -> "https://api.cloudflare.com/client/v4/accounts/YOUR_ACCOUNT_ID/ai/run"
                                         "custom" -> "https://api.example.com/v1"
                                         else -> ""

@@ -155,7 +155,7 @@ object ProviderModelScanner {
                     urls.add("$cleanBase/v1/models")
                     urls.add("$cleanBase/models")
                 }
-                urls.add("https://api.ollama.com/v1/models")
+                urls.add("https://ollama.com/v1/models")
             }
             else -> {
                 if (cleanBase.isNotBlank()) {
