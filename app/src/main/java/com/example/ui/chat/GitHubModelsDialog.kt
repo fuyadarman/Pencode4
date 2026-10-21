@@ -38,14 +38,27 @@ fun GitHubModelsDialog(
     val authManager = remember { GitHubAuthManager.getInstance(context) }
     val authState by authManager.authState.collectAsState()
 
+    var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("All") }
-    val categories = listOf("All", "Flagship", "Reasoning", "Coding", "Fast")
+    var customModelInput by remember { mutableStateOf("") }
+    val categories = listOf("All", "NVIDIA", "OpenAI", "DeepSeek", "Meta", "Mistral", "Microsoft", "Reasoning", "Coding")
 
-    val models = remember(selectedCategory) {
-        if (selectedCategory == "All") {
-            GitHubModelsService.AVAILABLE_MODELS
+    val models = remember(selectedCategory, searchQuery) {
+        val baseList = when (selectedCategory) {
+            "All" -> GitHubModelsService.AVAILABLE_MODELS
+            "NVIDIA", "OpenAI", "DeepSeek", "Meta", "Mistral", "Microsoft" ->
+                GitHubModelsService.AVAILABLE_MODELS.filter { it.publisher.contains(selectedCategory, ignoreCase = true) }
+            else ->
+                GitHubModelsService.AVAILABLE_MODELS.filter { it.category.equals(selectedCategory, ignoreCase = true) }
+        }
+        if (searchQuery.isBlank()) {
+            baseList
         } else {
-            GitHubModelsService.AVAILABLE_MODELS.filter { it.category.equals(selectedCategory, ignoreCase = true) }
+            baseList.filter {
+                it.id.contains(searchQuery, ignoreCase = true) ||
+                it.name.contains(searchQuery, ignoreCase = true) ||
+                it.publisher.contains(searchQuery, ignoreCase = true)
+            }
         }
     }
 
@@ -139,15 +152,89 @@ fun GitHubModelsDialog(
                     }
                 }
 
-                // Category chips
+                // Search Bar
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("Search 30+ GitHub AI models (nemotron, gpt-4o, llama...)", fontSize = 11.sp, color = Color(0xFF64748B)) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color(0xFF64748B), modifier = Modifier.size(16.dp)) },
+                    trailingIcon = {
+                        if (searchQuery.isNotBlank()) {
+                            IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(24.dp)) {
+                                Icon(Icons.Default.Close, contentDescription = "Clear", tint = Color(0xFF94A3B8), modifier = Modifier.size(14.dp))
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = Color(0xFF38BDF8),
+                        unfocusedBorderColor = Color(0xFF2E3248),
+                        focusedContainerColor = Color(0xFF1A1D2D),
+                        unfocusedContainerColor = Color(0xFF1A1D2D)
+                    ),
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(10.dp)
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Custom Model Entry (Allows using ANY custom model name directly)
                 Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    OutlinedTextField(
+                        value = customModelInput,
+                        onValueChange = { customModelInput = it },
+                        placeholder = { Text("Or type any model ID (e.g. nemotron-3-ultra)", fontSize = 11.sp, color = Color(0xFF64748B)) },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color(0xFF38BDF8),
+                            unfocusedBorderColor = Color(0xFF2E3248),
+                            focusedContainerColor = Color(0xFF1A1D2D),
+                            unfocusedContainerColor = Color(0xFF1A1D2D)
+                        ),
+                        modifier = Modifier.weight(1f).height(44.dp),
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    Button(
+                        onClick = {
+                            val targetId = customModelInput.trim()
+                            if (targetId.isNotBlank()) {
+                                onModelSelected(
+                                    targetId,
+                                    GitHubModelsService.GITHUB_MODELS_PROVIDER,
+                                    GitHubModelsService.GITHUB_MODELS_BASE_URL,
+                                    authState.accessToken
+                                )
+                                onDismiss()
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.height(44.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp)
+                    ) {
+                        Text("Use", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Category chips with horizontal scroll
+                androidx.compose.foundation.lazy.LazyRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    categories.forEach { cat ->
+                    items(categories) { cat ->
                         val isSelected = selectedCategory == cat
                         Surface(
-                            shape = RoundedCornerShape(16.dp),
+                            shape = RoundedCornerShape(14.dp),
                             color = if (isSelected) Color(0xFF38BDF8) else Color(0xFF1A1D2D),
                             border = BorderStroke(1.dp, if (isSelected) Color(0xFF38BDF8) else Color(0xFF2E3248)),
                             modifier = Modifier.clickable { selectedCategory = cat }
@@ -163,7 +250,7 @@ fun GitHubModelsDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 // Models list
                 LazyColumn(

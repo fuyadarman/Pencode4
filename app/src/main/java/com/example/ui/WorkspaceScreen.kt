@@ -2536,51 +2536,42 @@ fun ChatBubble(
                     }
                 }
 
-            if (isUser) {
-                if (isCurrentlyActiveThinking) {
-                    val liveMetrics = com.example.data.TokenMetrics(
-                        modelName = currentRunningModelName.ifBlank { "gemini-3.1-flash-lite" },
-                        executionTimeSeconds = executionElapsedTimeSeconds,
-                        isLive = true,
-                        systemTokens = liveSystemTokens,
-                        userTokens = liveUserTokens,
-                        historyTokens = 420,
-                        skillTokens = liveToolTokens,
-                        totalInputTokens = liveTotalInputTokens,
-                        totalOutputTokens = liveTotalOutputTokens
-                    )
-                    CollapsibleTokenMonitor(
-                        metrics = liveMetrics,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                } else {
-                    val displayModel = message.modelName ?: assistantModelName ?: "gemini-3.1-flash-lite"
-                    val displaySecs = if (message.executionTimeSeconds > 0) message.executionTimeSeconds else (assistantDuration?.removeSuffix("s")?.toLongOrNull() ?: 0L)
-                    val sysTok = if (message.systemTokens > 0) message.systemTokens else 2440
-                    val usrTok = if (message.userTokens > 0) message.userTokens else maxOf(1, message.content.length / 4)
-                    val toolTok = message.toolTokens
-                    val histTok = if (message.historyTokens > 0) message.historyTokens else 320
-                    val skillTok = if (message.skillTokens > 0) message.skillTokens else toolTok
-                    val inTok = if (message.totalInputTokens > 0) message.totalInputTokens else (sysTok + usrTok + histTok + skillTok)
-                    val outTok = message.totalOutputTokens
-
-                    val storedMetrics = com.example.data.TokenMetrics(
-                        modelName = displayModel,
-                        executionTimeSeconds = displaySecs,
-                        isLive = false,
-                        systemTokens = sysTok,
-                        userTokens = usrTok,
-                        historyTokens = histTok,
-                        skillTokens = skillTok,
-                        totalInputTokens = inTok,
-                        totalOutputTokens = outTok
-                    )
-                    CollapsibleTokenMonitor(
-                        metrics = storedMetrics,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                }
+            val rawModel = if (isCurrentlyActiveThinking) {
+                currentRunningModelName.ifBlank { message.modelName ?: assistantModelName ?: "gemini-3.1-flash-lite" }
+            } else {
+                message.modelName ?: currentRunningModelName.ifBlank { assistantModelName ?: "gemini-3.1-flash-lite" }
             }
+            val cleanModelName = rawModel
+                .removePrefix("GitHub: ")
+                .removePrefix("github_models:")
+                .removePrefix("github:")
+                .trim()
+
+            val displaySecs = if (message.executionTimeSeconds > 0) message.executionTimeSeconds else (assistantDuration?.removeSuffix("s")?.toLongOrNull() ?: executionElapsedTimeSeconds)
+            val sysTok = if (message.systemTokens > 0) message.systemTokens else if (liveSystemTokens > 0) liveSystemTokens else 2440
+            val usrTok = if (message.userTokens > 0) message.userTokens else if (liveUserTokens > 0) liveUserTokens else maxOf(1, message.content.length / 4)
+            val toolTok = if (message.toolTokens > 0) message.toolTokens else liveToolTokens
+            val histTok = if (message.historyTokens > 0) message.historyTokens else 320
+            val skillTok = if (message.skillTokens > 0) message.skillTokens else toolTok
+            val inTok = if (message.totalInputTokens > 0) message.totalInputTokens else if (liveTotalInputTokens > 0) liveTotalInputTokens else (sysTok + usrTok + histTok + skillTok)
+            val outTok = if (message.totalOutputTokens > 0) message.totalOutputTokens else liveTotalOutputTokens
+
+            val displayMetrics = com.example.data.TokenMetrics(
+                modelName = cleanModelName,
+                executionTimeSeconds = displaySecs,
+                isLive = isCurrentlyActiveThinking,
+                systemTokens = sysTok,
+                userTokens = usrTok,
+                historyTokens = histTok,
+                skillTokens = skillTok,
+                totalInputTokens = inTok,
+                totalOutputTokens = outTok
+            )
+
+            CollapsibleTokenMonitor(
+                metrics = displayMetrics,
+                modifier = Modifier.padding(top = 4.dp)
+            )
 
             // Message Actions
     Row(

@@ -260,44 +260,6 @@ fun ProfessionalChatBar(
                 }
             }
 
-            // Active Model Pill (Clearly shows when GitHub AI model or Custom Model is in use)
-            if (currentModelDisplayName.isNotBlank() && currentModelDisplayName != "Gemini") {
-                Surface(
-                    color = if (currentModelDisplayName.contains("github", ignoreCase = true)) Color(0xFF0F172A) else Color(0xFF1E1B4B),
-                    border = BorderStroke(1.dp, if (currentModelDisplayName.contains("github", ignoreCase = true)) Color(0xFF38BDF8) else Color(0xFFA78BFA)),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.padding(bottom = 6.dp).clickable { showGitHubModelsDialog = true }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = if (currentModelDisplayName.contains("github", ignoreCase = true)) Color(0xFF0284C7) else Color(0xFF7C3AED),
-                            modifier = Modifier.size(16.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color.White, modifier = Modifier.size(10.dp))
-                            }
-                        }
-                        Text(
-                            text = "Active: $currentModelDisplayName",
-                            color = Color(0xFFF1F5F9),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Icon(
-                            imageVector = Icons.Default.SwapHoriz,
-                            contentDescription = "Switch",
-                            tint = Color(0xFF94A3B8),
-                            modifier = Modifier.size(13.dp)
-                        )
-                    }
-                }
-            }
-
             // Text Input with "Make, test, iterate..." placeholder
             TextField(
                 value = chatInputText,
