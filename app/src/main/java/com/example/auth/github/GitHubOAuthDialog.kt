@@ -381,7 +381,7 @@ fun GitHubOAuthDialog(
                                     value = workerUrlInput,
                                     onValueChange = { workerUrlInput = it },
                                     label = { Text("Worker Base URL", fontSize = 11.sp) },
-                                    placeholder = { Text("https://pencode-auth.<subdomain>.workers.dev", fontSize = 11.sp) },
+                                    placeholder = { Text("https://pencode-auth-worker.fuyadheart.workers.dev", fontSize = 11.sp) },
                                     colors = OutlinedTextFieldDefaults.colors(
                                         focusedTextColor = Color.White,
                                         unfocusedTextColor = Color.White,

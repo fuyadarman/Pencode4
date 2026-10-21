@@ -2066,7 +2066,7 @@ fun ChatTabContent(
                         onSelectCustomModel = { modelId, provider, baseUrl, apiKey ->
                             onSaveSettings(provider, apiKey, baseUrl, modelId, true)
                         },
-                        currentModelDisplayName = selectedModelId.ifBlank { "Gemini" }
+                        currentModelDisplayName = if (currentRunningModelName.isNotBlank() && currentRunningModelName != "Gemini Model") currentRunningModelName else selectedModelId.ifBlank { "Gemini" }
                     )
                 }
             }

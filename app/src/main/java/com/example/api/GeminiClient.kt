@@ -681,9 +681,10 @@ object GeminiClient {
                 }
             }
 
-            useCustom && (provider == "mistral" || provider == "openai" || provider == "custom" || provider == "groq" || provider == "cohere" || provider == "ollama_cloud" || provider == "ollama" || provider == "openrouter" || provider == "opencode_zen" || provider == "opencode" || provider == "cline") -> {
+            useCustom && (provider == "mistral" || provider == "openai" || provider == "custom" || provider == "groq" || provider == "cohere" || provider == "ollama_cloud" || provider == "ollama" || provider == "openrouter" || provider == "opencode_zen" || provider == "opencode" || provider == "cline" || provider == "github_models" || provider == "github") -> {
                 val rawBase = when {
                     !customBaseUrl.isNullOrBlank() -> customBaseUrl.trim()
+                    provider == "github_models" || provider == "github" -> "https://models.inference.ai.azure.com"
                     provider == "cline" -> "https://api.cline.bot/v1"
                     provider == "opencode_zen" || provider == "opencode" -> "https://opencode.ai/zen/v1"
                     provider == "mistral" -> "https://api.mistral.ai"

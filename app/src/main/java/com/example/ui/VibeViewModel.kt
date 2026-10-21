@@ -2176,6 +2176,29 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         _customModelId.value = modelId
         _useCustomModel.value = useCustom
 
+        val alias = if (provider.contains("github", ignoreCase = true)) "GitHub: $modelId" else modelId.ifBlank { provider }
+        val existingIndex = _customModels.value.indexOfFirst { it.provider == provider && it.modelId == modelId }
+        val updatedList = if (existingIndex != -1) {
+            _customModels.value.toMutableList().apply {
+                this[existingIndex] = this[existingIndex].copy(apiKey = apiKey, baseUrl = baseUrl, alias = alias)
+            }
+        } else {
+            val newConfig = CustomModelConfig(
+                alias = alias,
+                provider = provider,
+                apiKey = apiKey,
+                baseUrl = baseUrl,
+                modelId = modelId
+            )
+            _customModels.value + newConfig
+        }
+        saveCustomModels(updatedList)
+        val activeId = updatedList.find { it.provider == provider && it.modelId == modelId }?.id ?: ""
+        if (activeId.isNotBlank()) {
+            selectModel(activeId)
+        }
+        _currentRunningModelName.value = alias
+
         sharedPrefs.edit()
             .putString("custom_provider", provider)
             .putString("custom_api_key", apiKey)

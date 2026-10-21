@@ -1,4 +1,4 @@
-name = "pencode-auth"
+name = "pencode-auth-worker"
 main = "worker.js"
 compatibility_date = "2024-04-01"
 account_id = "73b9d134e47ef7760838943407da3367"

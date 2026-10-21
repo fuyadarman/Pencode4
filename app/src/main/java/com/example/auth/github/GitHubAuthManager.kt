@@ -48,7 +48,7 @@ class GitHubAuthManager(private val context: Context) {
         const val CLIENT_ID = "Iv23liJ1YMYgjNpHUToe"
         const val APP_ID = "5369463"
         const val APP_PUBLIC_URL = "https://github.com/apps/pencode"
-        const val DEFAULT_WORKER_URL = "https://pencode-auth.fuyadarman.workers.dev"
+        const val DEFAULT_WORKER_URL = "https://pencode-auth-worker.fuyadheart.workers.dev"
         private const val PREFS_NAME = "pencode_github_auth_prefs"
         private const val TAG = "GitHubAuthManager"
 
@@ -84,7 +84,13 @@ class GitHubAuthManager(private val context: Context) {
         val displayName = prefs.getString("display_name", "") ?: ""
         val selectedRepo = prefs.getString("selected_repo", "") ?: ""
         val selectedBranch = prefs.getString("selected_branch", "main") ?: "main"
-        val workerUrl = prefs.getString("worker_url", DEFAULT_WORKER_URL) ?: DEFAULT_WORKER_URL
+        val rawWorker = prefs.getString("worker_url", DEFAULT_WORKER_URL) ?: DEFAULT_WORKER_URL
+        val workerUrl = if (rawWorker.isBlank() || rawWorker.contains("fuyadarman")) {
+            prefs.edit().putString("worker_url", DEFAULT_WORKER_URL).apply()
+            DEFAULT_WORKER_URL
+        } else {
+            rawWorker
+        }
 
         val isConnected = token.isNotBlank()
         _authState.value = GitHubAuthState(
@@ -233,33 +239,84 @@ class GitHubAuthManager(private val context: Context) {
                     .apply()
             }
 
-            // 2. Fetch user repositories (up to 100 recent)
-            val reposRequest = Request.Builder()
-                .url("https://api.github.com/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator,organization_member")
-                .header("Authorization", "Bearer $token")
-                .header("Accept", "application/vnd.github.v3+json")
-                .build()
-
-            val reposRes = httpClient.newCall(reposRequest).execute()
-            val reposBody = reposRes.body?.string().orEmpty()
+            // 2. Fetch user repositories (public + private + orgs)
             val reposList = mutableListOf<GitHubRepoItem>()
+            val seenRepos = mutableSetOf<String>()
 
-            if (reposRes.isSuccessful && reposBody.isNotBlank()) {
-                val jsonArr = JSONArray(reposBody)
-                for (i in 0 until jsonArr.length()) {
-                    val obj = jsonArr.optJSONObject(i) ?: continue
-                    reposList.add(
-                        GitHubRepoItem(
-                            name = obj.optString("name", ""),
-                            fullName = obj.optString("full_name", ""),
-                            description = obj.optString("description", ""),
-                            isPrivate = obj.optBoolean("private", false),
-                            defaultBranch = obj.optString("default_branch", "main"),
-                            starsCount = obj.optInt("stargazers_count", 0),
-                            updatedAt = obj.optString("updated_at", "")
-                        )
+            fun addRepoFromJson(obj: JSONObject) {
+                val full = obj.optString("full_name", "")
+                if (full.isBlank() || seenRepos.contains(full.lowercase())) return
+                seenRepos.add(full.lowercase())
+                reposList.add(
+                    GitHubRepoItem(
+                        name = obj.optString("name", full),
+                        fullName = full,
+                        description = obj.optString("description", ""),
+                        isPrivate = obj.optBoolean("private", false),
+                        defaultBranch = obj.optString("default_branch", "main"),
+                        starsCount = obj.optInt("stargazers_count", 0),
+                        updatedAt = obj.optString("updated_at", "")
                     )
+                )
+            }
+
+            try {
+                val reposRequest = Request.Builder()
+                    .url("https://api.github.com/user/repos?visibility=all&per_page=100&sort=updated&affiliation=owner,collaborator,organization_member")
+                    .header("Authorization", "Bearer $token")
+                    .header("Accept", "application/vnd.github.v3+json")
+                    .build()
+                val reposRes = httpClient.newCall(reposRequest).execute()
+                val reposBody = reposRes.body?.string().orEmpty()
+                if (reposRes.isSuccessful && reposBody.isNotBlank()) {
+                    val jsonArr = JSONArray(reposBody)
+                    for (i in 0 until jsonArr.length()) {
+                        jsonArr.optJSONObject(i)?.let { addRepoFromJson(it) }
+                    }
                 }
+            } catch (e: Exception) {
+                Log.w(TAG, "Error fetching user/repos: ${e.message}")
+            }
+
+            // Also fetch repositories from GitHub App installations (specifically for GitHub Apps access to private repos)
+            try {
+                val instRequest = Request.Builder()
+                    .url("https://api.github.com/user/installations")
+                    .header("Authorization", "Bearer $token")
+                    .header("Accept", "application/vnd.github.v3+json")
+                    .build()
+                val instRes = httpClient.newCall(instRequest).execute()
+                val instBody = instRes.body?.string().orEmpty()
+                if (instRes.isSuccessful && instBody.isNotBlank()) {
+                    val instJson = JSONObject(instBody)
+                    val installations = instJson.optJSONArray("installations")
+                    if (installations != null) {
+                        for (i in 0 until installations.length()) {
+                            val inst = installations.optJSONObject(i) ?: continue
+                            val instId = inst.optLong("id", 0L)
+                            if (instId > 0) {
+                                val instReposReq = Request.Builder()
+                                    .url("https://api.github.com/user/installations/$instId/repositories?per_page=100")
+                                    .header("Authorization", "Bearer $token")
+                                    .header("Accept", "application/vnd.github.v3+json")
+                                    .build()
+                                val instReposRes = httpClient.newCall(instReposReq).execute()
+                                val instReposBody = instReposRes.body?.string().orEmpty()
+                                if (instReposRes.isSuccessful && instReposBody.isNotBlank()) {
+                                    val rJson = JSONObject(instReposBody)
+                                    val rArr = rJson.optJSONArray("repositories")
+                                    if (rArr != null) {
+                                        for (j in 0 until rArr.length()) {
+                                            rArr.optJSONObject(j)?.let { addRepoFromJson(it) }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Error fetching installation repos: ${e.message}")
             }
 
             _authState.value = _authState.value.copy(
