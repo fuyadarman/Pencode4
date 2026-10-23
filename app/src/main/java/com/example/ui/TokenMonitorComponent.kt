@@ -51,6 +51,8 @@ fun CollapsibleTokenMonitor(
     metrics: TokenMetrics,
     modifier: Modifier = Modifier
 ) {
+    if (metrics.modelName.isBlank()) return
+
     var isExpanded by remember { mutableStateOf(false) }
 
     Column(

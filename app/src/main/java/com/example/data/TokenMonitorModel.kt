@@ -1,7 +1,7 @@
 package com.example.data
 
 data class TokenMetrics(
-    val modelName: String = "Gemini 2.0 Flash",
+    val modelName: String = "",
     val executionTimeSeconds: Long = 0,
     val isLive: Boolean = false,
     val systemTokens: Int = 2440,

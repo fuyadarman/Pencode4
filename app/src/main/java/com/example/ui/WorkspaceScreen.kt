@@ -285,8 +285,8 @@ fun WorkspaceScreen(
                     ) {
                         IconButton(onClick = { showExplorer = !showExplorer }) {
                             Icon(
-                                imageVector = Icons.Default.Menu,
-                                contentDescription = "Files Explorer",
+                                imageVector = if (showExplorer) Icons.Default.Close else Icons.Default.Menu,
+                                contentDescription = if (showExplorer) "Close Files Explorer" else "Open Files Explorer",
                                 tint = Color(0xFF38BDF8)
                             )
                         }
@@ -430,40 +430,9 @@ fun WorkspaceScreen(
                 .imePadding()
                 .background(com.example.ui.theme.AppTheme.bgApp)
         ) {
-            Row(modifier = Modifier.fillMaxSize()) {
-                // Side Navigation Files Panel Tree-View
-                AnimatedVisibility(
-                    visible = showExplorer,
-                    enter = slideInHorizontally { -it } + fadeIn(),
-                    exit = slideOutHorizontally { -it } + fadeOut()
-                ) {
-                    Row(modifier = Modifier.fillMaxHeight()) {
-                        ExplorerPanel(
-                            files = files,
-                            activeFile = activeFile,
-                            onSelectFile = {
-                                onSelectFile(it)
-                                showExplorer = false
-                            },
-                            onCreateFile = onCreateFile,
-                            onDeleteFile = onDeleteFile,
-                            onRenameFile = onRenameFile,
-                            onMoveFile = onMoveFile,
-                            onImportFiles = onImportFiles,
-                            onDecompileApk = onDecompileApk,
-                            onPush = { showPushDialog = true },
-                            onSearch = { showSearchDialog = true },
-                            modifier = Modifier
-                                .width(280.dp)
-                                .fillMaxHeight()
-                                .background(com.example.ui.theme.AppTheme.bgSurface)
-                        )
-                        VerticalDivider(color = com.example.ui.theme.AppTheme.border)
-                    }
-                }
-
+            Box(modifier = Modifier.fillMaxSize()) {
                 // Workspace Content Display based on selected tab
-                Box(modifier = Modifier.weight(1f)) {
+                Box(modifier = Modifier.fillMaxSize()) {
                     when (currentTab) {
                         WorkspaceTab.CHAT -> {
                             ChatTabContent(
@@ -650,6 +619,60 @@ fun WorkspaceScreen(
                             .align(Alignment.BottomCenter)
                             .padding(bottom = 8.dp)
                     )
+                }
+
+                // Side Navigation Files Panel Tree-View Drawer with backdrop
+                AnimatedVisibility(
+                    visible = showExplorer,
+                    enter = slideInHorizontally { -it } + fadeIn(),
+                    exit = slideOutHorizontally { -it } + fadeOut(),
+                    modifier = Modifier.fillMaxSize().zIndex(100f)
+                ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        // Clickable Dimmed Backdrop: tapping anywhere outside closes the drawer
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.55f))
+                                .clickable { showExplorer = false }
+                        )
+
+                        // Explorer Panel
+                        Row(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .align(Alignment.CenterStart)
+                        ) {
+                            ExplorerPanel(
+                                files = files,
+                                activeFile = activeFile,
+                                onSelectFile = {
+                                    onSelectFile(it)
+                                    showExplorer = false
+                                },
+                                onCreateFile = onCreateFile,
+                                onDeleteFile = onDeleteFile,
+                                onRenameFile = onRenameFile,
+                                onMoveFile = onMoveFile,
+                                onImportFiles = onImportFiles,
+                                onDecompileApk = onDecompileApk,
+                                onPush = { 
+                                    showPushDialog = true 
+                                    showExplorer = false
+                                },
+                                onSearch = { 
+                                    showSearchDialog = true 
+                                    showExplorer = false
+                                },
+                                onClose = { showExplorer = false },
+                                modifier = Modifier
+                                    .width(290.dp)
+                                    .fillMaxHeight()
+                                    .background(com.example.ui.theme.AppTheme.bgSurface)
+                            )
+                            VerticalDivider(color = com.example.ui.theme.AppTheme.border)
+                        }
+                    }
                 }
             }
         }
@@ -2537,12 +2560,12 @@ fun ChatBubble(
                 }
 
             val rawModel = if (isCurrentlyActiveThinking) {
-                currentRunningModelName.ifBlank { message.modelName ?: assistantModelName ?: "Gemini 2.0 Flash" }
+                currentRunningModelName.ifBlank { message.modelName ?: assistantModelName ?: "" }
             } else {
-                message.modelName ?: currentRunningModelName.ifBlank { assistantModelName ?: "Gemini 2.0 Flash" }
+                message.modelName ?: currentRunningModelName.ifBlank { assistantModelName ?: "" }
             }
             val cleanModelName = when {
-                rawModel.isBlank() || rawModel.contains("gemini-3.1", ignoreCase = true) || rawModel == "Gemini Model" -> "Gemini 2.0 Flash"
+                rawModel.isBlank() || rawModel.contains("gemini-3.1", ignoreCase = true) || rawModel == "Gemini Model" || rawModel.contains("Gemini 2.0 Flash", ignoreCase = true) -> ""
                 else -> rawModel
                     .removePrefix("GitHub: ")
                     .removePrefix("github_models:")
@@ -2550,31 +2573,33 @@ fun ChatBubble(
                     .trim()
             }
 
-            val displaySecs = if (message.executionTimeSeconds > 0) message.executionTimeSeconds else (assistantDuration?.removeSuffix("s")?.toLongOrNull() ?: executionElapsedTimeSeconds)
-            val sysTok = if (message.systemTokens > 0) message.systemTokens else if (liveSystemTokens > 0) liveSystemTokens else 2440
-            val usrTok = if (message.userTokens > 0) message.userTokens else if (liveUserTokens > 0) liveUserTokens else maxOf(1, message.content.length / 4)
-            val toolTok = if (message.toolTokens > 0) message.toolTokens else liveToolTokens
-            val histTok = if (message.historyTokens > 0) message.historyTokens else 320
-            val skillTok = if (message.skillTokens > 0) message.skillTokens else toolTok
-            val inTok = if (message.totalInputTokens > 0) message.totalInputTokens else if (liveTotalInputTokens > 0) liveTotalInputTokens else (sysTok + usrTok + histTok + skillTok)
-            val outTok = if (message.totalOutputTokens > 0) message.totalOutputTokens else if (liveTotalOutputTokens > 0) liveTotalOutputTokens else if (!isUser && message.content.isNotBlank()) maxOf(1, message.content.length / 4) else 0
+            if (cleanModelName.isNotBlank()) {
+                val displaySecs = if (message.executionTimeSeconds > 0) message.executionTimeSeconds else (assistantDuration?.removeSuffix("s")?.toLongOrNull() ?: executionElapsedTimeSeconds)
+                val sysTok = if (message.systemTokens > 0) message.systemTokens else if (liveSystemTokens > 0) liveSystemTokens else 2440
+                val usrTok = if (message.userTokens > 0) message.userTokens else if (liveUserTokens > 0) liveUserTokens else maxOf(1, message.content.length / 4)
+                val toolTok = if (message.toolTokens > 0) message.toolTokens else liveToolTokens
+                val histTok = if (message.historyTokens > 0) message.historyTokens else 320
+                val skillTok = if (message.skillTokens > 0) message.skillTokens else toolTok
+                val inTok = if (message.totalInputTokens > 0) message.totalInputTokens else if (liveTotalInputTokens > 0) liveTotalInputTokens else (sysTok + usrTok + histTok + skillTok)
+                val outTok = if (message.totalOutputTokens > 0) message.totalOutputTokens else if (liveTotalOutputTokens > 0) liveTotalOutputTokens else if (!isUser && message.content.isNotBlank()) maxOf(1, message.content.length / 4) else 0
 
-            val displayMetrics = com.example.data.TokenMetrics(
-                modelName = cleanModelName,
-                executionTimeSeconds = displaySecs,
-                isLive = isCurrentlyActiveThinking,
-                systemTokens = sysTok,
-                userTokens = usrTok,
-                historyTokens = histTok,
-                skillTokens = skillTok,
-                totalInputTokens = inTok,
-                totalOutputTokens = outTok
-            )
+                val displayMetrics = com.example.data.TokenMetrics(
+                    modelName = cleanModelName,
+                    executionTimeSeconds = displaySecs,
+                    isLive = isCurrentlyActiveThinking,
+                    systemTokens = sysTok,
+                    userTokens = usrTok,
+                    historyTokens = histTok,
+                    skillTokens = skillTok,
+                    totalInputTokens = inTok,
+                    totalOutputTokens = outTok
+                )
 
-            CollapsibleTokenMonitor(
-                metrics = displayMetrics,
-                modifier = Modifier.padding(top = 4.dp)
-            )
+                CollapsibleTokenMonitor(
+                    metrics = displayMetrics,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
 
             // Message Actions
     Row(
@@ -3640,7 +3665,7 @@ fun PreviewTabContent(
                 // Three-line Hamburger Menu Button with Dropdown
                 Box {
                     Surface(
-                        onClick = { showHamburgerMenu = true },
+                        onClick = { showHamburgerMenu = !showHamburgerMenu },
                         shape = RoundedCornerShape(8.dp),
                         color = Color(0xFF161B22),
                         border = BorderStroke(1.dp, Color(0xFF30363D))
@@ -3650,9 +3675,9 @@ fun PreviewTabContent(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Menu,
-                                contentDescription = "Browser Options Menu",
-                                tint = Color(0xFFE6EDF3),
+                                imageVector = if (showHamburgerMenu) Icons.Default.Close else Icons.Default.Menu,
+                                contentDescription = if (showHamburgerMenu) "Close Menu" else "Browser Options Menu",
+                                tint = if (showHamburgerMenu) Color(0xFF38BDF8) else Color(0xFFE6EDF3),
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -3666,14 +3691,32 @@ fun PreviewTabContent(
                             .border(1.dp, Color(0xFF30363D), RoundedCornerShape(12.dp))
                             .widthIn(min = 230.dp)
                     ) {
-                        // Viewport Mode Switcher
-                        Text(
-                            text = "VIEWPORT SIZE",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF8B949E),
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
-                        )
+                        // Viewport Mode Switcher Header with Close Button
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "VIEWPORT SIZE",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF8B949E)
+                            )
+                            IconButton(
+                                onClick = { showHamburgerMenu = false },
+                                modifier = Modifier.size(20.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Close Menu",
+                                    tint = Color(0xFF8B949E),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        }
                         PreviewViewport.entries.forEach { vp ->
                             DropdownMenuItem(
                                 text = {
@@ -5786,6 +5829,7 @@ fun ExplorerPanel(
     onDecompileApk: (String) -> Unit = {},
     onPush: () -> Unit,
     onSearch: () -> Unit,
+    onClose: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var expandedFolders by remember { mutableStateOf(setOf<String>()) }
@@ -5860,17 +5904,33 @@ fun ExplorerPanel(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                "EXPLORER",
-                color = Color(0xFF8B949E),
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                IconButton(
+                    onClick = onClose,
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Close Explorer",
+                        tint = Color(0xFF38BDF8),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+                Text(
+                    "EXPLORER",
+                    color = Color(0xFF8B949E),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 IconButton(
                     onClick = {

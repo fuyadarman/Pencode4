@@ -27,6 +27,7 @@ import java.util.zip.ZipOutputStream
  */
 class AndroidTerminalEngine(private val appContext: Context) {
 
+    val lightExecutor = LightShellCommandExecutor(appContext)
     private val workingDirMap = mutableMapOf<String, String>()
     private val sessionEnv = mutableMapOf<String, String>()
 
@@ -106,35 +107,59 @@ class AndroidTerminalEngine(private val appContext: Context) {
                 trimmed.contains("||") ||
                 trimmed.contains(";") ||
                 trimmed.contains("|") ||
-                trimmed.contains(">") ||
+                (trimmed.contains(">") && !trimmed.contains(">>")) ||
                 trimmed.contains("<")
+
+        val fullEnv = sessionEnv + mapOf("PWD" to workingDir.canonicalPath, "PATH" to fullPathString)
+
+        // 6. Direct execution of light/standard shell commands via pure-Kotlin engine
+        // Completely bypasses SELinux sandbox blocks, missing /system/bin binaries, and OEM toybox limitations
+        if (lightExecutor.canHandle(trimmed) && !trimmed.contains("|") && !trimmed.contains("&&") && !trimmed.contains("||")) {
+            val lightResult = lightExecutor.execute(workingDir, projectDir, trimmed, fullEnv)
+            if (lightResult != null) {
+                if (lightExecutor.isModifyingCommand(trimmed) || isModifyingCommand(trimmed)) {
+                    onFileModified()
+                }
+                return@withContext lightResult
+            }
+        }
 
         // Format command for non-blocking execution on Android
         val sanitizedCommand = sanitizeAndroidCommand(trimmed)
 
-        // 6. Execute via Android native /system/bin/sh
+        // 7. Execute via Android native /system/bin/sh
         val nativeResult = executeNativeShell(workingDir, sanitizedCommand)
 
-        // 7. If native shell succeeded or produced valid output, return it
+        // 8. If native shell succeeded with non-empty output, return it
         if (nativeResult.isSuccess) {
             val output = nativeResult.getOrNull() ?: ""
-            if (isModifyingCommand(trimmed)) {
-                onFileModified()
-            }
-            return@withContext output
-        }
-
-        // 8. If native shell command was not found or failed, try pure-Kotlin fallback handlers
-        val args = splitCommand(trimmed)
-        if (args.isNotEmpty() && !hasShellOperators) {
-            val cmd = args[0]
-            val fallbackRes = executeKotlinFallback(workingDir, projectDir, cmd, args)
-            if (fallbackRes != null) {
+            if (output.isNotEmpty()) {
                 if (isModifyingCommand(trimmed)) {
                     onFileModified()
                 }
-                return@withContext fallbackRes
+                return@withContext output
             }
+        }
+
+        // 9. If native shell returned empty output, failed, or binary wasn't found, try pure-Kotlin executor
+        val fallbackRes = lightExecutor.execute(workingDir, projectDir, trimmed, fullEnv)
+            ?: run {
+                val args = splitCommand(trimmed)
+                if (args.isNotEmpty()) {
+                    executeKotlinFallback(workingDir, projectDir, args[0], args)
+                } else null
+            }
+
+        if (fallbackRes != null) {
+            if (isModifyingCommand(trimmed) || lightExecutor.isModifyingCommand(trimmed)) {
+                onFileModified()
+            }
+            return@withContext fallbackRes
+        }
+
+        if (nativeResult.isSuccess) {
+            val output = nativeResult.getOrNull() ?: ""
+            return@withContext output
         }
 
         // Return native error or standard exit message
@@ -254,6 +279,8 @@ class AndroidTerminalEngine(private val appContext: Context) {
                 // If grep returned 1, it means no matches found
                 if (command.contains("grep") && exitCode == 1 && trimmedOut.isEmpty()) {
                     Result.success("(No matches found)")
+                } else if (trimmedOut.contains("not found") || trimmedOut.contains("inaccessible") || trimmedOut.contains("Permission denied")) {
+                    Result.failure(Exception(trimmedOut))
                 } else if (trimmedOut.isNotEmpty()) {
                     Result.success(trimmedOut)
                 } else {

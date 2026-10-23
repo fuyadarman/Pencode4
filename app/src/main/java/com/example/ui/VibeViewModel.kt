@@ -3354,13 +3354,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 executeAndTrackCommandWorkflow(projectDir, command, repo, token, branch)
             } else {
                 val result = repository.executeCommand(project.name, command)
-                if (result.contains("inaccessible or not found") || result.contains("not found")) {
+                val isMissingBinary = result.contains("inaccessible or not found") || result.contains("not found")
+                val credCheck = gitHubCommandWorkflowManager.checkGitHubCredentials(repo, token)
+                if (isMissingBinary && credCheck.isValid) {
                     _terminalOutput.value += "[Local shell missing binary] Intercepting command and routing to GitHub Actions...\n"
-                    val credCheck = gitHubCommandWorkflowManager.checkGitHubCredentials(repo, token)
-                    if (!credCheck.isValid) {
-                        _terminalOutput.value += "\n${credCheck.promptMessage}\n\n$"
-                        return@launch
-                    }
                     executeAndTrackCommandWorkflow(projectDir, command, repo, token, branch)
                 } else {
                     val resultStr = if (result.isEmpty()) "(no output)" else result
