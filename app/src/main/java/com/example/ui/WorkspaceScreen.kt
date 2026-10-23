@@ -2537,15 +2537,18 @@ fun ChatBubble(
                 }
 
             val rawModel = if (isCurrentlyActiveThinking) {
-                currentRunningModelName.ifBlank { message.modelName ?: assistantModelName ?: "gemini-3.1-flash-lite" }
+                currentRunningModelName.ifBlank { message.modelName ?: assistantModelName ?: "Gemini 2.0 Flash" }
             } else {
-                message.modelName ?: currentRunningModelName.ifBlank { assistantModelName ?: "gemini-3.1-flash-lite" }
+                message.modelName ?: currentRunningModelName.ifBlank { assistantModelName ?: "Gemini 2.0 Flash" }
             }
-            val cleanModelName = rawModel
-                .removePrefix("GitHub: ")
-                .removePrefix("github_models:")
-                .removePrefix("github:")
-                .trim()
+            val cleanModelName = when {
+                rawModel.isBlank() || rawModel.contains("gemini-3.1", ignoreCase = true) || rawModel == "Gemini Model" -> "Gemini 2.0 Flash"
+                else -> rawModel
+                    .removePrefix("GitHub: ")
+                    .removePrefix("github_models:")
+                    .removePrefix("github:")
+                    .trim()
+            }
 
             val displaySecs = if (message.executionTimeSeconds > 0) message.executionTimeSeconds else (assistantDuration?.removeSuffix("s")?.toLongOrNull() ?: executionElapsedTimeSeconds)
             val sysTok = if (message.systemTokens > 0) message.systemTokens else if (liveSystemTokens > 0) liveSystemTokens else 2440
@@ -2554,7 +2557,7 @@ fun ChatBubble(
             val histTok = if (message.historyTokens > 0) message.historyTokens else 320
             val skillTok = if (message.skillTokens > 0) message.skillTokens else toolTok
             val inTok = if (message.totalInputTokens > 0) message.totalInputTokens else if (liveTotalInputTokens > 0) liveTotalInputTokens else (sysTok + usrTok + histTok + skillTok)
-            val outTok = if (message.totalOutputTokens > 0) message.totalOutputTokens else liveTotalOutputTokens
+            val outTok = if (message.totalOutputTokens > 0) message.totalOutputTokens else if (liveTotalOutputTokens > 0) liveTotalOutputTokens else if (!isUser && message.content.isNotBlank()) maxOf(1, message.content.length / 4) else 0
 
             val displayMetrics = com.example.data.TokenMetrics(
                 modelName = cleanModelName,
@@ -7228,12 +7231,19 @@ fun PushProjectDialog(
     onSaveBranch: (String) -> Unit = {},
     onPush: (String, String, String, Boolean) -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val authManager = remember { com.example.auth.github.GitHubAuthManager.getInstance(context) }
+    val authState by authManager.authState.collectAsState()
+    val isConnected = authState.isConnected && authState.accessToken.isNotBlank()
+
     var repo by remember { mutableStateOf(initialRepo) }
     var token by remember { mutableStateOf(initialToken) }
     var branch by remember { mutableStateOf(initialBranch) }
     var forcePush by remember { mutableStateOf(false) }
     var showToken by remember { mutableStateOf(false) }
+    var showRepoPicker by remember { mutableStateOf(false) }
 
+    val activeToken = if (isConnected) authState.accessToken else token
     val isPushing = gitProgress.isNotEmpty() && !gitProgress.contains("complete", ignoreCase = true) && !gitProgress.contains("failed", ignoreCase = true) && !gitProgress.contains("error", ignoreCase = true)
 
     Dialog(onDismissRequest = { if (!isPushing) onDismiss() }) {
@@ -7289,7 +7299,55 @@ fun PushProjectDialog(
 
                 HorizontalDivider(color = Color(0xFF21262D), thickness = 1.dp)
 
-                // Repository Field
+                // Connected Account Badge
+                if (isConnected) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFF1F242C),
+                        border = BorderStroke(1.dp, Color(0xFF238636).copy(alpha = 0.4f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .background(Color(0xFF3FB950), CircleShape)
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Connected GitHub Account",
+                                    color = Color(0xFF8B949E),
+                                    fontSize = 11.sp
+                                )
+                                Text(
+                                    text = "@${authState.username.ifBlank { "User" }}",
+                                    color = Color(0xFFF0F6FC),
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = Color(0xFF238636).copy(alpha = 0.2f),
+                                border = BorderStroke(1.dp, Color(0xFF238636).copy(alpha = 0.5f))
+                            ) {
+                                Text(
+                                    text = "Authenticated",
+                                    color = Color(0xFF3FB950),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Repository Field with Selector Button
                 OutlinedTextField(
                     value = repo,
                     onValueChange = { 
@@ -7306,6 +7364,28 @@ fun PushProjectDialog(
                             modifier = Modifier.size(18.dp)
                         )
                     },
+                    trailingIcon = {
+                        if (isConnected) {
+                            FilledTonalButton(
+                                onClick = { showRepoPicker = true },
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = Color(0xFF21262D),
+                                    contentColor = Color(0xFF58A6FF)
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                modifier = Modifier.padding(end = 6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.FormatListBulleted,
+                                    contentDescription = "Select Repository",
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Select", fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color(0xFFE6EDF3),
@@ -7321,7 +7401,7 @@ fun PushProjectDialog(
                     shape = RoundedCornerShape(10.dp)
                 )
 
-                // Helper Card in English
+                // Helper Card
                 Surface(
                     shape = RoundedCornerShape(10.dp),
                     color = Color(0xFF1F242C),
@@ -7335,7 +7415,11 @@ fun PushProjectDialog(
                     ) {
                         Text("💡", fontSize = 13.sp)
                         Text(
-                            text = "You can enter just the repository name (e.g., 'my-app'). The owner username will be automatically retrieved from your access token.",
+                            text = if (isConnected) {
+                                "Tap 'Select' to pick any of your repositories, or enter a repository name. Your connected GitHub account will be used automatically."
+                            } else {
+                                "You can enter just the repository name (e.g., 'my-app'). The owner username will be automatically retrieved from your access token."
+                            },
                             color = Color(0xFF79C0FF),
                             fontSize = 11.sp,
                             lineHeight = 15.sp
@@ -7343,48 +7427,50 @@ fun PushProjectDialog(
                     }
                 }
 
-                // GitHub Token Field with Show/Hide toggle
-                OutlinedTextField(
-                    value = token,
-                    onValueChange = { 
-                        token = it
-                        onSaveToken(it)
-                    },
-                    label = { Text("GitHub Access Token (PAT)", fontSize = 12.sp) },
-                    placeholder = { Text("ghp_xxxxxxxxxxxxxxxxxxxx", color = Color(0xFF484F58)) },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Default.VpnKey,
-                            contentDescription = null,
-                            tint = Color(0xFFD29922),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    },
-                    trailingIcon = {
-                        IconButton(onClick = { showToken = !showToken }) {
+                // GitHub Token Field (Only shown if NOT connected via GitHub OAuth)
+                if (!isConnected) {
+                    OutlinedTextField(
+                        value = token,
+                        onValueChange = { 
+                            token = it
+                            onSaveToken(it)
+                        },
+                        label = { Text("GitHub Access Token (PAT)", fontSize = 12.sp) },
+                        placeholder = { Text("ghp_xxxxxxxxxxxxxxxxxxxx", color = Color(0xFF484F58)) },
+                        leadingIcon = {
                             Icon(
-                                imageVector = if (showToken) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                contentDescription = if (showToken) "Hide Token" else "Show Token",
-                                tint = Color(0xFF8B949E),
+                                imageVector = Icons.Default.VpnKey,
+                                contentDescription = null,
+                                tint = Color(0xFFD29922),
                                 modifier = Modifier.size(18.dp)
                             )
-                        }
-                    },
-                    visualTransformation = if (showToken) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color(0xFFE6EDF3),
-                        focusedBorderColor = Color(0xFF58A6FF),
-                        unfocusedBorderColor = Color(0xFF30363D),
-                        focusedLabelColor = Color(0xFF58A6FF),
-                        unfocusedLabelColor = Color(0xFF8B949E),
-                        focusedContainerColor = Color(0xFF0D1117),
-                        unfocusedContainerColor = Color(0xFF0D1117)
-                    ),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
-                )
+                        },
+                        trailingIcon = {
+                            IconButton(onClick = { showToken = !showToken }) {
+                                Icon(
+                                    imageVector = if (showToken) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    contentDescription = if (showToken) "Hide Token" else "Show Token",
+                                    tint = Color(0xFF8B949E),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        },
+                        visualTransformation = if (showToken) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color(0xFFE6EDF3),
+                            focusedBorderColor = Color(0xFF58A6FF),
+                            unfocusedBorderColor = Color(0xFF30363D),
+                            focusedLabelColor = Color(0xFF58A6FF),
+                            unfocusedLabelColor = Color(0xFF8B949E),
+                            focusedContainerColor = Color(0xFF0D1117),
+                            unfocusedContainerColor = Color(0xFF0D1117)
+                        ),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp)
+                    )
+                }
 
                 // Branch Field
                 OutlinedTextField(
@@ -7541,8 +7627,8 @@ fun PushProjectDialog(
                     Spacer(modifier = Modifier.width(10.dp))
                     Button(
                         onClick = {
-                            if (repo.isNotBlank() && token.isNotBlank()) {
-                                onPush(repo, token, branch.ifBlank { "main" }, forcePush)
+                            if (repo.isNotBlank() && activeToken.isNotBlank()) {
+                                onPush(repo, activeToken, branch.ifBlank { "main" }, forcePush)
                             }
                         },
                         colors = ButtonDefaults.buttonColors(
@@ -7552,7 +7638,7 @@ fun PushProjectDialog(
                             disabledContentColor = Color(0xFF484F58)
                         ),
                         shape = RoundedCornerShape(8.dp),
-                        enabled = repo.isNotBlank() && token.isNotBlank() && !isPushing
+                        enabled = repo.isNotBlank() && activeToken.isNotBlank() && !isPushing
                     ) {
                         Icon(
                             imageVector = Icons.Default.CloudUpload,
@@ -7565,6 +7651,23 @@ fun PushProjectDialog(
                 }
             }
         }
+    }
+
+    if (showRepoPicker) {
+        com.example.ui.build.GitHubRepoSelectorDialog(
+            isOpen = showRepoPicker,
+            authManager = authManager,
+            onDismiss = { showRepoPicker = false },
+            onRepoSelected = { repoName, selectedBranch ->
+                repo = repoName
+                if (selectedBranch.isNotBlank()) {
+                    branch = selectedBranch
+                    onSaveBranch(selectedBranch)
+                }
+                onSaveRepo(repoName)
+                showRepoPicker = false
+            }
+        )
     }
 }
 

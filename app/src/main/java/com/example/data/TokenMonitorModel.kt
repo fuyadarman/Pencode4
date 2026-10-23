@@ -1,7 +1,7 @@
 package com.example.data
 
 data class TokenMetrics(
-    val modelName: String = "gemini-3.1-flash-lite",
+    val modelName: String = "Gemini 2.0 Flash",
     val executionTimeSeconds: Long = 0,
     val isLive: Boolean = false,
     val systemTokens: Int = 2440,
@@ -13,4 +13,7 @@ data class TokenMetrics(
 ) {
     val calculatedTotalInput: Int
         get() = if (totalInputTokens > 0) totalInputTokens else (systemTokens + userTokens + historyTokens + skillTokens)
+
+    val calculatedTotalTokens: Int
+        get() = calculatedTotalInput + totalOutputTokens
 }

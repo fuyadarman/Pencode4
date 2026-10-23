@@ -77,7 +77,7 @@ fun CollapsibleTokenMonitor(
                         modifier = Modifier.size(13.dp)
                     )
                     Text(
-                        text = "${metrics.modelName.take(18)}${if (metrics.modelName.length > 18) "..." else ""} • ${NumberFormat.getInstance().format(metrics.calculatedTotalInput)} tokens",
+                        text = "${metrics.modelName.take(20)}${if (metrics.modelName.length > 20) "..." else ""} • ${NumberFormat.getInstance().format(metrics.calculatedTotalTokens)} tokens",
                         color = Color(0xFF94A3B8),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium

@@ -125,8 +125,8 @@ fun ProfessionalChatBar(
 
     // Outer Chat Bar Container matching user screenshot with zero extra items outside
     Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        modifier = modifier.fillMaxWidth().heightIn(max = 220.dp),
+        shape = RoundedCornerShape(18.dp),
         color = Color(0xFF1E2028),
         border = BorderStroke(1.dp, Color(0xFF2E3342)),
         tonalElevation = 2.dp
@@ -134,7 +134,7 @@ fun ProfessionalChatBar(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp)
+                .padding(horizontal = 12.dp, vertical = 6.dp)
         ) {
             // Attached/tagged chips row inside the chatbar container
             if (attachedFiles.isNotEmpty() || taggedFiles.isNotEmpty() || taggedSkills.isNotEmpty()) {
@@ -297,10 +297,10 @@ fun ProfessionalChatBar(
                     .fillMaxWidth()
                     .padding(0.dp),
                 minLines = 1,
-                maxLines = 6
+                maxLines = 4
             )
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             // Bottom action row: [+] [ [ ] Plan ] [ ::: Free ⌄ ]          [Mic] [↑]
             Row(
