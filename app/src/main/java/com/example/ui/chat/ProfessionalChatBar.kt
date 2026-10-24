@@ -405,114 +405,16 @@ fun ProfessionalChatBar(
                             )
                         }
                     }
-
-                    // 2. Plan Toggle Button [ [ ] Plan ] with checkbox outline
-                    Surface(
-                        onClick = { onTogglePlanMode(!isPlanModeActive) },
-                        shape = RoundedCornerShape(8.dp),
-                        color = if (isPlanModeActive) Color(0xFF333846) else Color(0xFF262933),
-                        border = BorderStroke(
-                            1.dp,
-                            if (isPlanModeActive) Color(0xFFF59E0B) else Color(0xFF373C4D)
-                        )
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(13.dp)
-                                    .clip(RoundedCornerShape(3.dp))
-                                    .background(if (isPlanModeActive) Color(0xFFF59E0B) else Color.Transparent)
-                                    .border(
-                                        1.2.dp,
-                                        if (isPlanModeActive) Color(0xFFF59E0B) else Color(0xFF8E95A5),
-                                        RoundedCornerShape(3.dp)
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (isPlanModeActive) {
-                                    Icon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = null,
-                                        tint = Color.Black,
-                                        modifier = Modifier.size(10.dp)
-                                    )
-                                }
-                            }
-                            Text(
-                                text = "Plan",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = if (isPlanModeActive) Color(0xFFF59E0B) else Color(0xFFE2E8F0)
-                            )
-                        }
-                    }
-
-                    // 3. Thinking Effort Button [ 🧠 Normal ⌄ ]
-                    Surface(
-                        onClick = { showReasoningEffortDialog = true },
-                        shape = RoundedCornerShape(8.dp),
-                        color = Color(0xFF262933),
-                        border = BorderStroke(1.dp, Color(0xFF373C4D))
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Psychology,
-                                contentDescription = "Thinking Effort",
-                                tint = Color(0xFFC9D1D9),
-                                modifier = Modifier.size(15.dp)
-                            )
-                            Text(
-                                text = currentReasoningEffort.name.lowercase().replaceFirstChar { it.uppercase() },
-                                fontSize = 12.5.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color(0xFFE2E8F0)
-                            )
-                            Icon(
-                                imageVector = Icons.Default.KeyboardArrowDown,
-                                contentDescription = "Select Effort",
-                                tint = Color(0xFF8E95A5),
-                                modifier = Modifier.size(14.dp)
-                            )
-                        }
-                    }
-
-                    // 4. MCP Button [ 🔀 MCP ]
-                    Surface(
-                        onClick = onOpenSelectMcpDialog,
-                        shape = RoundedCornerShape(8.dp),
-                        color = Color(0xFF262933),
-                        border = BorderStroke(
-                            1.dp,
-                            if (selectedMcpServerIds.isNotEmpty()) com.example.ui.theme.AppTheme.accentBlue else Color(0xFF373C4D)
-                        )
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Hub,
-                                contentDescription = "MCP Servers",
-                                tint = if (selectedMcpServerIds.isNotEmpty()) com.example.ui.theme.AppTheme.accentBlue else Color(0xFF8E95A5),
-                                modifier = Modifier.size(13.dp)
-                            )
-                            Text(
-                                text = if (selectedMcpServerIds.isNotEmpty()) "MCP (${selectedMcpServerIds.size})" else "MCP",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = if (selectedMcpServerIds.isNotEmpty()) com.example.ui.theme.AppTheme.accentBlue else Color(0xFFE2E8F0)
-                            )
-                        }
-                    }
+                    // 2. Tune Controls Button (Houses Plan, Thinking & Reasoning, and MCP)
+                    ChatTuneControlsButton(
+                        isPlanModeActive = isPlanModeActive,
+                        onTogglePlanMode = onTogglePlanMode,
+                        currentReasoningEffort = currentReasoningEffort,
+                        onSelectReasoningEffort = onSelectReasoningEffort,
+                        selectedMcpServerIds = selectedMcpServerIds,
+                        onOpenSelectMcpDialog = onOpenSelectMcpDialog,
+                        onOpenReasoningDialog = { showReasoningEffortDialog = true }
+                    )
                 }
 
                 // Right action controls: [Mic] [↑]
