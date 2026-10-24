@@ -2677,6 +2677,14 @@ button {
 
             val cleanRepo = repo.trim().removePrefix("https://github.com/").removePrefix("http://github.com/").removeSuffix(".git")
             val parts = cleanRepo.split("/").filter { it.isNotBlank() }
+
+            val cleanToken = token.trim()
+                .removePrefix("Bearer ")
+                .removePrefix("bearer ")
+                .removePrefix("token ")
+                .removePrefix("Token ")
+                .trim()
+            var activeAuthHeader = "Bearer $cleanToken"
             
             var owner = ""
             var repoName = ""
@@ -2685,11 +2693,24 @@ button {
                 progressCallback("Fetching GitHub username from token...")
                 val userRequest = Request.Builder()
                     .url("https://api.github.com/user")
-                    .header("Authorization", "token ${token.trim()}")
+                    .header("Authorization", activeAuthHeader)
                     .header("Accept", "application/vnd.github.v3+json")
                     .get()
                     .build()
-                val userResponse = client.newCall(userRequest).execute()
+                var userResponse = client.newCall(userRequest).execute()
+                if (!userResponse.isSuccessful && userResponse.code == 401) {
+                    val fallbackReq = Request.Builder()
+                        .url("https://api.github.com/user")
+                        .header("Authorization", "token $cleanToken")
+                        .header("Accept", "application/vnd.github.v3+json")
+                        .get()
+                        .build()
+                    val fb = client.newCall(fallbackReq).execute()
+                    if (fb.isSuccessful) {
+                        userResponse = fb
+                        activeAuthHeader = "token $cleanToken"
+                    }
+                }
                 if (userResponse.isSuccessful) {
                     val bodyStr = userResponse.body?.string() ?: ""
                     val userMap = moshi.adapter(Map::class.java).fromJson(bodyStr) as? Map<*, *>
@@ -2719,14 +2740,27 @@ button {
             // 1.5 Verify repository existence & get metadata
             progressCallback("Verifying repository with GitHub...")
             val repoUrl = "https://api.github.com/repos/$owner/$repoName"
-            val repoRequest = Request.Builder()
+            var repoRequest = Request.Builder()
                 .url(repoUrl)
-                .header("Authorization", "token ${token.trim()}")
+                .header("Authorization", activeAuthHeader)
                 .header("Accept", "application/vnd.github.v3+json")
                 .get()
                 .build()
             
-            val repoResponse = client.newCall(repoRequest).execute()
+            var repoResponse = client.newCall(repoRequest).execute()
+            if (!repoResponse.isSuccessful && repoResponse.code == 401 && activeAuthHeader.startsWith("Bearer")) {
+                val fallbackRequest = Request.Builder()
+                    .url(repoUrl)
+                    .header("Authorization", "token $cleanToken")
+                    .header("Accept", "application/vnd.github.v3+json")
+                    .get()
+                    .build()
+                val fallbackResp = client.newCall(fallbackRequest).execute()
+                if (fallbackResp.isSuccessful) {
+                    repoResponse = fallbackResp
+                    activeAuthHeader = "token $cleanToken"
+                }
+            }
             if (!repoResponse.isSuccessful) {
                 val code = repoResponse.code
                 val bodyStr = repoResponse.body?.string() ?: ""
@@ -2742,7 +2776,7 @@ button {
             val refUrl = "https://api.github.com/repos/$owner/$repoName/git/refs/heads/$branch"
             val refRequest = Request.Builder()
                 .url(refUrl)
-                .header("Authorization", "token ${token.trim()}")
+                .header("Authorization", activeAuthHeader)
                 .header("Accept", "application/vnd.github.v3+json")
                 .get()
                 .build()
@@ -2757,7 +2791,7 @@ button {
                 val defaultRefUrl = "https://api.github.com/repos/$owner/$repoName/git/refs/heads/$defaultBranch"
                 val defaultRefRequest = Request.Builder()
                     .url(defaultRefUrl)
-                    .header("Authorization", "token ${token.trim()}")
+                    .header("Authorization", activeAuthHeader)
                     .header("Accept", "application/vnd.github.v3+json")
                     .get()
                     .build()
@@ -2780,7 +2814,7 @@ button {
                         val createRefBodyJson = moshi.adapter(Map::class.java).toJson(createRefBodyMap)
                         val createRefRequest = Request.Builder()
                             .url(createRefUrl)
-                            .header("Authorization", "token ${token.trim()}")
+                            .header("Authorization", activeAuthHeader)
                             .header("Accept", "application/vnd.github.v3+json")
                             .post(createRefBodyJson.toRequestBody(mediaType))
                             .build()
@@ -2807,7 +2841,7 @@ button {
                     val initBodyJson = moshi.adapter(Map::class.java).toJson(initBodyMap)
                     val initRequest = Request.Builder()
                         .url(initUrl)
-                        .header("Authorization", "token ${token.trim()}")
+                        .header("Authorization", activeAuthHeader)
                         .header("Accept", "application/vnd.github.v3+json")
                         .put(initBodyJson.toRequestBody(mediaType))
                         .build()
@@ -2835,7 +2869,7 @@ button {
                     val commitUrl = "https://api.github.com/repos/$owner/$repoName/git/commits/$lastCommitSha"
                     val commitReq = Request.Builder()
                         .url(commitUrl)
-                        .header("Authorization", "token ${token.trim()}")
+                        .header("Authorization", activeAuthHeader)
                         .header("Accept", "application/vnd.github.v3+json")
                         .build()
                     val commitResp = client.newCall(commitReq).execute()
@@ -2870,7 +2904,7 @@ button {
                         val blobUrl = "https://api.github.com/repos/$owner/$repoName/git/blobs"
                         val blobReq = Request.Builder()
                             .url(blobUrl)
-                            .header("Authorization", "token ${token.trim()}")
+                            .header("Authorization", activeAuthHeader)
                             .header("Accept", "application/vnd.github.v3+json")
                             .post(blobBodyJson.toRequestBody(mediaType))
                             .build()
@@ -2932,7 +2966,7 @@ button {
             val treeUrl = "https://api.github.com/repos/$owner/$repoName/git/trees"
             val treeReq = Request.Builder()
                 .url(treeUrl)
-                .header("Authorization", "token ${token.trim()}")
+                .header("Authorization", activeAuthHeader)
                 .header("Accept", "application/vnd.github.v3+json")
                 .post(treeBodyJson.toRequestBody(mediaType))
                 .build()
@@ -2961,7 +2995,7 @@ button {
             val commitUrl = "https://api.github.com/repos/$owner/$repoName/git/commits"
             val commitReq = Request.Builder()
                 .url(commitUrl)
-                .header("Authorization", "token ${token.trim()}")
+                .header("Authorization", activeAuthHeader)
                 .header("Accept", "application/vnd.github.v3+json")
                 .post(commitBodyJson.toRequestBody(mediaType))
                 .build()
@@ -2990,7 +3024,7 @@ button {
                 val updateRefBodyJson = moshi.adapter(Map::class.java).toJson(updateRefBodyMap)
                 updateRefReq = Request.Builder()
                     .url(updateRefUrl)
-                    .header("Authorization", "token ${token.trim()}")
+                    .header("Authorization", activeAuthHeader)
                     .header("Accept", "application/vnd.github.v3+json")
                     .post(updateRefBodyJson.toRequestBody(mediaType))
                     .build()
@@ -3002,7 +3036,7 @@ button {
                 val updateRefBodyJson = moshi.adapter(Map::class.java).toJson(updateRefBodyMap)
                 updateRefReq = Request.Builder()
                     .url(updateRefUrl)
-                    .header("Authorization", "token ${token.trim()}")
+                    .header("Authorization", activeAuthHeader)
                     .header("Accept", "application/vnd.github.v3+json")
                     .patch(updateRefBodyJson.toRequestBody(mediaType))
                     .build()

@@ -7390,18 +7390,40 @@ fun PushProjectDialog(
                                     fontWeight = FontWeight.SemiBold
                                 )
                             }
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = Color(0xFF238636).copy(alpha = 0.2f),
-                                border = BorderStroke(1.dp, Color(0xFF238636).copy(alpha = 0.5f))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                Text(
-                                    text = "Authenticated",
-                                    color = Color(0xFF3FB950),
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                )
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = Color(0xFF238636).copy(alpha = 0.2f),
+                                    border = BorderStroke(1.dp, Color(0xFF238636).copy(alpha = 0.5f))
+                                ) {
+                                    Text(
+                                        text = "Authenticated",
+                                        color = Color(0xFF3FB950),
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                    )
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = Color(0xFF21262D),
+                                    border = BorderStroke(1.dp, Color(0xFF30363D)),
+                                    modifier = Modifier.clickable {
+                                        authManager.disconnect()
+                                        showToken = true
+                                    }
+                                ) {
+                                    Text(
+                                        text = "Change",
+                                        color = Color(0xFF58A6FF),
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -7636,38 +7658,57 @@ fun PushProjectDialog(
                         color = containerBg,
                         border = BorderStroke(1.dp, indicatorColor.copy(alpha = 0.4f))
                     ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            if (isSuccess) {
-                                Icon(
-                                    imageVector = Icons.Default.CheckCircle,
-                                    contentDescription = "Success",
-                                    tint = indicatorColor,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            } else if (isFailure) {
-                                Icon(
-                                    imageVector = Icons.Default.Error,
-                                    contentDescription = "Failure",
-                                    tint = indicatorColor,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            } else {
-                                CircularProgressIndicator(
-                                    color = indicatorColor,
-                                    modifier = Modifier.size(18.dp),
-                                    strokeWidth = 2.dp
+                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                if (isSuccess) {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = "Success",
+                                        tint = indicatorColor,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                } else if (isFailure) {
+                                    Icon(
+                                        imageVector = Icons.Default.Error,
+                                        contentDescription = "Failure",
+                                        tint = indicatorColor,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                } else {
+                                    CircularProgressIndicator(
+                                        color = indicatorColor,
+                                        modifier = Modifier.size(18.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                }
+                                Text(
+                                    text = gitProgress,
+                                    color = Color(0xFFF0F6FC),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.weight(1f)
                                 )
                             }
-                            Text(
-                                text = gitProgress,
-                                color = Color(0xFFF0F6FC),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium
-                            )
+                            if (isFailure && (gitProgress.contains("401") || gitProgress.contains("Bad credentials", ignoreCase = true))) {
+                                Button(
+                                    onClick = {
+                                        authManager.disconnect()
+                                        token = ""
+                                        showToken = true
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDA3633)),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                    modifier = Modifier.align(Alignment.End)
+                                ) {
+                                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Reset & Enter New Token", fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
+                                }
+                            }
                         }
                     }
                 }
