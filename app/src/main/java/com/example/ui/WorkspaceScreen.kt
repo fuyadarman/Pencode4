@@ -530,6 +530,7 @@ fun WorkspaceScreen(
                             )
                         }
                         WorkspaceTab.ANDROID_BUILD -> {
+                            val buildTabContext = androidx.compose.ui.platform.LocalContext.current
                             AndroidBuildTabContent(
                                 project = project,
                                 githubRepo = githubRepo,
@@ -553,7 +554,10 @@ fun WorkspaceScreen(
                                 onSaveToken = onSaveGithubToken,
                                 onSaveBranch = onSaveGithubBranch,
                                 onTriggerBuild = {
-                                    onPushGitRepo(githubRepo, githubToken, githubBranch, true) { _ -> }
+                                    val effectiveToken = githubToken.ifBlank {
+                                        com.example.auth.github.GitHubAuthManager.getInstance(buildTabContext).authState.value.accessToken
+                                    }
+                                    onPushGitRepo(githubRepo, effectiveToken, githubBranch, true) { _ -> }
                                 },
                                 detectedAndroidBuildErrors = detectedAndroidBuildErrors,
                                 onFixBuildErrors = onFixAndroidBuildErrors
@@ -2395,11 +2399,15 @@ fun ChatBubble(
     val align = if (isUser) Alignment.End else Alignment.Start
     val isDark = com.example.ui.theme.AppTheme.isDark
     val bg = if (isUser) {
-        if (isDark) Color(0xFF21262D) else Color(0xFFEAEFF5)
+        if (isDark) Color(0xFF262C36) else Color(0xFFE2E8F0)
     } else {
         if (isDark) Color(0xFF161B22) else Color(0xFFFFFFFF)
     }
-    val border = if (isDark) Color(0xFF30363D) else Color(0xFFD0D7DE)
+    val border = if (isUser) {
+        if (isDark) Color(0xFF3B4350) else Color(0xFFCBD5E1)
+    } else {
+        if (isDark) Color(0xFF30363D) else Color(0xFFD0D7DE)
+    }
     val context = androidx.compose.ui.platform.LocalContext.current
     val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
 
@@ -2436,15 +2444,14 @@ fun ChatBubble(
             val chatMessageContentToCopy = if (isUser) userDisplayText else message.content
             Card(
                 shape = RoundedCornerShape(
-                    topStart = 18.dp,
-                    topEnd = 18.dp,
-                    bottomStart = if (isUser) 18.dp else 6.dp,
-                    bottomEnd = if (isUser) 6.dp else 18.dp
+                    topStart = 16.dp,
+                    topEnd = 16.dp,
+                    bottomStart = if (isUser) 16.dp else 4.dp,
+                    bottomEnd = if (isUser) 4.dp else 16.dp
                 ),
                 colors = CardDefaults.cardColors(containerColor = bg),
                 border = BorderStroke(1.dp, border),
-                modifier = Modifier
-                    .widthIn(max = 600.dp)
+                modifier = (if (isUser) Modifier.fillMaxWidth(0.55f) else Modifier.widthIn(max = 600.dp))
                     .safeLongPressCopy(
                         textToCopy = { chatMessageContentToCopy },
                         label = "Chat Message",
@@ -2508,6 +2515,15 @@ fun ChatBubble(
                                 }
                             } else {
                                 if (isUser) {
+                                    val userLines = remember(userDisplayText) { userDisplayText.lines() }
+                                    val isLongPrompt = userLines.size > 10
+                                    var isPromptExpanded by remember { mutableStateOf(false) }
+                                    val promptToDisplay = if (isLongPrompt && !isPromptExpanded) {
+                                        userLines.take(10).joinToString("\n")
+                                    } else {
+                                        userDisplayText
+                                    }
+
                                     if (mentionChips.isNotEmpty()) {
                                         Row(
                                             modifier = Modifier
@@ -2521,8 +2537,30 @@ fun ChatBubble(
                                             }
                                         }
                                     }
-                                    if (userDisplayText.isNotBlank()) {
-                                        FormattedMarkdownText(text = userDisplayText)
+                                    if (promptToDisplay.isNotBlank()) {
+                                        FormattedMarkdownText(text = promptToDisplay)
+                                    }
+                                    if (isLongPrompt) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                            modifier = Modifier
+                                                .clickable { isPromptExpanded = !isPromptExpanded }
+                                                .padding(top = 4.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = if (isPromptExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                                contentDescription = if (isPromptExpanded) "Show less" else "Show more",
+                                                tint = Color(0xFF58A6FF),
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Text(
+                                                text = if (isPromptExpanded) "Show less" else "Show more (${userLines.size - 10} more lines)",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = Color(0xFF58A6FF)
+                                            )
+                                        }
                                     }
                                 } else {
                                     val planSurvey = remember(message.content) {
@@ -5008,19 +5046,36 @@ fun AndroidBuildTabContent(
                                     }
                                 }
 
-                                Button(
-                                    onClick = { showRepoPicker = true },
-                                    modifier = Modifier.fillMaxWidth().height(42.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
-                                    shape = RoundedCornerShape(8.dp)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Icon(Icons.Default.FolderOpen, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = if (tempRepo.isNotBlank()) "Selected Repo: $tempRepo (Click to Change)" else "Select a Repository (${authState.userRepos.size} available)",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                    Button(
+                                        onClick = { showRepoPicker = true },
+                                        modifier = Modifier.weight(1f).height(42.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Icon(Icons.Default.FolderOpen, contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = if (tempRepo.isNotBlank()) "Repo: ${tempRepo.substringAfterLast('/')}" else "Select Repo (${authState.userRepos.size})",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    Button(
+                                        onClick = { showRepoPicker = true },
+                                        modifier = Modifier.height(42.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Icon(Icons.Default.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Create Repo", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
                                 }
                             }
                         }
@@ -5163,6 +5218,13 @@ fun AndroidBuildTabContent(
                                 modifier = Modifier.height(24.dp)
                             ) {
                                 Text("Switch Repo", fontSize = 10.sp, color = Color(0xFF38BDF8))
+                            }
+                            TextButton(
+                                onClick = { showRepoPicker = true },
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                                modifier = Modifier.height(24.dp)
+                            ) {
+                                Text("+ Create", fontSize = 10.sp, color = Color(0xFF10B981))
                             }
                         }
                     }

@@ -34,7 +34,7 @@ enum class McpPlatformType(
         "GitHub",
         "https://api.github.com/mcp",
         "GitHub Repositories, Workflows, Pull Requests & CI/CD",
-        "https://github.com/apps/pencode",
+        "https://github.com/apps/pencose/installations/new",
         "https://cdn.simpleicons.org/github/FFFFFF"
     ),
     CUSTOM(

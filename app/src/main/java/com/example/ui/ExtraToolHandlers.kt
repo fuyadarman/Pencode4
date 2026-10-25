@@ -146,6 +146,49 @@ object ExtraToolHandlers {
                 updateLog(cloneLog.id, if (isSuccess) "success" else "failed", result)
                 result
             }
+            "create_github_repo", "create_repo", "create_git_repo" -> {
+                val repoName = (args?.name ?: args?.title ?: args?.query ?: args?.message ?: "").trim()
+                val isPrivate = args?.isPrivate ?: false
+                val description = args?.description ?: ""
+                val autoInit = args?.autoInit ?: true
+
+                val createLog = createLog(
+                    "Create GitHub Repo",
+                    "thinking",
+                    "Creating GitHub repository: $repoName (private=$isPrivate)",
+                    "github-create"
+                )
+                addLog(createLog)
+                setAgentStatus("Creating GitHub repository $repoName...")
+
+                val token = gitToken?.trim()?.ifBlank { null }
+                if (token.isNullOrBlank()) {
+                    val errMsg = "Error: GitHub access token is missing or user is not connected to GitHub. Please connect your GitHub account in the Build Tab first."
+                    updateLog(createLog.id, "failed", errMsg)
+                    errMsg
+                } else {
+                    val result = com.example.git.GitHubRepoCreationEngine.createRepository(
+                        token = token,
+                        name = repoName,
+                        isPrivate = isPrivate,
+                        description = description,
+                        autoInit = autoInit
+                    )
+
+                    result.fold(
+                        onSuccess = { createdRepo ->
+                            val msg = "Successfully created GitHub repository '${createdRepo.fullName}' (private=${createdRepo.isPrivate}). Default branch: ${createdRepo.defaultBranch}. Repository URL: https://github.com/${createdRepo.fullName}"
+                            updateLog(createLog.id, "success", msg)
+                            msg
+                        },
+                        onFailure = { err ->
+                            val errMsg = "Failed to create GitHub repository: ${err.message}"
+                            updateLog(createLog.id, "failed", errMsg)
+                            errMsg
+                        }
+                    )
+                }
+            }
             "clone_web_ui", "scrape_web_ui" -> {
                 val targetUrl = (args?.url ?: args?.query ?: args?.message ?: "").trim()
                 val targetFile = args?.targetFile ?: args?.destinationPath ?: args?.path

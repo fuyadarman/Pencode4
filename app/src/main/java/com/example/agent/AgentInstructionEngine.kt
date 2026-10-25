@@ -201,6 +201,7 @@ object AgentInstructionEngine {
         sb.append("10. COGNITIVE REASONING & PLANNING DEPTH:\n").append(ReasoningEffortEngine.getCodingDirective(reasoningEffort)).append("\n")
         sb.append("11. OPTIONAL BUILD VERIFICATION: If you suspect syntax errors or if the user asks to build/test, invoke 'trigger_build'. If the build reports errors, invoke 'read_build_errors' to diagnose. Once edits are complete, call 'complete' without delay.\n")
         sb.append("12. GITHUB CLONE: When user asks to clone a GitHub repository or gives a repository URL/link/name, immediately invoke 'clone_git_repo'(url = <repo_url_or_owner_slash_repo>). Do not ask manual steps or refuse.\n")
+        sb.append("13. GITHUB REPO CREATION: When user asks to create a new GitHub repository, invoke 'create_github_repo'(name = <repo_name>, isPrivate? = true/false, description? = <desc>).\n")
 
         // 4. Skills Module (Only if skills are active)
         if (activeSkills.isNotEmpty()) {
@@ -266,6 +267,7 @@ object AgentInstructionEngine {
 
         // Web / Internet / Browser inspection & cloning tools
         tools.add("'clone_git_repo'(url, branch?) [Clone GitHub repository files directly into workspace]")
+        tools.add("'create_github_repo'(name, isPrivate?, description?) [Creates a new GitHub repository]")
         tools.add("'web_search'(query) [Fast online search & information retrieval]")
         tools.add("'browser_search'(query)")
         tools.add("'browser_read'()")

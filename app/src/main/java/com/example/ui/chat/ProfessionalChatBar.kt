@@ -73,32 +73,7 @@ fun ProfessionalChatBar(
     var showPlusMenu by remember { mutableStateOf(false) }
     var showReasoningEffortDialog by remember { mutableStateOf(false) }
     var showQuickTaskInjectionBar by remember { mutableStateOf(false) }
-    var showGitHubModelsDialog by remember { mutableStateOf(false) }
-    var showGitHubAuthDialog by remember { mutableStateOf(false) }
 
-    if (showGitHubModelsDialog) {
-        GitHubModelsDialog(
-            isOpen = showGitHubModelsDialog,
-            currentSelectedModel = currentModelDisplayName,
-            onDismiss = { showGitHubModelsDialog = false },
-            onModelSelected = { modelId, provider, baseUrl, apiKey ->
-                onSelectCustomModel?.invoke(modelId, provider, baseUrl, apiKey)
-            },
-            onOpenConnectGitHub = {
-                showGitHubAuthDialog = true
-            }
-        )
-    }
-
-    if (showGitHubAuthDialog) {
-        com.example.auth.github.GitHubOAuthDialog(
-            isOpen = showGitHubAuthDialog,
-            onDismiss = { showGitHubAuthDialog = false },
-            onAuthSuccess = { _, _ ->
-                showGitHubModelsDialog = true
-            }
-        )
-    }
 
     if (showReasoningEffortDialog) {
         ReasoningEffortSelectorDialog(
@@ -369,23 +344,7 @@ fun ProfessionalChatBar(
                                     onOpenSelectMcpDialog()
                                 }
                             )
-                            HorizontalDivider(color = com.example.ui.theme.AppTheme.border)
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        "GitHub AI Models",
-                                        color = com.example.ui.theme.AppTheme.textPrimary,
-                                        fontSize = 13.sp
-                                    )
-                                },
-                                leadingIcon = {
-                                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(18.dp))
-                                },
-                                onClick = {
-                                    showPlusMenu = false
-                                    showGitHubModelsDialog = true
-                                }
-                            )
+
                             HorizontalDivider(color = com.example.ui.theme.AppTheme.border)
                             DropdownMenuItem(
                                 text = {

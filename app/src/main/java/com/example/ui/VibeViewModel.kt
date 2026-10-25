@@ -4555,6 +4555,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                             }
                             "generate_image", "pollinations_image", "create_image", "generate_logo", "create_logo",
                             "clone_git_repo", "clone_github_repo", "clone_repo", "git_clone",
+                            "create_github_repo", "create_repo", "create_git_repo",
                             "copy_file", "duplicate_code", "duplicate_file", "clone_web_ui", "scrape_web_ui", "deep_clone_web_ui",
                             "fetch_url", "read_url", "scrape_url", "skill_check", "list_skills", "inspect_skill",
                             "resize_image", "scale_image", "image_resize", "compress_image", "crop_image", "get_image_info", "image_info", "optimize_image", "image_crop", "image_compress", "inspect_image",

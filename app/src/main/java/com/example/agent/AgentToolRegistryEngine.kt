@@ -64,6 +64,7 @@ object AgentToolRegistryEngine {
 
         [WEB BROWSING & UI CLONING]
         • clone_git_repo(url: string, branch?: string) -> Clones all files from a GitHub repository into current workspace.
+        • create_github_repo(name: string, isPrivate?: boolean, description?: string, autoInit?: boolean) -> Creates a new GitHub repository under user's connected GitHub account.
         • web_search(query: string) -> Searches the live internet and technical documentation using fast, crash-proof engine.
         • browser_search(query: string) -> Searches the web or navigates to a URL.
         • browser_read() -> Reads the current webpage text.
@@ -107,6 +108,7 @@ object AgentToolRegistryEngine {
             "'trigger_build'(message?) [Build project (React Vite, Android, Chrome Extension, Flutter ONLY). Waits for build]",
             "'list_all_tools'() [View all tools & commands with full docs]",
             "'clone_git_repo'(url, branch?) [Clone GitHub repository files into workspace]",
+            "'create_github_repo'(name, isPrivate?, description?) [Creates a new GitHub repository]",
             "'browser_search'(query)",
             "'browser_read'()",
             "'browser_snapshot'()",

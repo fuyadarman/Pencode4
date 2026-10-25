@@ -179,10 +179,10 @@ class MainActivity : ComponentActivity() {
 
                         LaunchedEffect(githubAuthState.isConnected, githubAuthState.accessToken, githubAuthState.selectedRepo) {
                             if (githubAuthState.isConnected && githubAuthState.accessToken.isNotBlank()) {
-                                if (viewModel.githubToken.value.isBlank()) {
+                                if (viewModel.githubToken.value != githubAuthState.accessToken) {
                                     viewModel.saveGithubToken(githubAuthState.accessToken)
                                 }
-                                if (githubAuthState.selectedRepo.isNotBlank() && viewModel.githubRepo.value.isBlank()) {
+                                if (githubAuthState.selectedRepo.isNotBlank() && viewModel.githubRepo.value != githubAuthState.selectedRepo) {
                                     viewModel.saveGithubRepo(githubAuthState.selectedRepo)
                                     viewModel.saveGithubBranch(githubAuthState.selectedBranch)
                                 }

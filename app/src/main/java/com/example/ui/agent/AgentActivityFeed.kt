@@ -68,38 +68,78 @@ fun AgentActivityFeed(
         }
     }
 
+    var isOperationsExpanded by remember { mutableStateOf(isThinking) }
+
+    LaunchedEffect(isThinking) {
+        if (!isThinking) {
+            isOperationsExpanded = false
+        } else {
+            isOperationsExpanded = true
+        }
+    }
+
     Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 14.dp, vertical = 8.dp)
     ) {
-        // 1. Elapsed Runtime Header ("Working for 1m 24s")
+        // 1. Elapsed Runtime Header ("Working for 1m 24s" / "Completed in ...")
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.padding(bottom = 12.dp, top = 4.dp)
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp, top = 4.dp)
         ) {
-            if (isThinking) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(12.dp),
-                    strokeWidth = 1.5.dp,
-                    color = Color(0xFF7D8590)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .clickable(!isThinking) { isOperationsExpanded = !isOperationsExpanded }
+            ) {
+                if (isThinking) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(12.dp),
+                        strokeWidth = 1.5.dp,
+                        color = Color(0xFF7D8590)
+                    )
+                }
+                Text(
+                    text = if (isThinking) "Working for $formattedDuration" else "Completed in $formattedDuration",
+                    fontSize = 13.sp,
+                    fontFamily = FontFamily.SansSerif,
+                    fontWeight = FontWeight.Normal,
+                    color = Color(0xFF8B949E)
                 )
             }
-            Text(
-                text = if (isThinking) "Working for $formattedDuration" else "Completed in $formattedDuration",
-                fontSize = 13.sp,
-                fontFamily = FontFamily.SansSerif,
-                fontWeight = FontWeight.Normal,
-                color = Color(0xFF8B949E)
-            )
+
+            if (!isThinking && displayLogs.isNotEmpty()) {
+                IconButton(
+                    onClick = { isOperationsExpanded = !isOperationsExpanded },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isOperationsExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = if (isOperationsExpanded) "Collapse Operations" else "Expand Operations",
+                        tint = Color(0xFF8B949E),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
         }
 
-        // 2. Feed Items: Tool Execution Indicators matching screenshot design
-        ToolExecutionListView(
-            logs = displayLogs,
-            isThinking = isThinking
-        )
+        // 2. Feed Items: Tool Execution Indicators matching screenshot design (Collapsible)
+        AnimatedVisibility(
+            visible = isOperationsExpanded || isThinking,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
+            ToolExecutionListView(
+                logs = displayLogs,
+                isThinking = isThinking
+            )
+        }
     }
 }
 

@@ -208,7 +208,9 @@ data class ToolArguments(
     val iconEmoji: String? = null,
     val intervalMinutes: Long? = null,
     val isRecurring: Boolean? = null,
-    val fields: List<String>? = null
+    val fields: List<String>? = null,
+    val isPrivate: Boolean? = null,
+    val autoInit: Boolean? = null
 )
 
 @JsonClass(generateAdapter = true)

@@ -47,7 +47,7 @@ class GitHubAuthManager(private val context: Context) {
     companion object {
         const val CLIENT_ID = "Iv23liJ1YMYgjNpHUToe"
         const val APP_ID = "5369463"
-        const val APP_PUBLIC_URL = "https://github.com/apps/pencode"
+        const val APP_PUBLIC_URL = "https://github.com/apps/pencose/installations/new"
         const val DEFAULT_WORKER_URL = "https://pencode-auth-worker.fuyadheart.workers.dev"
         private const val PREFS_NAME = "pencode_github_auth_prefs"
         private const val TAG = "GitHubAuthManager"
@@ -211,25 +211,56 @@ class GitHubAuthManager(private val context: Context) {
     }
 
     suspend fun refreshUserProfileAndRepos(token: String = _authState.value.accessToken) = withContext(Dispatchers.IO) {
-        if (token.isBlank()) return@withContext
+        val cleanToken = token.trim()
+            .removePrefix("Bearer ")
+            .removePrefix("bearer ")
+            .removePrefix("token ")
+            .removePrefix("Token ")
+            .trim()
+        if (cleanToken.isBlank()) return@withContext
         try {
-            // 1. Fetch user profile
-            val userRequest = Request.Builder()
+            // 1. Fetch user profile with fallback for Bearer vs token format
+            var activeAuthHeader = "Bearer $cleanToken"
+            var userRequest = Request.Builder()
                 .url("https://api.github.com/user")
-                .header("Authorization", "Bearer $token")
+                .header("Authorization", activeAuthHeader)
                 .header("Accept", "application/vnd.github.v3+json")
                 .build()
 
-            val userRes = httpClient.newCall(userRequest).execute()
+            var userRes = httpClient.newCall(userRequest).execute()
+            if (!userRes.isSuccessful && userRes.code == 401) {
+                val fallbackReq = Request.Builder()
+                    .url("https://api.github.com/user")
+                    .header("Authorization", "token $cleanToken")
+                    .header("Accept", "application/vnd.github.v3+json")
+                    .build()
+                val fb = httpClient.newCall(fallbackReq).execute()
+                if (fb.isSuccessful) {
+                    userRes = fb
+                    activeAuthHeader = "token $cleanToken"
+                }
+            }
+
+            if (userRes.code == 401) {
+                // Token is genuinely expired or revoked by GitHub
+                Log.w(TAG, "GitHub token is invalid or expired (401 Bad credentials).")
+                _authState.value = _authState.value.copy(
+                    isConnected = false,
+                    errorMessage = "GitHub session expired (401 Bad credentials). Please reconnect your GitHub account.",
+                    isLoading = false
+                )
+                return@withContext
+            }
+
             val userBody = userRes.body?.string().orEmpty()
-            var username = ""
-            var avatarUrl = ""
-            var displayName = ""
+            var username = _authState.value.username
+            var avatarUrl = _authState.value.avatarUrl
+            var displayName = _authState.value.displayName
 
             if (userRes.isSuccessful && userBody.isNotBlank()) {
                 val userJson = JSONObject(userBody)
-                username = userJson.optString("login", "")
-                avatarUrl = userJson.optString("avatar_url", "")
+                username = userJson.optString("login", username)
+                avatarUrl = userJson.optString("avatar_url", avatarUrl)
                 displayName = userJson.optString("name", username)
 
                 prefs.edit()
@@ -239,7 +270,7 @@ class GitHubAuthManager(private val context: Context) {
                     .apply()
             }
 
-            // 2. Fetch user repositories (public + private + orgs)
+            // 2. Fetch user repositories (public + private + orgs + collaborators)
             val reposList = mutableListOf<GitHubRepoItem>()
             val seenRepos = mutableSetOf<String>()
 
@@ -260,10 +291,11 @@ class GitHubAuthManager(private val context: Context) {
                 )
             }
 
+            // A. Primary /user/repos with all affiliations
             try {
                 val reposRequest = Request.Builder()
                     .url("https://api.github.com/user/repos?visibility=all&per_page=100&sort=updated&affiliation=owner,collaborator,organization_member")
-                    .header("Authorization", "Bearer $token")
+                    .header("Authorization", activeAuthHeader)
                     .header("Accept", "application/vnd.github.v3+json")
                     .build()
                 val reposRes = httpClient.newCall(reposRequest).execute()
@@ -278,11 +310,30 @@ class GitHubAuthManager(private val context: Context) {
                 Log.w(TAG, "Error fetching user/repos: ${e.message}")
             }
 
+            // B. Also query standard /user/repos?type=all
+            try {
+                val typeAllRequest = Request.Builder()
+                    .url("https://api.github.com/user/repos?type=all&per_page=100&sort=updated")
+                    .header("Authorization", activeAuthHeader)
+                    .header("Accept", "application/vnd.github.v3+json")
+                    .build()
+                val typeAllRes = httpClient.newCall(typeAllRequest).execute()
+                val typeAllBody = typeAllRes.body?.string().orEmpty()
+                if (typeAllRes.isSuccessful && typeAllBody.isNotBlank()) {
+                    val jsonArr = JSONArray(typeAllBody)
+                    for (i in 0 until jsonArr.length()) {
+                        jsonArr.optJSONObject(i)?.let { addRepoFromJson(it) }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Error fetching type=all repos: ${e.message}")
+            }
+
             // Also fetch repositories from GitHub App installations (specifically for GitHub Apps access to private repos)
             try {
                 val instRequest = Request.Builder()
                     .url("https://api.github.com/user/installations")
-                    .header("Authorization", "Bearer $token")
+                    .header("Authorization", activeAuthHeader)
                     .header("Accept", "application/vnd.github.v3+json")
                     .build()
                 val instRes = httpClient.newCall(instRequest).execute()
@@ -297,7 +348,7 @@ class GitHubAuthManager(private val context: Context) {
                             if (instId > 0) {
                                 val instReposReq = Request.Builder()
                                     .url("https://api.github.com/user/installations/$instId/repositories?per_page=100")
-                                    .header("Authorization", "Bearer $token")
+                                    .header("Authorization", activeAuthHeader)
                                     .header("Accept", "application/vnd.github.v3+json")
                                     .build()
                                 val instReposRes = httpClient.newCall(instReposReq).execute()

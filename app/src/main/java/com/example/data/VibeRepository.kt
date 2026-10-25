@@ -2678,12 +2678,27 @@ button {
             val cleanRepo = repo.trim().removePrefix("https://github.com/").removePrefix("http://github.com/").removeSuffix(".git")
             val parts = cleanRepo.split("/").filter { it.isNotBlank() }
 
-            val cleanToken = token.trim()
+            var cleanToken = token.trim()
                 .removePrefix("Bearer ")
                 .removePrefix("bearer ")
                 .removePrefix("token ")
                 .removePrefix("Token ")
                 .trim()
+            
+            if (cleanToken.isBlank()) {
+                val authManager = com.example.auth.github.GitHubAuthManager.getInstance(context)
+                val stored = authManager.authState.value.accessToken.ifBlank {
+                    context.getSharedPreferences("pencode_github_auth_prefs", android.content.Context.MODE_PRIVATE).getString("access_token", "") ?: ""
+                }.ifBlank {
+                    context.getSharedPreferences("vibe_coder_prefs", android.content.Context.MODE_PRIVATE).getString("github_token", "") ?: ""
+                }
+                cleanToken = stored.trim().removePrefix("Bearer ").removePrefix("bearer ").removePrefix("token ").trim()
+            }
+
+            if (cleanToken.isBlank()) {
+                return@withContext Result.failure(Exception("GitHub access token is missing or not configured. Please connect your GitHub account in the Build Tab first."))
+            }
+
             var activeAuthHeader = "Bearer $cleanToken"
             
             var owner = ""
@@ -2764,6 +2779,12 @@ button {
             if (!repoResponse.isSuccessful) {
                 val code = repoResponse.code
                 val bodyStr = repoResponse.body?.string() ?: ""
+                if (code == 401) {
+                    return@withContext Result.failure(Exception("GitHub repository verification failed (401 Bad credentials).\nYour GitHub token or session may have expired. Please re-authorize or reconnect your GitHub account in the Build Tab."))
+                }
+                if (code == 404) {
+                    return@withContext Result.failure(Exception("GitHub repository '$owner/$repoName' was not found (404).\nYou can create this repository directly from the Build Tab or check permissions."))
+                }
                 return@withContext Result.failure(Exception("GitHub repository verification failed ($code). Check your URL, token, and permissions.\nDetails: $bodyStr"))
             }
             
