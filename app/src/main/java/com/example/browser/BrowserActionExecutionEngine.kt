@@ -54,7 +54,10 @@ object BrowserActionExecutionEngine {
                 el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
             } catch(ke) {}
             try {
-                if (el.form) { el.form.submit(); }
+                if (el.form) {
+                    var submitEv = new Event('submit', { bubbles: true, cancelable: true });
+                    el.form.dispatchEvent(submitEv);
+                }
             } catch(fe) {}
         """.trimIndent() else ""
 

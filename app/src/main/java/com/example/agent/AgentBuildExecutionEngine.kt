@@ -42,6 +42,25 @@ object AgentBuildExecutionEngine {
         return UNSUPPORTED_STATIC_STACKS.any { key == it || key.contains("cdn") }
     }
 
+    private fun executeGitHubCall(client: OkHttpClient, url: String, tokenVal: String): okhttp3.Response {
+        val clean = tokenVal.removePrefix("Bearer ").removePrefix("bearer ").removePrefix("token ").removePrefix("Token ").trim()
+        val buildReq = { authHeader: String ->
+            Request.Builder()
+                .url(url)
+                .header("Authorization", authHeader)
+                .header("Accept", "application/vnd.github.v3+json")
+                .build()
+        }
+        var resp = client.newCall(buildReq("Bearer $clean")).execute()
+        if (!resp.isSuccessful && resp.code == 401) {
+            val fallback = client.newCall(buildReq("token $clean")).execute()
+            if (fallback.isSuccessful) {
+                resp = fallback
+            }
+        }
+        return resp
+    }
+
     /**
      * Executes the build action and waits for completion.
      */
@@ -89,12 +108,7 @@ object AgentBuildExecutionEngine {
             repoName = parts[0]
             // Fetch username
             try {
-                val userReq = okhttp3.Request.Builder()
-                    .url("https://api.github.com/user")
-                    .header("Authorization", "token $tokenVal")
-                    .header("Accept", "application/vnd.github.v3+json")
-                    .build()
-                val userResp = client.newCall(userReq).execute()
+                val userResp = executeGitHubCall(client, "https://api.github.com/user", tokenVal)
                 if (userResp.isSuccessful) {
                     val body = userResp.body?.string() ?: ""
                     val map = moshi.adapter(Map::class.java).fromJson(body) as? Map<*, *>
@@ -113,12 +127,7 @@ object AgentBuildExecutionEngine {
         var baselineRunId: Long = 0L
         try {
             val checkUrl = "https://api.github.com/repos/$owner/$repoName/actions/runs?per_page=3"
-            val checkReq = okhttp3.Request.Builder()
-                .url(checkUrl)
-                .header("Authorization", "token $tokenVal")
-                .header("Accept", "application/vnd.github.v3+json")
-                .build()
-            val checkResp = client.newCall(checkReq).execute()
+            val checkResp = executeGitHubCall(client, checkUrl, tokenVal)
             if (checkResp.isSuccessful) {
                 val b = checkResp.body?.string() ?: ""
                 val rMap = moshi.adapter(Map::class.java).fromJson(b) as? Map<*, *>
@@ -160,13 +169,7 @@ object AgentBuildExecutionEngine {
 
             try {
                 val runsUrl = "https://api.github.com/repos/$owner/$repoName/actions/runs?per_page=5"
-                val runsReq = okhttp3.Request.Builder()
-                    .url(runsUrl)
-                    .header("Authorization", "token $tokenVal")
-                    .header("Accept", "application/vnd.github.v3+json")
-                    .build()
-
-                val runsResp = client.newCall(runsReq).execute()
+                val runsResp = executeGitHubCall(client, runsUrl, tokenVal)
                 if (!runsResp.isSuccessful) {
                     continue
                 }
@@ -207,12 +210,7 @@ object AgentBuildExecutionEngine {
 
                 try {
                     val jobsUrl = "https://api.github.com/repos/$owner/$repoName/actions/runs/$currentRunId/jobs"
-                    val jobsReq = okhttp3.Request.Builder()
-                        .url(jobsUrl)
-                        .header("Authorization", "token $tokenVal")
-                        .header("Accept", "application/vnd.github.v3+json")
-                        .build()
-                    val jobsResp = client.newCall(jobsReq).execute()
+                    val jobsResp = executeGitHubCall(client, jobsUrl, tokenVal)
                     if (jobsResp.isSuccessful) {
                         val jobsBody = jobsResp.body?.string() ?: ""
                         val jobsJson = moshi.adapter(Map::class.java).fromJson(jobsBody) as? Map<*, *>
@@ -257,12 +255,7 @@ object AgentBuildExecutionEngine {
                         if (primaryJobId != null) {
                             try {
                                 val logsUrl = "https://api.github.com/repos/$owner/$repoName/actions/jobs/$primaryJobId/logs"
-                                val logsReq = okhttp3.Request.Builder()
-                                    .url(logsUrl)
-                                    .header("Authorization", "token $tokenVal")
-                                    .header("Accept", "application/vnd.github.v3+json")
-                                    .build()
-                                val logsResp = client.newCall(logsReq).execute()
+                                val logsResp = executeGitHubCall(client, logsUrl, tokenVal)
                                 if (logsResp.isSuccessful) {
                                     val fullLogs = logsResp.body?.string() ?: ""
                                     val lines = fullLogs.lines()

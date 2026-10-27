@@ -63,7 +63,7 @@ object LivePreviewBrowserManager {
 
             // Load any pending URL queued by AI Agent or tab switch
             val pending = _pendingUrl.value
-            if (!pending.isNullOrBlank() && pending != currentWebUrl) {
+            if (!pending.isNullOrBlank() && !currentWebUrl.equals(pending, ignoreCase = true) && !currentWebUrl.trimEnd('/').equals(pending.trimEnd('/'), ignoreCase = true)) {
                 _pendingUrl.value = null
                 webView.loadUrl(pending)
             }
@@ -179,8 +179,18 @@ object LivePreviewBrowserManager {
                     ripple.style.transform = 'scale(1.8)';
                     ripple.style.opacity = '0';
                     setTimeout(function() { ripple.remove(); }, 400);
-                }, 50);
-
+                // Prevent accidental page reload on submit button or empty href link click
+                try {
+                    var tagName = el.tagName.toLowerCase();
+                    if ((tagName === 'button' || (tagName === 'input' && (el.type === 'submit' || el.type === 'button'))) && el.form) {
+                        el.addEventListener('click', function(ev) { ev.preventDefault(); }, { once: true, capture: true });
+                    } else if (tagName === 'a') {
+                        var href = (el.getAttribute('href') || '').trim();
+                        if (href === '#' || href === '' || href.indexOf('javascript:') === 0) {
+                            el.addEventListener('click', function(ev) { ev.preventDefault(); }, { once: true, capture: true });
+                        }
+                    }
+                } catch(pe) {}
                 el.focus();
                 el.click();
                 return 'clicked';
@@ -320,12 +330,9 @@ object LivePreviewBrowserManager {
      */
     suspend fun runJavascript(script: String): String = withContext(Dispatchers.Main) {
         val wv = getActiveWebView() ?: return@withContext "Error: Live preview browser is not currently active."
-        setActionStatus("🤖 AI Agent: Executing browser script...")
         val deferred = CompletableDeferred<String>()
         wv.evaluateJavascript(script) { res -> deferred.complete(res ?: "null") }
-        val res = deferred.await()
-        clearActionStatus()
-        res
+        deferred.await()
     }
 
     /**

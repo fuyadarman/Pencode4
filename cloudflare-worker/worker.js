@@ -58,17 +58,18 @@ export default {
 
       // 2. OAuth Token Exchange (Code + Client Secret -> Access Token)
       if (
-        (url.pathname === "/api/oauth/token" || url.pathname === "/oauth/callback") &&
+        (url.pathname === "/api/oauth/token" || url.pathname === "/oauth/callback" || url.pathname === "/api/oauth/refresh") &&
         request.method === "POST"
       ) {
         const body = await request.json().catch(() => ({}));
         const code = body.code || url.searchParams.get("code");
+        const refreshToken = body.refresh_token || url.searchParams.get("refresh_token");
         const clientId = body.client_id || env.GITHUB_CLIENT_ID || "Iv23liJ1YMYgjNpHUToe";
         const clientSecret = env.GITHUB_CLIENT_SECRET;
 
-        if (!code) {
+        if (!code && !refreshToken) {
           return new Response(
-            JSON.stringify({ error: "Missing 'code' parameter in request" }),
+            JSON.stringify({ error: "Missing 'code' or 'refresh_token' parameter in request" }),
             { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
           );
         }
@@ -83,18 +84,27 @@ export default {
           );
         }
 
-        // Exchange code with GitHub
+        const payload = refreshToken
+          ? {
+              client_id: clientId,
+              client_secret: clientSecret,
+              grant_type: "refresh_token",
+              refresh_token: refreshToken,
+            }
+          : {
+              client_id: clientId,
+              client_secret: clientSecret,
+              code: code,
+            };
+
+        // Exchange code or refresh token with GitHub
         const tokenRes = await fetch("https://github.com/login/oauth/access_token", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Accept: "application/json",
           },
-          body: JSON.stringify({
-            client_id: clientId,
-            client_secret: clientSecret,
-            code: code,
-          }),
+          body: JSON.stringify(payload),
         });
 
         const tokenData = await tokenRes.json();
@@ -108,8 +118,9 @@ export default {
               Accept: "application/vnd.github.v3+json",
             },
           });
-          const userData = await userRes.json();
-          tokenData.user = userData;
+          if (userRes.ok) {
+            tokenData.user = await userRes.json();
+          }
         }
 
         return new Response(JSON.stringify(tokenData), {

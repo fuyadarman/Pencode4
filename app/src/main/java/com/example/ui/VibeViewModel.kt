@@ -1259,6 +1259,39 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         startPollingBuild()
     }
 
+    private fun executeGitHubCall(
+        client: OkHttpClient,
+        url: String,
+        token: String,
+        method: String = "GET",
+        body: okhttp3.RequestBody? = null
+    ): okhttp3.Response {
+        val clean = token.removePrefix("Bearer ").removePrefix("bearer ").removePrefix("token ").removePrefix("Token ").trim()
+        val buildReq: (String) -> Request = { authHeader ->
+            val builder = Request.Builder()
+                .url(url)
+                .header("Authorization", authHeader)
+                .header("Accept", "application/vnd.github.v3+json")
+            if (method.equals("POST", ignoreCase = true) && body != null) {
+                builder.post(body)
+            } else if (method.equals("POST", ignoreCase = true)) {
+                builder.post(okhttp3.RequestBody.create("application/json".toMediaTypeOrNull(), "{}"))
+            } else {
+                builder.get()
+            }
+            builder.build()
+        }
+
+        var response = client.newCall(buildReq("Bearer $clean")).execute()
+        if (!response.isSuccessful && response.code == 401) {
+            val fallbackResp = client.newCall(buildReq("token $clean")).execute()
+            if (fallbackResp.isSuccessful) {
+                response = fallbackResp
+            }
+        }
+        return response
+    }
+
     fun startPollingBuild() {
         if (pollJob != null && pollJob?.isActive == true) return
         _isPollingBuild.value = true
@@ -1270,7 +1303,18 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             
             while (_isPollingBuild.value) {
                 val repoVal = _githubRepo.value.trim()
-                val tokenVal = _githubToken.value.trim()
+                var tokenVal = _githubToken.value.trim()
+
+                if (tokenVal.isEmpty()) {
+                    val app = getApplication<Application>()
+                    val authCandidate = com.example.auth.github.GitHubAuthManager.getInstance(app).authState.value.accessToken.trim()
+                    val prefsCandidate = sharedPrefs.getString("github_token", "")?.trim() ?: ""
+                    val pencodeCandidate = app.getSharedPreferences("pencode_github_auth_prefs", android.content.Context.MODE_PRIVATE).getString("access_token", "")?.trim() ?: ""
+                    tokenVal = authCandidate.ifBlank { prefsCandidate }.ifBlank { pencodeCandidate }
+                    if (tokenVal.isNotBlank()) {
+                        _githubToken.value = tokenVal
+                    }
+                }
 
                 if (repoVal.isEmpty() || tokenVal.isEmpty()) {
                     _buildStatus.value = "Waiting for GitHub configuration..."
@@ -1296,13 +1340,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                             repoName = parts[0]
                         } else {
                             try {
-                                val userRequest = Request.Builder()
-                                    .url("https://api.github.com/user")
-                                    .header("Authorization", "token $tokenVal")
-                                    .header("Accept", "application/vnd.github.v3+json")
-                                    .get()
-                                    .build()
-                                val userResponse = client.newCall(userRequest).execute()
+                                val userResponse = executeGitHubCall(client, "https://api.github.com/user", tokenVal)
                                 if (userResponse.isSuccessful) {
                                     val bodyStr = userResponse.body?.string() ?: ""
                                     val userMap = moshi.adapter(Map::class.java).fromJson(bodyStr) as? Map<*, *>
@@ -1339,13 +1377,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
 
                 try {
                     val runsUrl = "https://api.github.com/repos/$owner/$repoName/actions/runs"
-                    val runsRequest = Request.Builder()
-                        .url(runsUrl)
-                        .header("Authorization", "token $tokenVal")
-                        .header("Accept", "application/vnd.github.v3+json")
-                        .build()
-
-                    val runsResponse = client.newCall(runsRequest).execute()
+                    val runsResponse = executeGitHubCall(client, runsUrl, tokenVal)
                     if (runsResponse.isSuccessful) {
                         consecutiveConnectionErrors = 0
                         val bodyStr = runsResponse.body?.string() ?: ""
@@ -1355,12 +1387,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                         // Fetch GitHub workflows
                         try {
                             val wfUrl = "https://api.github.com/repos/$owner/$repoName/actions/workflows"
-                            val wfRequest = Request.Builder()
-                                .url(wfUrl)
-                                .header("Authorization", "token $tokenVal")
-                                .header("Accept", "application/vnd.github.v3+json")
-                                .build()
-                            val wfResponse = client.newCall(wfRequest).execute()
+                            val wfResponse = executeGitHubCall(client, wfUrl, tokenVal)
                             if (wfResponse.isSuccessful) {
                                 val wfBodyStr = wfResponse.body?.string() ?: ""
                                 val wfMap = moshi.adapter(Map::class.java).fromJson(wfBodyStr) as? Map<*, *>
@@ -1438,13 +1465,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
 
                             if (runId != null) {
                                 val jobsUrl = "https://api.github.com/repos/$owner/$repoName/actions/runs/$runId/jobs"
-                                val jobsRequest = Request.Builder()
-                                    .url(jobsUrl)
-                                    .header("Authorization", "token $tokenVal")
-                                    .header("Accept", "application/vnd.github.v3+json")
-                                    .build()
-
-                                val jobsResponse = client.newCall(jobsRequest).execute()
+                                val jobsResponse = executeGitHubCall(client, jobsUrl, tokenVal)
                                 if (jobsResponse.isSuccessful) {
                                     val jobsBodyStr = jobsResponse.body?.string() ?: ""
                                     val jobsMap = moshi.adapter(Map::class.java).fromJson(jobsBodyStr) as? Map<*, *>
@@ -1487,13 +1508,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                                         val jobId = (primaryJob["id"] as? Number)?.toLong()
                                         if (jobId != null) {
                                             val logsUrl = "https://api.github.com/repos/$owner/$repoName/actions/jobs/$jobId/logs"
-                                            val logsRequest = Request.Builder()
-                                                .url(logsUrl)
-                                                .header("Authorization", "token $tokenVal")
-                                                .header("Accept", "application/vnd.github.v3+json")
-                                                .build()
-
-                                            val logsResponse = client.newCall(logsRequest).execute()
+                                            val logsResponse = executeGitHubCall(client, logsUrl, tokenVal)
                                             if (logsResponse.isSuccessful) {
                                                 val rawLogs = logsResponse.body?.string() ?: ""
                                                 val cleanLogs = rawLogs.replace(Regex("\u001B\\[[;\\d]*m"), "")
@@ -1548,8 +1563,13 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                     } else {
                         consecutiveConnectionErrors++
                         if (consecutiveConnectionErrors >= 5) {
-                            _buildStatus.value = "Error fetching runs: ${runsResponse.code}"
-                            _buildError.value = "Failed to communicate with GitHub. Check your repository URL and token permissions."
+                            if (runsResponse.code == 401) {
+                                _buildStatus.value = "GitHub authorization expired (401)"
+                                _buildError.value = "GitHub token is invalid or expired. Tap Switch Repo / Reconnect Account."
+                            } else {
+                                _buildStatus.value = "Error fetching runs: ${runsResponse.code}"
+                                _buildError.value = "Failed to communicate with GitHub. Check your repository URL and token permissions."
+                            }
                         }
                     }
                 } catch (e: Exception) {
@@ -1629,14 +1649,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                     val dispatchUrl = "https://api.github.com/repos/$owner/$repoName/actions/workflows/${wf.id}/dispatches"
                     val jsonBody = "{\"ref\":\"$branchVal\"}"
                     val requestBody = okhttp3.RequestBody.create(mediaType, jsonBody)
-                    val request = Request.Builder()
-                        .url(dispatchUrl)
-                        .header("Authorization", "token $tokenVal")
-                        .header("Accept", "application/vnd.github.v3+json")
-                        .post(requestBody)
-                        .build()
-
-                    val response = client.newCall(request).execute()
+                    val response = executeGitHubCall(client, dispatchUrl, tokenVal, "POST", requestBody)
                     if (response.isSuccessful) {
                         Log.d("VibeViewModel", "Successfully triggered workflow: ${wf.name}")
                     } else {
@@ -1723,12 +1736,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 while (attempt < 3 && artifacts.isNullOrEmpty()) {
                     attempt++
                     try {
-                        val request = Request.Builder()
-                            .url(artifactsUrl)
-                            .header("Authorization", "token $tokenVal")
-                            .header("Accept", "application/vnd.github.v3+json")
-                            .build()
-                        val response = okHttpClient.newCall(request).execute()
+                        val response = executeGitHubCall(okHttpClient, artifactsUrl, tokenVal)
                         if (response.isSuccessful) {
                             val bodyStr = response.body?.string() ?: ""
                             val map = moshi.adapter(Map::class.java).fromJson(bodyStr) as? Map<*, *>
@@ -1746,12 +1754,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 if (artifacts.isNullOrEmpty()) {
                     try {
                         val repoArtifactsUrl = "https://api.github.com/repos/$owner/$repoName/actions/artifacts?per_page=10"
-                        val request = Request.Builder()
-                            .url(repoArtifactsUrl)
-                            .header("Authorization", "token $tokenVal")
-                            .header("Accept", "application/vnd.github.v3+json")
-                            .build()
-                        val response = okHttpClient.newCall(request).execute()
+                        val response = executeGitHubCall(okHttpClient, repoArtifactsUrl, tokenVal)
                         if (response.isSuccessful) {
                             val bodyStr = response.body?.string() ?: ""
                             val map = moshi.adapter(Map::class.java).fromJson(bodyStr) as? Map<*, *>
@@ -1816,7 +1819,9 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 while (redirectCount < 10) {
                     val reqBuilder = Request.Builder().url(currentUrl)
                     if (redirectCount == 0 && (currentUrl.contains("api.github.com") || currentUrl.contains("/actions/artifacts/"))) {
-                        reqBuilder.header("Authorization", "token $tokenVal")
+                        val clean = tokenVal.removePrefix("Bearer ").removePrefix("bearer ").removePrefix("token ").removePrefix("Token ").trim()
+                        val authHeader = if (clean.startsWith("ghp_")) "token $clean" else "Bearer $clean"
+                        reqBuilder.header("Authorization", authHeader)
                         reqBuilder.header("Accept", "application/vnd.github.v3+json")
                     }
                     val req = reqBuilder.build()

@@ -51,7 +51,7 @@ fun GitHubOAuthDialog(
 
     var showInAppWebView by remember { mutableStateOf(false) }
     var manualTokenInput by remember { mutableStateOf("") }
-    var showManualTokenOption by remember { mutableStateOf(false) }
+    var showManualTokenOption by remember { mutableStateOf(true) }
     var showWorkerSettings by remember { mutableStateOf(false) }
     var workerUrlInput by remember { mutableStateOf(authState.workerUrl) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
@@ -407,42 +407,99 @@ fun GitHubOAuthDialog(
                             }
                         }
 
-                        // Manual Token option
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { showManualTokenOption = !showManualTokenOption }
-                                .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                        // Permanent Token (Classic PAT) option
+                        Card(
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E2235)),
+                            border = BorderStroke(1.dp, Color(0xFF6366F1).copy(alpha = 0.4f)),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("Direct Access Token / Manual Entry", color = Color(0xFF64748B), fontSize = 11.sp)
-                            Icon(
-                                imageVector = if (showManualTokenOption) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                contentDescription = null,
-                                tint = Color(0xFF64748B),
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.VpnKey,
+                                            contentDescription = null,
+                                            tint = Color(0xFFA5B4FC),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Text(
+                                            "Permanent Token (Recommended)",
+                                            color = Color.White,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                    Surface(
+                                        color = Color(0xFF065F46),
+                                        shape = RoundedCornerShape(4.dp)
+                                    ) {
+                                        Text(
+                                            "No Expiration",
+                                            color = Color(0xFF6EE7B7),
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
 
-                        AnimatedVisibility(visible = showManualTokenOption) {
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(
+                                    text = "Classic Personal Access Tokens never expire. Once configured, your account stays connected permanently without 401 authentication errors.",
+                                    color = Color(0xFF94A3B8),
+                                    fontSize = 10.sp,
+                                    lineHeight = 14.sp
+                                )
+
+                                OutlinedButton(
+                                    onClick = {
+                                        try {
+                                            uriHandler.openUri("https://github.com/settings/tokens/new?description=Pencode+Android+App&scopes=repo,workflow,read:user")
+                                        } catch (_: Exception) {}
+                                    },
+                                    modifier = Modifier.fillMaxWidth().height(34.dp),
+                                    shape = RoundedCornerShape(8.dp),
+                                    border = BorderStroke(1.dp, Color(0xFF4F46E5))
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Icon(Icons.Default.OpenInNew, contentDescription = null, tint = Color(0xFFA5B4FC), modifier = Modifier.size(14.dp))
+                                        Text("1-Tap: Generate Token on GitHub", color = Color(0xFFA5B4FC), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                    }
+                                }
+
                                 OutlinedTextField(
                                     value = manualTokenInput,
                                     onValueChange = { manualTokenInput = it },
-                                    label = { Text("GitHub Token / OAuth Token", fontSize = 11.sp) },
-                                    placeholder = { Text("gho_... or ghp_...", fontSize = 11.sp) },
+                                    label = { Text("Paste Personal Access Token (ghp_...)", fontSize = 11.sp) },
+                                    placeholder = { Text("ghp_xxxxxxxxxxxx", fontSize = 11.sp) },
                                     colors = OutlinedTextFieldDefaults.colors(
                                         focusedTextColor = Color.White,
                                         unfocusedTextColor = Color.White,
                                         focusedBorderColor = Color(0xFF6366F1),
                                         unfocusedBorderColor = Color(0xFF38405B),
-                                        focusedContainerColor = Color(0xFF1A1D2D),
-                                        unfocusedContainerColor = Color(0xFF1A1D2D)
+                                        focusedContainerColor = Color(0xFF141724),
+                                        unfocusedContainerColor = Color(0xFF141724)
                                     ),
                                     modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(8.dp)
+                                    shape = RoundedCornerShape(8.dp),
+                                    singleLine = true
                                 )
+
                                 Button(
                                     onClick = {
                                         if (manualTokenInput.isNotBlank()) {
@@ -460,11 +517,11 @@ fun GitHubOAuthDialog(
                                         }
                                     },
                                     enabled = manualTokenInput.isNotBlank() && !isProcessing,
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1)),
-                                    modifier = Modifier.fillMaxWidth().height(36.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F46E5)),
+                                    modifier = Modifier.fillMaxWidth().height(38.dp),
                                     shape = RoundedCornerShape(8.dp)
                                 ) {
-                                    Text("Connect Token", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    Text("Connect Permanently", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }

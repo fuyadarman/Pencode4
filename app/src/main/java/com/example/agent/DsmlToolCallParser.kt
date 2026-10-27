@@ -30,21 +30,11 @@ object DsmlToolCallParser {
 
     private const val TAG = "DsmlToolCallParser"
 
-    // Normalizes various pipe symbols (fullwidth \uFF5C and standard |) to standard pipe
-    private fun normalizePipes(input: String): String {
-        return input.replace('｜', '|')
-    }
-
     /**
      * Checks if the raw text contains DSML or invoke tags.
      */
     fun isDsmlOrXmlToolCall(rawText: String): Boolean {
-        val norm = normalizePipes(rawText)
-        return norm.contains("<|DSML| calls>", ignoreCase = true) ||
-                norm.contains("<|DSML| invoke", ignoreCase = true) ||
-                norm.contains("<|tool_calls|>", ignoreCase = true) ||
-                norm.contains("<tool_calls>", ignoreCase = true) ||
-                (norm.contains("<invoke name=", ignoreCase = true) && norm.contains("<parameter name=", ignoreCase = true))
+        return DsmlToolCallEngine.hasDsmlOrXmlToolCalls(rawText)
     }
 
     /**
@@ -52,72 +42,7 @@ object DsmlToolCallParser {
      * Returns null if no valid invocations were found.
      */
     fun parse(rawText: String, finishReason: String? = null): ToolCallResponse? {
-        if (!isDsmlOrXmlToolCall(rawText)) return null
-
-        try {
-            val normText = normalizePipes(rawText)
-
-            // Extract thought / thinking from before the calls or inside <think> tags
-            val thoughtText = extractThought(rawText, normText)
-
-            val items = mutableListOf<ToolCallItem>()
-
-            // Regex matching <|DSML| invoke name="TOOL_NAME"> ... </|DSML| invoke>
-            // or <invoke name="TOOL_NAME"> ... </invoke>
-            val invokeRegex = Regex(
-                """<(?:\|DSML\|\s*)?invoke\s+name=["']([^"']+)["'][^>]*>(.*?)</(?:\|DSML\|\s*)?invoke>""",
-                setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE)
-            )
-
-            val matches = invokeRegex.findAll(normText).toList()
-
-            for (match in matches) {
-                val toolName = match.groupValues[1].trim()
-                val body = match.groupValues[2]
-
-                // Extract parameters: <|DSML| parameter name="KEY" ...>VALUE</|DSML| parameter>
-                // or <parameter name="KEY" ...>VALUE</parameter>
-                val paramRegex = Regex(
-                    """<(?:\|DSML\|\s*)?parameter\s+name=["']([^"']+)["'][^>]*>(.*?)</(?:\|DSML\|\s*)?parameter>""",
-                    setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE)
-                )
-
-                val paramMap = mutableMapOf<String, String>()
-                paramRegex.findAll(body).forEach { pMatch ->
-                    val pName = pMatch.groupValues[1].trim()
-                    val pValue = pMatch.groupValues[2].trim()
-                    paramMap[pName] = pValue
-                }
-
-                val toolArgs = buildToolArguments(paramMap)
-                items.add(ToolCallItem(tool = toolName, arguments = toolArgs))
-            }
-
-            if (items.isNotEmpty()) {
-                Log.d(TAG, "Successfully parsed ${items.size} DSML tool invocation(s): ${items.map { it.tool }}")
-                return if (items.size == 1) {
-                    ToolCallResponse(
-                        thought = thoughtText ?: "Parsed from DSML tool call.",
-                        tool = items[0].tool,
-                        arguments = items[0].arguments,
-                        tools = items,
-                        finishReason = finishReason
-                    )
-                } else {
-                    ToolCallResponse(
-                        thought = thoughtText ?: "Parsed ${items.size} DSML batch tool calls.",
-                        tool = items[0].tool,
-                        arguments = items[0].arguments,
-                        tools = items,
-                        finishReason = finishReason
-                    )
-                }
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Error parsing DSML tool call: ${e.message}", e)
-        }
-
-        return null
+        return DsmlToolCallEngine.parse(rawText, finishReason)
     }
 
     private fun extractThought(rawText: String, normText: String): String? {

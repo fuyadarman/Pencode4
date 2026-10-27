@@ -72,7 +72,17 @@ object BrowserControllerAgentEngine {
             backgroundBrowser.runJavascript(js)
         }
         try {
-            val obj = JSONObject(raw)
+            val decoded = try {
+                val trimmed = raw.trim()
+                if (trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
+                    org.json.JSONTokener(trimmed).nextValue()?.toString() ?: trimmed.removeSurrounding("\"")
+                } else {
+                    trimmed
+                }
+            } catch (_: Exception) {
+                raw.removeSurrounding("\"")
+            }
+            val obj = JSONObject(decoded)
             val title = obj.optString("title", "Untitled")
             val url = obj.optString("url", "")
             val elements = obj.optJSONArray("elements") ?: JSONArray()
@@ -177,6 +187,18 @@ object BrowserControllerAgentEngine {
                             if (!el) return 'Element not found: ' + sel;
                             el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                             el.focus();
+                            // Prevent accidental full page reload when clicking submit buttons or hash links
+                            try {
+                                var tagName = el.tagName.toLowerCase();
+                                if ((tagName === 'button' || (tagName === 'input' && (el.type === 'submit' || el.type === 'button'))) && el.form) {
+                                    el.addEventListener('click', function(ev) { ev.preventDefault(); }, { once: true, capture: true });
+                                } else if (tagName === 'a') {
+                                    var href = (el.getAttribute('href') || '').trim();
+                                    if (href === '#' || href === '' || href.indexOf('javascript:') === 0) {
+                                        el.addEventListener('click', function(ev) { ev.preventDefault(); }, { once: true, capture: true });
+                                    }
+                                }
+                            } catch(pe) {}
                             el.click();
                             return 'OK';
                         } catch(err) {
@@ -191,7 +213,7 @@ object BrowserControllerAgentEngine {
                 }
                 val res = rawRes.removeSurrounding("\"").trim()
                 if (res.contains("OK")) {
-                    kotlinx.coroutines.delay(1200)
+                    kotlinx.coroutines.delay(800)
                     val title = if (LivePreviewBrowserManager.isAvailable()) {
                         LivePreviewBrowserManager.getActiveWebView()?.title ?: ""
                     } else {
@@ -230,7 +252,7 @@ object BrowserControllerAgentEngine {
                 } else {
                     backgroundBrowser.runJavascript(js)
                 }
-                kotlinx.coroutines.delay(800)
+                kotlinx.coroutines.delay(600)
                 "Successfully scrolled page $dir by $px px."
             }
 
@@ -254,7 +276,12 @@ object BrowserControllerAgentEngine {
                         }
                     })()
                 """.trimIndent()
-                val res = backgroundBrowser.runJavascript(js)
+                val rawRes = if (LivePreviewBrowserManager.isAvailable()) {
+                    LivePreviewBrowserManager.runJavascript(js)
+                } else {
+                    backgroundBrowser.runJavascript(js)
+                }
+                val res = rawRes.removeSurrounding("\"").trim()
                 if (res.contains("OK")) {
                     "Successfully selected option \"$text\" on '$targetSelector'."
                 } else {

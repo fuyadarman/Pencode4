@@ -164,6 +164,10 @@ class GitHubAuthManager(private val context: Context) {
                     if (tokenObtained.isBlank()) {
                         tokenObtained = json.optString("token", "")
                     }
+                    val refreshToken = json.optString("refresh_token", "")
+                    if (refreshToken.isNotBlank()) {
+                        prefs.edit().putString("refresh_token", refreshToken).apply()
+                    }
                     if (tokenObtained.isNotBlank()) {
                         break
                     }
@@ -184,6 +188,57 @@ class GitHubAuthManager(private val context: Context) {
             _authState.value = _authState.value.copy(isLoading = false, errorMessage = err)
             Result.failure(Exception(err))
         }
+    }
+
+    suspend fun refreshAccessToken(): Result<String> = withContext(Dispatchers.IO) {
+        val refreshToken = prefs.getString("refresh_token", "")?.trim() ?: ""
+        if (refreshToken.isBlank()) {
+            return@withContext Result.failure(Exception("No refresh token stored"))
+        }
+        val worker = _authState.value.workerUrl.trimEnd('/')
+        val endpointsToTry = mutableListOf<String>()
+        if (worker.isNotBlank()) {
+            endpointsToTry.add("$worker/api/oauth/refresh")
+            endpointsToTry.add("$worker/api/oauth/token")
+        }
+
+        for (endpoint in endpointsToTry) {
+            try {
+                val jsonBody = JSONObject().apply {
+                    put("refresh_token", refreshToken)
+                    put("grant_type", "refresh_token")
+                    put("client_id", CLIENT_ID)
+                }
+                val request = Request.Builder()
+                    .url(endpoint)
+                    .post(jsonBody.toString().toRequestBody("application/json".toMediaTypeOrNull()))
+                    .header("Accept", "application/json")
+                    .build()
+
+                val response = httpClient.newCall(request).execute()
+                val bodyStr = response.body?.string().orEmpty()
+                if (response.isSuccessful && bodyStr.isNotBlank()) {
+                    val json = JSONObject(bodyStr)
+                    val newAccess = json.optString("access_token", "").ifBlank { json.optString("token", "") }
+                    val newRefresh = json.optString("refresh_token", "")
+                    if (newAccess.isNotBlank()) {
+                        prefs.edit().putString("access_token", newAccess).apply()
+                        if (newRefresh.isNotBlank()) {
+                            prefs.edit().putString("refresh_token", newRefresh).apply()
+                        }
+                        _authState.value = _authState.value.copy(
+                            accessToken = newAccess,
+                            isConnected = true
+                        )
+                        Log.i(TAG, "Successfully refreshed GitHub access token.")
+                        return@withContext Result.success(newAccess)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Refresh attempt failed at $endpoint: ${e.message}")
+            }
+        }
+        Result.failure(Exception("Failed to refresh access token"))
     }
 
     suspend fun connectWithToken(token: String): Result<String> = withContext(Dispatchers.IO) {
@@ -210,7 +265,7 @@ class GitHubAuthManager(private val context: Context) {
         refreshUserProfileAndRepos(token)
     }
 
-    suspend fun refreshUserProfileAndRepos(token: String = _authState.value.accessToken) = withContext(Dispatchers.IO) {
+    suspend fun refreshUserProfileAndRepos(token: String = _authState.value.accessToken): Unit = withContext(Dispatchers.IO) {
         val cleanToken = token.trim()
             .removePrefix("Bearer ")
             .removePrefix("bearer ")
@@ -242,6 +297,16 @@ class GitHubAuthManager(private val context: Context) {
             }
 
             if (userRes.code == 401) {
+                // If we have a refresh token, attempt automatic refresh before reporting expired
+                val refreshRes = refreshAccessToken()
+                if (refreshRes.isSuccess) {
+                    val refreshedToken = refreshRes.getOrNull().orEmpty()
+                    if (refreshedToken.isNotBlank()) {
+                        refreshUserProfileAndRepos(refreshedToken)
+                        return@withContext
+                    }
+                }
+
                 // Token is genuinely expired or revoked by GitHub
                 Log.w(TAG, "GitHub token is invalid or expired (401 Bad credentials).")
                 _authState.value = _authState.value.copy(
@@ -392,6 +457,7 @@ class GitHubAuthManager(private val context: Context) {
     fun disconnect() {
         prefs.edit()
             .remove("access_token")
+            .remove("refresh_token")
             .remove("username")
             .remove("avatar_url")
             .remove("display_name")

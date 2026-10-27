@@ -27,6 +27,12 @@ object CustomModelResponseParser {
             return ExtractedResult(null, null, null)
         }
 
+        // 0. Direct DSML or XML tool call check (handles non-JSON or raw text completions)
+        val directDsml = com.example.agent.DsmlToolCallParser.parse(rawResponse)
+        if (directDsml != null) {
+            return ExtractedResult(null, directDsml, null)
+        }
+
         try {
             val json = JSONObject(rawResponse)
 
@@ -66,6 +72,10 @@ object CustomModelResponseParser {
                             }
 
                             if (!reasoning.isNullOrBlank()) {
+                                val dsmlFromReasoning = com.example.agent.DsmlToolCallParser.parse(reasoning)
+                                if (dsmlFromReasoning != null) {
+                                    return ExtractedResult(null, dsmlFromReasoning, reasoning)
+                                }
                                 Log.d(TAG, "Using reasoning_content as response text")
                                 return ExtractedResult(reasoning, null, reasoning)
                             }
@@ -74,6 +84,10 @@ object CustomModelResponseParser {
                         // Check legacy choice.text
                         val choiceText = firstChoice.optString("text", "")
                         if (choiceText.isNotBlank()) {
+                            val dsml = com.example.agent.DsmlToolCallParser.parse(choiceText)
+                            if (dsml != null) {
+                                return ExtractedResult(null, dsml, null)
+                            }
                             return ExtractedResult(choiceText, null, null)
                         }
                     }
@@ -84,6 +98,10 @@ object CustomModelResponseParser {
             if (json.has("content")) {
                 val directContent = parseContentValue(json.opt("content"))
                 if (!directContent.isNullOrBlank()) {
+                    val dsml = com.example.agent.DsmlToolCallParser.parse(directContent)
+                    if (dsml != null) {
+                        return ExtractedResult(null, dsml, null)
+                    }
                     return ExtractedResult(directContent, null, null)
                 }
             }
@@ -93,11 +111,21 @@ object CustomModelResponseParser {
                 .ifBlank { json.optString("output", "") }
                 .ifBlank { json.optString("text", "") }
             if (simpleResponse.isNotBlank()) {
+                val dsml = com.example.agent.DsmlToolCallParser.parse(simpleResponse)
+                if (dsml != null) {
+                    return ExtractedResult(null, dsml, null)
+                }
                 return ExtractedResult(simpleResponse, null, null)
             }
 
         } catch (e: Exception) {
             Log.w(TAG, "Non-JSON or parsing error in extractContentOrTool: ${e.message}")
+            // Fallback for raw text responses
+            val fallbackDsml = com.example.agent.DsmlToolCallParser.parse(rawResponse)
+            if (fallbackDsml != null) {
+                return ExtractedResult(null, fallbackDsml, null)
+            }
+            return ExtractedResult(rawResponse.trim(), null, null)
         }
 
         return ExtractedResult(null, null, null)

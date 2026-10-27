@@ -6,6 +6,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.webkit.WebChromeClient
 import android.webkit.ConsoleMessage
+import com.example.ui.GitHubRepoSelectorDialog
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -246,8 +247,9 @@ fun WorkspaceScreen(
     val liveBrowserPendingUrl by com.example.browser.LivePreviewBrowserManager.pendingUrl.collectAsState()
     val liveBrowserActionStatus by com.example.browser.LivePreviewBrowserManager.agentActionStatus.collectAsState()
 
-    LaunchedEffect(liveBrowserPendingUrl, liveBrowserActionStatus) {
-        if ((!liveBrowserPendingUrl.isNullOrBlank() || !liveBrowserActionStatus.isNullOrBlank()) && currentTab != WorkspaceTab.PREVIEW) {
+    LaunchedEffect(liveBrowserPendingUrl) {
+        val pending = liveBrowserPendingUrl
+        if (!pending.isNullOrBlank() && !com.example.ui.preview.WebPreviewLifecycleManager.isInternalVirtualUrl(pending) && currentTab != WorkspaceTab.PREVIEW) {
             onTabSelected(WorkspaceTab.PREVIEW)
         }
     }
@@ -567,7 +569,7 @@ fun WorkspaceScreen(
 
                     // Persistent Preview Tab Container:
                     // Stays mounted so the WebView is NEVER destroyed or forced to reload when switching tabs!
-                    var hasPreviewEverBeenOpened by remember { mutableStateOf(false) }
+                    var hasPreviewEverBeenOpened by remember { mutableStateOf(true) }
                     if (currentTab == WorkspaceTab.PREVIEW) {
                         hasPreviewEverBeenOpened = true
                     }
@@ -2611,7 +2613,7 @@ fun ChatBubble(
                     .trim()
             }
 
-            if (cleanModelName.isNotBlank()) {
+            if (isUser && cleanModelName.isNotBlank()) {
                 val displaySecs = if (message.executionTimeSeconds > 0) message.executionTimeSeconds else (assistantDuration?.removeSuffix("s")?.toLongOrNull() ?: executionElapsedTimeSeconds)
                 val sysTok = if (message.systemTokens > 0) message.systemTokens else if (liveSystemTokens > 0) liveSystemTokens else 2440
                 val usrTok = if (message.userTokens > 0) message.userTokens else if (liveUserTokens > 0) liveUserTokens else maxOf(1, message.content.length / 4)
@@ -4407,11 +4409,14 @@ fun PreviewTabContent(
                                 com.example.ui.preview.WebPreviewLifecycleManager.prepareWebView(this)
 
                                 if (customUrl != null) {
+                                    tag = customUrl
                                     loadUrl(customUrl!!)
                                 } else if (effectiveHtmlContent != null || hasWebDist) {
+                                    tag = effectiveHtmlContent?.let { com.example.ui.preview.WebPreviewPerformanceGuard.preprocessHtmlSafely(it) }
                                     loadUrl(com.example.ui.preview.WebPreviewLifecycleManager.VIRTUAL_BASE_URL)
                                 } else {
                                     val startHtml = com.example.browser.RealBrowserStartPageGenerator.generateStartPageHtml()
+                                    tag = startHtml
                                     loadDataWithBaseURL(
                                         "https://browser-home/",
                                         startHtml,
@@ -4434,16 +4439,20 @@ fun PreviewTabContent(
                                 if (customUrl == null && effectiveHtmlContent != null && (isUniversalPreviewApplicable || !hasWebDist)) {
                                     val currentContent = com.example.ui.preview.WebPreviewPerformanceGuard.preprocessHtmlSafely(effectiveHtmlContent)
                                     val currentTag = webView.tag as? String
-                                    if (currentTag != currentContent) {
+                                    if (currentTag != null && currentTag != currentContent) {
                                         webView.tag = currentContent
                                         webView.loadUrl(com.example.ui.preview.WebPreviewLifecycleManager.VIRTUAL_BASE_URL)
+                                    } else if (currentTag == null) {
+                                        webView.tag = currentContent
                                     }
                                 } else if (customUrl == null && effectiveHtmlContent == null && !hasWebDist) {
                                     val startHtml = com.example.browser.RealBrowserStartPageGenerator.generateStartPageHtml()
                                     val currentTag = webView.tag as? String
-                                    if (currentTag != startHtml) {
+                                    if (currentTag != null && currentTag != startHtml) {
                                         webView.tag = startHtml
                                         webView.loadDataWithBaseURL("https://browser-home/", startHtml, "text/html", "UTF-8", null)
+                                    } else if (currentTag == null) {
+                                        webView.tag = startHtml
                                     }
                                 }
                             }
@@ -5855,11 +5864,11 @@ fun AndroidBuildTabContent(
         }
 
         if (showRepoPicker) {
-            com.example.ui.build.GitHubRepoSelectorDialog(
+            GitHubRepoSelectorDialog(
                 isOpen = showRepoPicker,
                 authManager = authManager,
                 onDismiss = { showRepoPicker = false },
-                onRepoSelected = { repoName, branch ->
+                onRepoSelected = { repoName: String, branch: String ->
                     tempRepo = repoName
                     tempBranch = branch
                     val token = authState.accessToken.ifBlank { tempToken }
@@ -7817,11 +7826,11 @@ fun PushProjectDialog(
     }
 
     if (showRepoPicker) {
-        com.example.ui.build.GitHubRepoSelectorDialog(
+        GitHubRepoSelectorDialog(
             isOpen = showRepoPicker,
             authManager = authManager,
             onDismiss = { showRepoPicker = false },
-            onRepoSelected = { repoName, selectedBranch ->
+            onRepoSelected = { repoName: String, selectedBranch: String ->
                 repo = repoName
                 if (selectedBranch.isNotBlank()) {
                     branch = selectedBranch
