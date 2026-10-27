@@ -367,7 +367,11 @@ object MultiEditChunkParser {
             script = argsObj.optString("script", "").ifBlank { null },
             direction = argsObj.optString("direction", "").ifBlank { null },
             amount = if (argsObj.has("amount")) argsObj.optInt("amount") else null,
-            text = argsObj.optString("text", "").ifBlank { null },
+            text = argsObj.optString("text", "")
+                .ifBlank { argsObj.optString("value", "") }
+                .ifBlank { argsObj.optString("input", "") }
+                .ifBlank { argsObj.optString("content", "") }
+                .ifBlank { null },
             targetImage = argsObj.optString("targetImage", "").ifBlank { null },
             mcpServerId = argsObj.optString("mcpServerId", "")
                 .ifBlank { argsObj.optString("serverId", "") }

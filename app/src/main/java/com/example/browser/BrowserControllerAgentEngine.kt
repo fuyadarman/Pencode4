@@ -139,9 +139,17 @@ object BrowserControllerAgentEngine {
         val cleanSelector = selector?.trim()?.let {
             if (it.equals("null", ignoreCase = true) || it.equals("undefined", ignoreCase = true) || it.isBlank()) null else it
         }
+        val parsedIndex = cleanSelector?.let { s ->
+            if (s.startsWith("[") && s.endsWith("]")) {
+                s.substring(1, s.length - 1).trim().toIntOrNull()
+            } else if (s.all { it.isDigit() }) {
+                s.toIntOrNull()
+            } else null
+        }
+        val effectiveIndex = elementIndex ?: parsedIndex
         val targetSelector = when {
-            elementIndex != null && elementIndex > 0 -> "[data-agent-index='$elementIndex']"
-            cleanSelector != null -> cleanSelector
+            effectiveIndex != null && effectiveIndex > 0 -> "[data-agent-index='$effectiveIndex']"
+            cleanSelector != null && parsedIndex == null -> cleanSelector
             else -> ""
         }
 
@@ -230,7 +238,7 @@ object BrowserControllerAgentEngine {
             "type" -> {
                 BrowserActionExecutionEngine.executeTypeAction(
                     selector = cleanSelector,
-                    elementIndex = elementIndex,
+                    elementIndex = effectiveIndex,
                     text = text,
                     clearBefore = clearBefore,
                     pressEnter = pressEnter,
@@ -321,6 +329,45 @@ object BrowserControllerAgentEngine {
                     )
                 } else {
                     "Error: Missing workspace repository context for browser upload."
+                }
+            }
+
+            "submit" -> {
+                val js = """
+                    (function() {
+                        try {
+                            var sel = $escapedSelector;
+                            var el = null;
+                            if (sel) {
+                                try { el = document.querySelector(sel); } catch(e) {}
+                                if (!el) try { el = document.getElementById(sel); } catch(e) {}
+                            }
+                            if (!el) {
+                                el = document.querySelector('form, button[type="submit"], input[type="submit"]');
+                            }
+                            if (!el) return 'No form or submit button found';
+                            if (el.tagName.toLowerCase() === 'form') {
+                                var ev = new Event('submit', { bubbles: true, cancelable: true });
+                                el.dispatchEvent(ev);
+                            } else {
+                                el.click();
+                            }
+                            return 'OK';
+                        } catch(err) {
+                            return 'JS Exception: ' + (err.message || err.toString());
+                        }
+                    })()
+                """.trimIndent()
+                val rawRes = if (LivePreviewBrowserManager.isAvailable()) {
+                    LivePreviewBrowserManager.runJavascript(js)
+                } else {
+                    backgroundBrowser.runJavascript(js)
+                }
+                val res = rawRes.removeSurrounding("\"").trim()
+                if (res.contains("OK")) {
+                    "Successfully submitted form/element '$targetSelector'."
+                } else {
+                    "Error submitting form: $res"
                 }
             }
 

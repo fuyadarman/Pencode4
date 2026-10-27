@@ -548,6 +548,7 @@ fun CreateProjectDialog(
     var description by remember { mutableStateOf("") }
     var selectedTemplate by remember { mutableStateOf<String?>("empty") } // Default empty project
     var selectedUris by remember { mutableStateOf<List<android.net.Uri>>(emptyList()) }
+    var isCreating by remember { mutableStateOf(false) }
 
     val filePickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         contract = androidx.activity.result.contract.ActivityResultContracts.GetMultipleContents()
@@ -743,7 +744,8 @@ fun CreateProjectDialog(
                         Spacer(modifier = Modifier.width(12.dp))
                         Button(
                             onClick = {
-                                if (name.isNotBlank()) {
+                                if (name.isNotBlank() && !isCreating) {
+                                    isCreating = true
                                     onCreate(name, description, selectedTemplate, selectedUris)
                                 }
                             },
@@ -752,7 +754,7 @@ fun CreateProjectDialog(
                                 contentColor = Color.White
                             ),
                             shape = RoundedCornerShape(8.dp),
-                            enabled = name.isNotBlank()
+                            enabled = name.isNotBlank() && !isCreating
                         ) {
                             Text("Create Workspace", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                         }

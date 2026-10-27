@@ -37,9 +37,18 @@ object BrowserActionExecutionEngine {
             }
         }
 
+        val parsedIndex = cleanSelector?.let { s ->
+            if (s.startsWith("[") && s.endsWith("]")) {
+                s.substring(1, s.length - 1).trim().toIntOrNull()
+            } else if (s.all { it.isDigit() }) {
+                s.toIntOrNull()
+            } else null
+        }
+        val effectiveIndex = elementIndex ?: parsedIndex
+
         val targetSelector = when {
-            elementIndex != null && elementIndex > 0 -> "[data-agent-index='$elementIndex']"
-            cleanSelector != null -> cleanSelector
+            effectiveIndex != null && effectiveIndex > 0 -> "[data-agent-index='$effectiveIndex']"
+            cleanSelector != null && parsedIndex == null -> cleanSelector
             else -> ""
         }
 

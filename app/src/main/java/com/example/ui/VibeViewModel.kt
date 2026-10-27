@@ -1450,12 +1450,18 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                             Log.e("VibeViewModel", "Error polling workflows list: ${e.localizedMessage}")
                         }
                         
-                        if (!workflowRuns.isNullOrEmpty()) {
-                            val latestRun = workflowRuns[0] as? Map<*, *>
-                            val runId = (latestRun?.get("id") as? Number)?.toLong()
-                            val status = latestRun?.get("status") as? String ?: "unknown"
-                            val conclusion = latestRun?.get("conclusion") as? String
-                            val runNumber = (latestRun?.get("run_number") as? Number)?.toInt() ?: 1
+                        val androidRun = workflowRuns?.mapNotNull { it as? Map<*, *> }?.firstOrNull { run ->
+                            val path = (run["path"] as? String) ?: ""
+                            val name = (run["name"] as? String) ?: ""
+                            path.lowercase().endsWith("android.yml") || path.lowercase().endsWith("android.yaml") || name.contains("Android", ignoreCase = true)
+                        }
+
+                        if (androidRun != null) {
+                            val latestRun = androidRun
+                            val runId = (latestRun["id"] as? Number)?.toLong()
+                            val status = latestRun["status"] as? String ?: "unknown"
+                            val conclusion = latestRun["conclusion"] as? String
+                            val runNumber = (latestRun["run_number"] as? Number)?.toInt() ?: 1
 
                             _buildStatus.value = "Run #$runNumber: Status = $status" + (if (conclusion != null) " ($conclusion)" else "")
 
@@ -3204,7 +3210,28 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         val defaultFile = visibleFiles.find { it.path == "index.html" } ?: visibleFiles.firstOrNull()
         selectActiveFile(defaultFile)
 
-        _chatMessages.value = repository.getChatsForProject(projectName)
+        val allProjectChats = repository.getChatsForProject(projectName)
+        val welcomeCount = allProjectChats.count { it.content.contains("I have initialized the", ignoreCase = true) }
+        val finalChats = if (welcomeCount > 1) {
+            var keptFirst = false
+            val deduped = mutableListOf<ChatMessageEntity>()
+            for (chat in allProjectChats) {
+                if (chat.content.contains("I have initialized the", ignoreCase = true)) {
+                    if (!keptFirst) {
+                        keptFirst = true
+                        deduped.add(chat)
+                    } else {
+                        viewModelScope.launch { repository.deleteChatMessage(chat) }
+                    }
+                } else {
+                    deduped.add(chat)
+                }
+            }
+            deduped
+        } else {
+            allProjectChats
+        }
+        _chatMessages.value = finalChats
         loadBackupsForCurrentProject(projectName)
     }
 
@@ -3795,10 +3822,14 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 return@launch
             }
 
-            val activeApiKey = activeConfig.apiKey
-            val provider = activeConfig.provider
-            val modelId = activeConfig.modelId
-            val baseUrl = activeConfig.baseUrl
+            var activeApiKey = activeConfig.apiKey
+            var provider = activeConfig.provider
+            var modelId = activeConfig.modelId
+            var baseUrl = activeConfig.baseUrl
+            var currentModelId = activeConfig.modelId
+            var currentConfigId = activeConfig.id
+            val triedModelIds = mutableSetOf(activeConfig.id, activeConfig.modelId)
+            com.example.agent.AgentRepetitionGuardEngine.resetSession()
 
             val executionStartTime = System.currentTimeMillis()
             _executionElapsedTimeSeconds.value = 0L
@@ -4182,37 +4213,24 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     history.add(Content(role = "user", parts = listOf(Part(text = circuitBreakerMsg))))
                                 }
 
-                                val repCheck = com.example.agent.OpenCodeLoopGuardEngine.checkAndRecordRepetition(
+                                val loopAction = com.example.agent.AgentLoopInterceptorEngine.inspectAction(
                                     tool = tool,
                                     args = args,
                                     turn = turn,
-                                    hasModifiedFiles = filesModifiedThisPrompt || loopProtectionEngine.hasModifiedAnyFiles()
+                                    hasModifiedFiles = filesModifiedThisPrompt || loopProtectionEngine.hasModifiedAnyFiles(),
+                                    createAiLog = { title, status, details -> createAiLog(title, status, details) },
+                                    addHistory = { item: Content -> history.add(item) },
+                                    addLog = { logItem: AiActionLog -> _aiActionLogs.value = _aiActionLogs.value + logItem }
                                 )
-                                when (repCheck) {
-                                    is com.example.agent.OpenCodeLoopGuardEngine.RepetitionResult.AbortRepetition -> {
-                                        val abortLog = createAiLog(
-                                            title = "Repetition Loop Intercepted",
-                                            status = "success",
-                                            details = repCheck.summary
-                                        )
-                                        _aiActionLogs.value = _aiActionLogs.value + abortLog
-                                        handleComplete(repCheck.summary)
+                                when (loopAction) {
+                                    is com.example.agent.AgentLoopInterceptorEngine.LoopAction.Abort -> {
+                                        _aiActionLogs.value = _aiActionLogs.value + loopAction.log
+                                        handleComplete(loopAction.reason)
                                         loopCompleted = true
                                         break
                                     }
-                                    is com.example.agent.OpenCodeLoopGuardEngine.RepetitionResult.WarnAndNudge -> {
-                                        if (!repCheck.silentInUi) {
-                                            val warnLog = createAiLog(
-                                                title = "Repetition Warning",
-                                                status = "failed",
-                                                details = repCheck.message
-                                            )
-                                            _aiActionLogs.value = _aiActionLogs.value + warnLog
-                                        }
-                                        history.add(Content(role = "user", parts = listOf(Part(text = "System Notice: ${repCheck.message}"))))
-                                        continue
-                                    }
-                                    com.example.agent.OpenCodeLoopGuardEngine.RepetitionResult.Proceed -> { /* proceed normally */ }
+                                    com.example.agent.AgentLoopInterceptorEngine.LoopAction.SkipTurn -> continue
+                                    com.example.agent.AgentLoopInterceptorEngine.LoopAction.Continue -> { /* proceed */ }
                                 }
                             }
                             
@@ -4692,137 +4710,23 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'move_code': $result"))))
                             }
-                            "copy_code" -> {
-                                val sourcePath = normalizePath(args?.path ?: "")
-                                val destPath = normalizePath(args?.destinationPath ?: "")
-                                val copyCodeLog = AiActionLog(
-                                    title = "Copied code block",
-                                    status = "thinking",
-                                    details = "Copying from $sourcePath to $destPath"
-                                )
-                                _aiActionLogs.value = _aiActionLogs.value + copyCodeLog
-
-                                val result = com.example.agent.AgentCodeBlockOperations.handleCopyCode(
+                            "copy_code", "run_command", "global_search", "grep", "find_in_files", "find", "load_skill" -> {
+                                val result = com.example.agent.AgentAuxiliaryToolHandler.handleAuxiliaryTool(
+                                    tool = tool,
                                     args = args,
                                     project = project,
                                     repository = repository,
-                                    normalizePath = { normalizePath(it) }
+                                    stepResponse = stepResponse,
+                                    createAiLog = { title, status, details -> createAiLog(title, status, details) },
+                                    addLog = { log -> _aiActionLogs.value = _aiActionLogs.value + log },
+                                    updateLog = { id, status, details -> updateAiLog(id, status, details) },
+                                    appendToTerminal = { cmd, out -> appendToTerminal(cmd, out) },
+                                    refreshFiles = { _projectFiles.value = repository.getFilesForProject(project.name) },
+                                    normalizePath = { normalizePath(it) },
+                                    activeSkills = _agentSkills.value
                                 )
-                                if (result.startsWith("Successfully")) {
-                                    _projectFiles.value = repository.getFilesForProject(project.name)
-                                }
-
-                                _aiActionLogs.value = _aiActionLogs.value.map { log ->
-                                    if (log.id == copyCodeLog.id) {
-                                        log.copy(status = if (result.startsWith("Successfully")) "success" else "failed", details = result)
-                                    } else log
-                                }
-
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
-                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'copy_code': $result"))))
-                            }
-                            "run_command" -> {
-                                val shellCmd = args?.command ?: ""
-                                val intent = com.example.agent.HybridActionIntentTracker.resolveIntent(
-                                    tool = "run_command",
-                                    args = mapOf("command" to shellCmd),
-                                    thought = stepResponse?.thought ?: ""
-                                )
-                                val shellLog = createAiLog(
-                                    title = intent.title,
-                                    status = "thinking",
-                                    details = if (shellCmd.isNotEmpty()) "> $shellCmd" else null
-                                )
-                                _aiActionLogs.value = _aiActionLogs.value + shellLog
-
-                                val result = repository.executeCommand(project.name, shellCmd)
-                                appendToTerminal(shellCmd, result)
-
-                                val finalDetails = if (shellCmd.isNotEmpty()) {
-                                    "> $shellCmd\n\n" + if (result.isEmpty()) "(no output)" else result
-                                } else {
-                                    if (result.isEmpty()) "(no output)" else result
-                                }
-                                updateAiLog(shellLog.id, "success", finalDetails)
-
-                                history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
-                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'run_command': $result"))))
-                            }
-                            "global_search", "grep", "find_in_files", "find" -> {
-                                val query = args?.query ?: args?.search ?: args?.pattern ?: args?.message ?: ""
-                                val toolName = stepResponse.tool ?: "global_search"
-                                val intent = com.example.agent.HybridActionIntentTracker.resolveIntent(
-                                    tool = toolName,
-                                    args = mapOf("query" to query),
-                                    thought = stepResponse?.thought ?: ""
-                                )
-                                val searchLog = AiActionLog(
-                                    title = intent.title,
-                                    status = "thinking",
-                                    details = "> grep -r '$query' ."
-                                )
-                                _aiActionLogs.value = _aiActionLogs.value + searchLog
-
-                                val files = repository.getFilesForProject(project.name)
-                                val matches = mutableListOf<String>()
-                                files.forEach { file ->
-                                    val lines = file.content.lines()
-                                    lines.forEachIndexed { idx, line ->
-                                        if (line.contains(query, ignoreCase = true)) {
-                                            matches.add("${file.path}:${idx + 1}: $line")
-                                        }
-                                    }
-                                }
-
-                                val result = if (matches.isEmpty()) {
-                                    "No occurrences of '$query' found."
-                                } else {
-                                    "Matches found for '$query':\n" + matches.joinToString("\n")
-                                }
-                                appendToTerminal("grep -rn \"$query\" .", result)
-
-                                _aiActionLogs.value = _aiActionLogs.value.map { log ->
-                                    if (log.id == searchLog.id) {
-                                        val finalDetails = "> grep -r '$query' .\n\n$result"
-                                        log.copy(status = "success", details = finalDetails)
-                                    } else log
-                                }
-
-                                history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
-                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$toolName': $result"))))
-                            }
-                            "load_skill" -> {
-                                val skillQuery = args?.path ?: args?.query ?: args?.message ?: args?.content ?: ""
-                                val activeSkills = _agentSkills.value.filter { it.isInstalled && it.isEnabled }
-                                val matchedSkill = activeSkills.find { 
-                                    it.id.equals(skillQuery, ignoreCase = true) || 
-                                    it.name.contains(skillQuery, ignoreCase = true) ||
-                                    skillQuery.contains(it.id, ignoreCase = true)
-                                }
-
-                                val result = if (matchedSkill != null) {
-                                    val skillLog = createAiLog(
-                                        title = "Loaded Skill: ${matchedSkill.name}",
-                                        status = "success",
-                                        details = "Agent analyzed prompt and loaded skill '${matchedSkill.name}' by ${matchedSkill.author}"
-                                    )
-                                    _aiActionLogs.value = _aiActionLogs.value + skillLog
-
-                                    "Loaded Skill: ${matchedSkill.name} (${matchedSkill.author})\nDescription: ${matchedSkill.description}\nInstructions:\n${matchedSkill.skillPrompt}"
-                                } else {
-                                    val skillLog = createAiLog(
-                                        title = "Load Skill Failed",
-                                        status = "failed",
-                                        details = "Skill '$skillQuery' not active or not installed."
-                                    )
-                                    _aiActionLogs.value = _aiActionLogs.value + skillLog
-
-                                    val availableList = activeSkills.joinToString(", ") { "${it.id} (${it.name})" }
-                                    "Skill '$skillQuery' not found or not active. Active installed skills: $availableList"
-                                }
-
-                                history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
-                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for 'load_skill': $result"))))
+                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': $result"))))
                             }
                             else -> {
                                 val isMcpCandidate = tool.startsWith("mcp_") || 
@@ -4850,6 +4754,29 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                         }
                         } // End of toolCalls for loop
                     } else {
+                        val switchResult = com.example.model.ModelFallbackExecutionEngine.attemptAutoSwitch(
+                            context = getApplication(),
+                            currentModelId = currentModelId,
+                            currentRunningModelName = _currentRunningModelName.value,
+                            availableModels = _customModels.value,
+                            triedModelIds = triedModelIds,
+                            errorMessage = "Empty or invalid response",
+                            createAiLog = { title, status, details -> createAiLog(title, status, details) }
+                        )
+                        if (switchResult != null) {
+                            val next = switchResult.newConfig
+                            activeApiKey = next.apiKey
+                            provider = next.provider
+                            modelId = next.modelId
+                            baseUrl = next.baseUrl
+                            currentModelId = next.modelId
+                            currentConfigId = next.id
+                            _currentRunningModelName.value = next.alias.ifBlank { next.modelId }
+                            _aiActionLogs.value = _aiActionLogs.value + switchResult.switchLog
+                            history.add(switchResult.systemNotice)
+                            continue
+                        }
+
                         val failLog = AiActionLog(
                             title = "Invalid response parsed",
                             status = "failed",
@@ -4874,6 +4801,29 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                     throw e
                 } catch (e: Exception) {
                     Log.e("VibeViewModel", "Error in AI agent loop", e)
+                    val switchResult = com.example.model.ModelFallbackExecutionEngine.attemptAutoSwitch(
+                        context = getApplication(),
+                        currentModelId = currentModelId,
+                        currentRunningModelName = _currentRunningModelName.value,
+                        availableModels = _customModels.value,
+                        triedModelIds = triedModelIds,
+                        errorMessage = e.localizedMessage,
+                        createAiLog = { title, status, details -> createAiLog(title, status, details) }
+                    )
+                    if (switchResult != null) {
+                        val next = switchResult.newConfig
+                        activeApiKey = next.apiKey
+                        provider = next.provider
+                        modelId = next.modelId
+                        baseUrl = next.baseUrl
+                        currentModelId = next.modelId
+                        currentConfigId = next.id
+                        _currentRunningModelName.value = next.alias.ifBlank { next.modelId }
+                        _aiActionLogs.value = _aiActionLogs.value + switchResult.switchLog
+                        history.add(switchResult.systemNotice)
+                        continue
+                    }
+
                     val failLog = AiActionLog(
                         title = "Agent loop connection failure",
                         status = "failed",

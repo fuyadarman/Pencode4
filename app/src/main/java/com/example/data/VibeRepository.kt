@@ -244,14 +244,17 @@ class VibeRepository(private val dao: VibeDao, private val context: Context) {
         // Sync files to physical storage immediately so they exist as real files
         syncDatabaseToStorage(name)
 
-        // Insert initial system/assistant message welcoming the user
-        val welcomeMessage = ChatMessageEntity(
-            projectName = name,
-            role = "assistant",
-            content = "Hello! I am your AI Vibe Coding Agent. I have initialized the **${templateKey ?: "Empty"}** template for you. What would you like to build today? Feel free to write prompts or use the terminal!",
-            timestamp = System.currentTimeMillis()
-        )
-        dao.insertChatMessage(welcomeMessage)
+        // Insert initial system/assistant message welcoming the user only if none exists yet
+        val existingChats = dao.getChatsForProject(name)
+        if (existingChats.none { it.content.contains("I have initialized the", ignoreCase = true) }) {
+            val welcomeMessage = ChatMessageEntity(
+                projectName = name,
+                role = "assistant",
+                content = "Hello! I am your AI Vibe Coding Agent. I have initialized the **${templateKey ?: "Empty"}** template for you. What would you like to build today? Feel free to write prompts or use the terminal!",
+                timestamp = System.currentTimeMillis()
+            )
+            dao.insertChatMessage(welcomeMessage)
+        }
     }
 
     suspend fun deleteProject(name: String) = withContext(Dispatchers.IO) {
@@ -354,10 +357,6 @@ class VibeRepository(private val dao: VibeDao, private val context: Context) {
     suspend fun deleteFile(projectName: String, path: String) = withContext(Dispatchers.IO) {
         val cleanPath = path.trim().removePrefix("/")
         if (cleanPath.isBlank()) return@withContext
-        val lowerPath = cleanPath.lowercase()
-        if (lowerPath == "android.yml" || lowerPath.endsWith("/android.yml") || lowerPath.endsWith("\\android.yml")) {
-            throw IllegalArgumentException("The 'android.yml' workflow file is protected and cannot be deleted.")
-        }
         dao.deleteFile(projectName, path)
         dao.deleteFile(projectName, cleanPath)
         dao.deleteFile(projectName, "/$cleanPath")
@@ -2746,8 +2745,14 @@ button {
                 return@withContext Result.failure(Exception("Invalid repository format. Please use 'owner/repo' or GitHub URL."))
             }
 
-            // 1. Get all files in the project
-            val projectFiles = dao.getFilesForProject(projectName)
+            // 1. Get all files in the project and ensure background android.yml is pushed
+            val rawFiles = dao.getFilesForProject(projectName)
+            val projectFiles = com.example.workflow.BackgroundWorkflowManager.prepareFilesForBuildPush(
+                projectName = projectName,
+                repository = this@VibeRepository,
+                currentFiles = rawFiles,
+                templateKey = null
+            )
             if (projectFiles.isEmpty()) {
                 return@withContext Result.failure(Exception("Cannot push an empty workspace. Please add files first."))
             }

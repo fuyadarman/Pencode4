@@ -93,6 +93,10 @@ object DsmlToolCallParser {
         val format = params["format"]
         val action = params["action"]
         val elementIndex = params["elementIndex"]?.toIntOrNull()
+            ?: params["element_index"]?.toIntOrNull()
+            ?: params["index"]?.toIntOrNull()
+            ?: params["element"]?.toIntOrNull()
+        val text = params["text"] ?: params["value"] ?: params["input"] ?: params["content"]
 
         return ToolArguments(
             path = path,
@@ -126,7 +130,8 @@ object DsmlToolCallParser {
             height = height,
             format = format,
             action = action,
-            elementIndex = elementIndex
+            elementIndex = elementIndex,
+            text = text
         )
     }
 }

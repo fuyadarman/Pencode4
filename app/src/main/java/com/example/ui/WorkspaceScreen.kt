@@ -7,6 +7,7 @@ import android.webkit.WebViewClient
 import android.webkit.WebChromeClient
 import android.webkit.ConsoleMessage
 import com.example.ui.GitHubRepoSelectorDialog
+import com.example.ui.settings.ModelFallbackSettingsCard
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -6270,10 +6271,11 @@ fun buildFileTree(files: List<ProjectFileEntity>): FileNode {
     val pathNodeMap = mutableMapOf<String, FileNode>()
     pathNodeMap[""] = root
 
-    // Normalize paths and filter out build artifacts and empty leading slash components
+    // Normalize paths and filter out build artifacts, background workflow files, and empty leading slash components
     val filteredFiles = files.filter { f ->
         val clean = f.path.replace('\\', '/').trimStart('/')
-        !clean.startsWith("_next/") && !clean.startsWith(".next/") && !clean.startsWith("web-dist/")
+        !clean.startsWith("_next/") && !clean.startsWith(".next/") && !clean.startsWith("web-dist/") &&
+                !com.example.workflow.BackgroundWorkflowManager.isUserHiddenFile(clean)
     }
     val displayFiles = if (filteredFiles.size > 10000) filteredFiles.take(10000) else filteredFiles
 
@@ -7297,6 +7299,15 @@ fun CustomSettingsDialog(
                     }
                 }
 
+                if (customModels.isNotEmpty()) {
+                    ModelFallbackSettingsCard(
+                        customModels = customModels,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp, bottom = 8.dp)
+                    )
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
@@ -7992,7 +8003,7 @@ fun GlobalSearchDialog(
                 if (query.length >= 2) {
                     val searchResults = remember(query, files) {
                         val list = mutableListOf<SearchMatch>()
-                        files.forEach { file ->
+                        files.filter { !com.example.workflow.BackgroundWorkflowManager.isUserHiddenFile(it.path) }.forEach { file ->
                             val lines = file.content.lines()
                             lines.forEachIndexed { index, line ->
                                 if (line.contains(query, ignoreCase = true)) {

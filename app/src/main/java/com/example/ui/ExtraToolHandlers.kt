@@ -1025,10 +1025,17 @@ object ExtraToolHandlers {
             }
             "browser_controller", "browser_interact", "browser_action" -> {
                 val resolvedText = args?.text ?: args?.content ?: args?.query ?: args?.message ?: args?.search
-                val resolvedSelector = args?.selector ?: args?.targetFile ?: args?.path ?: args?.targetAnchor
+                val rawSelector = args?.selector ?: args?.targetFile ?: args?.path ?: args?.targetAnchor
+                val parsedIndexFromSel = rawSelector?.trim()?.let { s ->
+                    if (s.startsWith("[") && s.endsWith("]")) s.substring(1, s.length - 1).trim().toIntOrNull()
+                    else if (s.all { it.isDigit() }) s.toIntOrNull()
+                    else null
+                }
+                val resolvedIndex = args?.elementIndex ?: parsedIndexFromSel
+                val resolvedSelector = if (parsedIndexFromSel != null) null else rawSelector
                 val filePathArg = args?.filePath ?: args?.path ?: args?.targetFile ?: args?.sourcePath ?: args?.file
                 val destPathArg = args?.destinationPath ?: args?.targetFile ?: args?.newPath
-                val act = args?.action ?: if (!filePathArg.isNullOrBlank() && (args?.action == "upload" || resolvedText?.contains("upload") == true)) "upload" else if (!resolvedText.isNullOrBlank()) "type" else if (args?.elementIndex != null || !resolvedSelector.isNullOrBlank()) "click" else "scroll"
+                val act = args?.action?.lowercase()?.trim() ?: if (!filePathArg.isNullOrBlank() && (args?.action == "upload" || resolvedText?.contains("upload") == true)) "upload" else if (!resolvedText.isNullOrBlank()) "type" else if (resolvedIndex != null || !resolvedSelector.isNullOrBlank()) "click" else "scroll"
                 val actLog = createLog(
                     "Browser Controller Action",
                     "thinking",
@@ -1041,7 +1048,7 @@ object ExtraToolHandlers {
                 val result = com.example.browser.BrowserControllerAgentEngine.executeBrowserAction(
                     action = act,
                     selector = resolvedSelector,
-                    elementIndex = args?.elementIndex,
+                    elementIndex = resolvedIndex,
                     text = resolvedText,
                     clearBefore = args?.clearBefore ?: true,
                     pressEnter = args?.pressEnter ?: false,

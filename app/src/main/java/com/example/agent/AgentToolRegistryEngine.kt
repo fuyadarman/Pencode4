@@ -69,7 +69,8 @@ object AgentToolRegistryEngine {
         • browser_search(query: string) -> Searches the web or navigates to a URL.
         • browser_read() -> Reads the current webpage text.
         • browser_snapshot() -> Takes an indexed snapshot of all interactive elements on the page.
-        • browser_controller(action: 'click'|'type'|'scroll'|'select'|'download'|'upload', elementIndex?: int, selector?: string, text?: string, filePath?: string, destinationPath?: string) -> Interacts with webpage elements.
+        • browser_action(action: 'click'|'type'|'scroll'|'select'|'download'|'upload'|'submit', selector?: string, elementIndex?: int, text?: string, pressEnter?: boolean, clearBefore?: boolean, direction?: string, amount?: int, filePath?: string, destinationPath?: string) -> Directly controls and interacts with live browser webpage elements (clicking buttons/links, typing in inputs, scrolling, submitting forms).
+        • browser_controller(action: 'click'|'type'|'scroll'|'select'|'download'|'upload'|'submit', elementIndex?: int, selector?: string, text?: string, filePath?: string, destinationPath?: string) -> Alias for browser_action to interact with webpage elements.
         • browser_reload() -> Reloads the live preview tab / browser.
         • browser_download(url?: string, selector?: string, destinationPath?: string) -> Downloads any file, image, PDF, ZIP, or asset from browser into project workspace.
         • browser_upload(filePath: string, selector?: string, elementIndex?: int) -> Uploads any workspace file into an HTML file input on the current browser page.
@@ -112,6 +113,7 @@ object AgentToolRegistryEngine {
             "'browser_search'(query)",
             "'browser_read'()",
             "'browser_snapshot'()",
+            "'browser_action'(action: 'click'|'type'|'scroll'|'select'|'submit'|'upload', selector?, elementIndex?, text?, pressEnter?, direction?, amount?)",
             "'browser_controller'(action, elementIndex?, selector?, text?)",
             "'browser_reload'() [Reloads the live preview tab / browser]",
             "'browser_download'(url?, selector?, destinationPath?) [Downloads file from browser into workspace]",
@@ -125,6 +127,11 @@ object AgentToolRegistryEngine {
             "'compress_image'(path, quality?, format?) [Compress image size]",
             "'get_image_info'(path) [Inspect image width, height, MIME, size]",
             "'generate_pdf'(title, content, theme?, path?)",
+            "'create_todo_list'(query) [Creates task checklist]",
+            "'complete_todo_task'(query) [Marks checklist task complete]",
+            "'recall_learned_patterns'(query) [Recalls past fixes and patterns]",
+            "'mcp_call_tool'(mcpServerId, toolName, mcpArgsJson)",
+            "'mcp_list_tools'(mcpServerId)",
             "'ask_user'(question, options?)",
             "'ai_think'(message)",
             "'complete'(message)"
