@@ -67,11 +67,6 @@ fun ProfessionalChatBar(
     onToggleControlBrowser: (Boolean) -> Unit = {},
     onSelectCustomModel: ((modelId: String, provider: String, baseUrl: String, apiKey: String) -> Unit)? = null,
     currentModelDisplayName: String = "Gemini",
-    chatSessions: List<com.example.chat.ProjectChatSession> = emptyList(),
-    activeSessionId: String? = null,
-    onStartNewChat: () -> Unit = {},
-    onSelectChatSession: (String) -> Unit = {},
-    onDeleteChatSession: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val canSend = chatInputText.isNotBlank() || attachedFiles.isNotEmpty() || taggedFiles.isNotEmpty() || taggedSkills.isNotEmpty()
@@ -377,12 +372,7 @@ fun ProfessionalChatBar(
                         onSelectReasoningEffort = onSelectReasoningEffort,
                         selectedMcpServerIds = selectedMcpServerIds,
                         onOpenSelectMcpDialog = onOpenSelectMcpDialog,
-                        onOpenReasoningDialog = { showReasoningEffortDialog = true },
-                        chatSessions = chatSessions,
-                        activeSessionId = activeSessionId,
-                        onStartNewChat = onStartNewChat,
-                        onSelectChatSession = onSelectChatSession,
-                        onDeleteChatSession = onDeleteChatSession
+                        onOpenReasoningDialog = { showReasoningEffortDialog = true }
                     )
                 }
 
