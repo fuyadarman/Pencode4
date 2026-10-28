@@ -4869,6 +4869,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 val isMcpCandidate = tool.startsWith("mcp_") || 
                                     tool.startsWith("gsc_") || 
                                     tool.contains("__") || 
+                                    com.example.data.mcp.McpUniversalToolResolver.isMcpToolInvocation(tool, mcpManager) ||
                                     mcpManager.toolRegistry.findToolInServers(tool, mcpManager.servers.value) != null
 
                                 if (isMcpCandidate) {

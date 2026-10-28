@@ -31,11 +31,11 @@ object AdMobManager {
 
     private const val TAG = "AdMobManager"
 
-    // Official Google Test Ad Unit IDs
-    const val TEST_APP_OPEN_AD_UNIT_ID = "ca-app-pub-3940256099942544/9257395921"
-    const val TEST_REWARDED_AD_UNIT_ID = "ca-app-pub-3940256099942544/5224354917"
-    const val TEST_INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-3940256099942544/1033173712"
-    const val TEST_BANNER_AD_UNIT_ID = "ca-app-pub-3940256099942544/6300978111"
+    // Live Production Ad Unit IDs
+    const val TEST_APP_OPEN_AD_UNIT_ID = "ca-app-pub-3054330248552854/2721934974"
+    const val TEST_REWARDED_AD_UNIT_ID = "ca-app-pub-3054330248552854/4175898707"
+    const val TEST_INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-3054330248552854/5979934966"
+    const val TEST_BANNER_AD_UNIT_ID = "ca-app-pub-3054330248552854/9747789586"
 
     const val PROMPTS_PER_REWARDED_AD = 8
     const val TAB_SWITCHES_PER_INTERSTITIAL_AD = 5
@@ -44,7 +44,7 @@ object AdMobManager {
      * Master switch to enable/disable all AdMob ads across the app.
      * Set to true to enable Google AdMob ads.
      */
-    var isAdsEnabled: Boolean = false
+    var isAdsEnabled: Boolean = true
 
     private val isInitialized = AtomicBoolean(false)
     private var isAppOpenAdShowing = false
