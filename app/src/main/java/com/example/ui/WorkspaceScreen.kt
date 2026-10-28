@@ -226,7 +226,12 @@ fun WorkspaceScreen(
     onClearSelectedMcpServers: () -> Unit = {},
     reasoningEffort: com.example.agent.ReasoningEffort = com.example.agent.ReasoningEffort.NORMAL,
     onSelectReasoningEffort: (com.example.agent.ReasoningEffort) -> Unit = {},
-    onInjectInFlightTask: (String) -> Unit = {}
+    onInjectInFlightTask: (String) -> Unit = {},
+    chatSessions: List<com.example.chat.ProjectChatSession> = emptyList(),
+    activeSessionId: String? = null,
+    onStartNewChat: () -> Unit = {},
+    onSelectChatSession: (String) -> Unit = {},
+    onDeleteChatSession: (String) -> Unit = {}
 ) {
     var showExplorer by remember { mutableStateOf(false) }
     var showCreateFileDialog by remember { mutableStateOf(false) }
@@ -504,7 +509,12 @@ fun WorkspaceScreen(
                                 onOpenSkillsDialog = { showAgentSkillsDialog = true },
                                 isControlBrowserActive = isControlBrowserActive,
                                 onToggleControlBrowser = { isControlBrowserActive = it },
-                                onSwitchToPreviewTab = { onTabSelected(WorkspaceTab.PREVIEW) }
+                                onSwitchToPreviewTab = { onTabSelected(WorkspaceTab.PREVIEW) },
+                                chatSessions = chatSessions,
+                                activeSessionId = activeSessionId,
+                                onStartNewChat = onStartNewChat,
+                                onSelectChatSession = onSelectChatSession,
+                                onDeleteChatSession = onDeleteChatSession
                             )
                         }
                         WorkspaceTab.CODE -> {
@@ -1084,7 +1094,12 @@ fun ChatTabContent(
     isControlBrowserActive: Boolean = false,
     onToggleControlBrowser: (Boolean) -> Unit = {},
     onSwitchToPreviewTab: () -> Unit = {},
-    onSaveSettings: (String, String, String, String, Boolean) -> Unit = { _, _, _, _, _ -> }
+    onSaveSettings: (String, String, String, String, Boolean) -> Unit = { _, _, _, _, _ -> },
+    chatSessions: List<com.example.chat.ProjectChatSession> = emptyList(),
+    activeSessionId: String? = null,
+    onStartNewChat: () -> Unit = {},
+    onSelectChatSession: (String) -> Unit = {},
+    onDeleteChatSession: (String) -> Unit = {}
 ) {
     var taggedFiles by remember { mutableStateOf<List<ProjectFileEntity>>(emptyList()) }
     var taggedSkills by remember { mutableStateOf<List<com.example.ui.AgentSkill>>(emptyList()) }
@@ -2096,7 +2111,12 @@ fun ChatTabContent(
                         onSelectCustomModel = { modelId, provider, baseUrl, apiKey ->
                             onSaveSettings(provider, apiKey, baseUrl, modelId, true)
                         },
-                        currentModelDisplayName = if (currentRunningModelName.isNotBlank() && currentRunningModelName != "Gemini Model") currentRunningModelName else selectedModelId.ifBlank { "Gemini" }
+                        currentModelDisplayName = if (currentRunningModelName.isNotBlank() && currentRunningModelName != "Gemini Model") currentRunningModelName else selectedModelId.ifBlank { "Gemini" },
+                        chatSessions = chatSessions,
+                        activeSessionId = activeSessionId,
+                        onStartNewChat = onStartNewChat,
+                        onSelectChatSession = onSelectChatSession,
+                        onDeleteChatSession = onDeleteChatSession
                     )
                 }
             }

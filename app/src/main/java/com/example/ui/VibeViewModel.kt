@@ -2439,6 +2439,94 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     private val _chatMessages = MutableStateFlow<List<ChatMessageEntity>>(emptyList())
     val chatMessages: StateFlow<List<ChatMessageEntity>> = _chatMessages.asStateFlow()
 
+    // Multi-chat sessions per project
+    private val _currentChatSessionId = MutableStateFlow<String?>(null)
+    val currentChatSessionId: StateFlow<String?> = _currentChatSessionId.asStateFlow()
+
+    private val _projectChatSessions = MutableStateFlow<List<com.example.chat.ProjectChatSession>>(emptyList())
+    val projectChatSessions: StateFlow<List<com.example.chat.ProjectChatSession>> = _projectChatSessions.asStateFlow()
+
+    fun loadChatSessionsForProject(projectName: String, fallbackMessages: List<ChatMessageEntity> = emptyList()) {
+        val sessions = com.example.chat.ProjectChatSessionManager.getSessions(getApplication(), projectName, fallbackMessages)
+        _projectChatSessions.value = sessions
+        val activeId = com.example.chat.ProjectChatSessionManager.getActiveSessionId(getApplication(), projectName)
+            ?: sessions.firstOrNull()?.id
+        _currentChatSessionId.value = activeId
+        if (activeId != null) {
+            val (msgs, logs) = com.example.chat.ProjectChatSessionManager.loadSessionData(getApplication(), projectName, activeId)
+            if (msgs.isNotEmpty()) {
+                _chatMessages.value = msgs
+                _aiActionLogs.value = logs
+            }
+        }
+    }
+
+    fun startNewChatSession() {
+        val proj = _currentProject.value ?: return
+        val curId = _currentChatSessionId.value
+        if (curId != null) {
+            com.example.chat.ProjectChatSessionManager.saveSessionData(
+                getApplication(),
+                proj.name,
+                curId,
+                _chatMessages.value,
+                _aiActionLogs.value
+            )
+        }
+        val newSession = com.example.chat.ProjectChatSessionManager.createNewSession(getApplication(), proj.name)
+        _currentChatSessionId.value = newSession.id
+        _chatMessages.value = emptyList()
+        _aiActionLogs.value = emptyList()
+        _todoList.value = emptyList()
+        _projectChatSessions.value = com.example.chat.ProjectChatSessionManager.getSessions(getApplication(), proj.name)
+    }
+
+    fun selectChatSession(sessionId: String) {
+        val proj = _currentProject.value ?: return
+        val curId = _currentChatSessionId.value
+        if (curId != null) {
+            com.example.chat.ProjectChatSessionManager.saveSessionData(
+                getApplication(),
+                proj.name,
+                curId,
+                _chatMessages.value,
+                _aiActionLogs.value
+            )
+        }
+        com.example.chat.ProjectChatSessionManager.setActiveSessionId(getApplication(), proj.name, sessionId)
+        _currentChatSessionId.value = sessionId
+        val (msgs, logs) = com.example.chat.ProjectChatSessionManager.loadSessionData(getApplication(), proj.name, sessionId)
+        _chatMessages.value = msgs
+        _aiActionLogs.value = logs
+        _projectChatSessions.value = com.example.chat.ProjectChatSessionManager.getSessions(getApplication(), proj.name)
+    }
+
+    fun deleteChatSession(sessionId: String) {
+        val proj = _currentProject.value ?: return
+        val nextActiveId = com.example.chat.ProjectChatSessionManager.deleteSession(getApplication(), proj.name, sessionId)
+        val sessions = com.example.chat.ProjectChatSessionManager.getSessions(getApplication(), proj.name)
+        _projectChatSessions.value = sessions
+        if (sessions.isEmpty()) {
+            startNewChatSession()
+        } else if (_currentChatSessionId.value == sessionId) {
+            val targetId = nextActiveId ?: sessions.first().id
+            selectChatSession(targetId)
+        }
+    }
+
+    fun syncCurrentSessionData() {
+        val proj = _currentProject.value ?: return
+        val curId = _currentChatSessionId.value ?: return
+        com.example.chat.ProjectChatSessionManager.saveSessionData(
+            getApplication(),
+            proj.name,
+            curId,
+            _chatMessages.value,
+            _aiActionLogs.value
+        )
+        _projectChatSessions.value = com.example.chat.ProjectChatSessionManager.getSessions(getApplication(), proj.name)
+    }
+
     private val _isThinking = MutableStateFlow(false)
     val isThinking: StateFlow<Boolean> = _isThinking.asStateFlow()
 
@@ -3244,6 +3332,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             allProjectChats
         }
         _chatMessages.value = finalChats
+        loadChatSessionsForProject(projectName, finalChats)
         loadBackupsForCurrentProject(projectName)
     }
 
@@ -3663,6 +3752,12 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         val project = _currentProject.value ?: return
         if (userPrompt.isBlank() && attachments.isEmpty()) return
         lastUserPromptText = userPrompt
+
+        val curSessionId = _currentChatSessionId.value ?: com.example.chat.ProjectChatSessionManager.getActiveSessionId(getApplication(), project.name)
+        if (curSessionId != null) {
+            com.example.chat.ProjectChatSessionManager.updateSessionTitle(getApplication(), project.name, curSessionId, userPrompt)
+            _projectChatSessions.value = com.example.chat.ProjectChatSessionManager.getSessions(getApplication(), project.name)
+        }
 
         val scope = if (_allowBackgroundExecution.value) backgroundScope else viewModelScope
         currentAiJob = scope.launch {
@@ -5060,6 +5155,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             projectTodoListMap[project.name] = _todoList.value
             projectEditHistoryMap[project.name] = _editHistory.value
             projectAgentStatusMap[project.name] = _agentStatus.value
+            syncCurrentSessionData()
             if (runningProjectName == project.name) {
                 runningProjectName = null
             }

@@ -39,6 +39,11 @@ fun ChatTuneControlsButton(
     selectedMcpServerIds: Set<String>,
     onOpenSelectMcpDialog: () -> Unit,
     onOpenReasoningDialog: () -> Unit,
+    chatSessions: List<com.example.chat.ProjectChatSession> = emptyList(),
+    activeSessionId: String? = null,
+    onStartNewChat: () -> Unit = {},
+    onSelectChatSession: (String) -> Unit = {},
+    onDeleteChatSession: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var isExpanded by remember { mutableStateOf(false) }
@@ -148,6 +153,23 @@ fun ChatTuneControlsButton(
                                 )
                             }
                         }
+
+                        HorizontalDivider(color = Color(0xFF2A3140), thickness = 1.dp)
+
+                        // Project Chat Sessions (Start new chat & session list matching screenshot)
+                        ProjectChatSessionMenu(
+                            chatSessions = chatSessions,
+                            activeSessionId = activeSessionId,
+                            onStartNewChat = {
+                                isExpanded = false
+                                onStartNewChat()
+                            },
+                            onSelectChatSession = { sessionId ->
+                                isExpanded = false
+                                onSelectChatSession(sessionId)
+                            },
+                            onDeleteChatSession = onDeleteChatSession
+                        )
 
                         HorizontalDivider(color = Color(0xFF2A3140), thickness = 1.dp)
 

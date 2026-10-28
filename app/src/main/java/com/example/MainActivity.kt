@@ -171,6 +171,8 @@ class MainActivity : ComponentActivity() {
                         val liveTotalInputTokens by viewModel.liveTotalInputTokens.collectAsState()
                         val liveTotalOutputTokens by viewModel.liveTotalOutputTokens.collectAsState()
                         val reasoningEffort by viewModel.reasoningEffort.collectAsState()
+                        val chatSessions by viewModel.projectChatSessions.collectAsState()
+                        val activeSessionId by viewModel.currentChatSessionId.collectAsState()
                         var showHomeSettingsDialog by remember { mutableStateOf(false) }
                         var showAddNewModelDialog by remember { mutableStateOf(false) }
 
@@ -274,6 +276,11 @@ class MainActivity : ComponentActivity() {
                                 agentStatus = agentStatus,
                                 currentTab = currentTab,
                                 aiActionLogs = aiActionLogs,
+                                chatSessions = chatSessions,
+                                activeSessionId = activeSessionId,
+                                onStartNewChat = { viewModel.startNewChatSession() },
+                                onSelectChatSession = { viewModel.selectChatSession(it) },
+                                onDeleteChatSession = { viewModel.deleteChatSession(it) },
                                 mcpServers = viewModel.mcpServers.collectAsState().value,
                                 selectedMcpServerIds = viewModel.selectedMcpServerIds.collectAsState().value,
                                 onToggleSelectMcpServer = { viewModel.toggleSelectMcpServer(it) },
