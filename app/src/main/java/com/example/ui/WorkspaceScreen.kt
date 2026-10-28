@@ -226,7 +226,12 @@ fun WorkspaceScreen(
     onClearSelectedMcpServers: () -> Unit = {},
     reasoningEffort: com.example.agent.ReasoningEffort = com.example.agent.ReasoningEffort.NORMAL,
     onSelectReasoningEffort: (com.example.agent.ReasoningEffort) -> Unit = {},
-    onInjectInFlightTask: (String) -> Unit = {}
+    onInjectInFlightTask: (String) -> Unit = {},
+    chatSessions: List<com.example.chat.ProjectChatSession> = emptyList(),
+    activeSessionId: String? = null,
+    onStartNewChat: () -> Unit = {},
+    onSelectChatSession: (String) -> Unit = {},
+    onDeleteChatSession: (String) -> Unit = {}
 ) {
     var showExplorer by remember { mutableStateOf(false) }
     var showCreateFileDialog by remember { mutableStateOf(false) }
@@ -504,7 +509,12 @@ fun WorkspaceScreen(
                                 onOpenSkillsDialog = { showAgentSkillsDialog = true },
                                 isControlBrowserActive = isControlBrowserActive,
                                 onToggleControlBrowser = { isControlBrowserActive = it },
-                                onSwitchToPreviewTab = { onTabSelected(WorkspaceTab.PREVIEW) }
+                                onSwitchToPreviewTab = { onTabSelected(WorkspaceTab.PREVIEW) },
+                                chatSessions = chatSessions,
+                                activeSessionId = activeSessionId,
+                                onStartNewChat = onStartNewChat,
+                                onSelectChatSession = onSelectChatSession,
+                                onDeleteChatSession = onDeleteChatSession
                             )
                         }
                         WorkspaceTab.CODE -> {
@@ -1084,7 +1094,12 @@ fun ChatTabContent(
     isControlBrowserActive: Boolean = false,
     onToggleControlBrowser: (Boolean) -> Unit = {},
     onSwitchToPreviewTab: () -> Unit = {},
-    onSaveSettings: (String, String, String, String, Boolean) -> Unit = { _, _, _, _, _ -> }
+    onSaveSettings: (String, String, String, String, Boolean) -> Unit = { _, _, _, _, _ -> },
+    chatSessions: List<com.example.chat.ProjectChatSession> = emptyList(),
+    activeSessionId: String? = null,
+    onStartNewChat: () -> Unit = {},
+    onSelectChatSession: (String) -> Unit = {},
+    onDeleteChatSession: (String) -> Unit = {}
 ) {
     var taggedFiles by remember { mutableStateOf<List<ProjectFileEntity>>(emptyList()) }
     var taggedSkills by remember { mutableStateOf<List<com.example.ui.AgentSkill>>(emptyList()) }
@@ -2096,7 +2111,12 @@ fun ChatTabContent(
                         onSelectCustomModel = { modelId, provider, baseUrl, apiKey ->
                             onSaveSettings(provider, apiKey, baseUrl, modelId, true)
                         },
-                        currentModelDisplayName = if (currentRunningModelName.isNotBlank() && currentRunningModelName != "Gemini Model") currentRunningModelName else selectedModelId.ifBlank { "Gemini" }
+                        currentModelDisplayName = if (currentRunningModelName.isNotBlank() && currentRunningModelName != "Gemini Model") currentRunningModelName else selectedModelId.ifBlank { "Gemini" },
+                        chatSessions = chatSessions,
+                        activeSessionId = activeSessionId,
+                        onStartNewChat = onStartNewChat,
+                        onSelectChatSession = onSelectChatSession,
+                        onDeleteChatSession = onDeleteChatSession
                     )
                 }
             }
@@ -4960,8 +4980,8 @@ fun AndroidBuildTabContent(
         modifier = Modifier
             .fillMaxSize()
             .background(com.example.ui.theme.AppTheme.bgCanvas)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         // Tab Header
         Row(
@@ -5238,11 +5258,51 @@ fun AndroidBuildTabContent(
                             }
                         }
                     }
-                    Text(
-                        text = "Branch: $githubBranch",
-                        color = com.example.ui.theme.AppTheme.textSecondary,
-                        fontSize = 11.sp
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(top = 2.dp)
+                    ) {
+                        Text(
+                            text = "Branch: $githubBranch",
+                            color = com.example.ui.theme.AppTheme.textSecondary,
+                            fontSize = 11.sp
+                        )
+                        var isSeparated by remember(project.name) {
+                            mutableStateOf(com.example.workflow.ProjectBuildSeparationManager.isBuildSeparated(context, project.name))
+                        }
+                        Surface(
+                            onClick = {
+                                val nextSep = !isSeparated
+                                isSeparated = nextSep
+                                com.example.workflow.ProjectBuildSeparationManager.setBuildSeparated(context, project.name, nextSep)
+                                if (nextSep) {
+                                    showRepoPicker = true
+                                }
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isSeparated) Color(0xFFEC4899).copy(alpha = 0.2f) else Color(0xFF1E293B),
+                            border = BorderStroke(1.dp, if (isSeparated) Color(0xFFEC4899) else Color(0xFF334155))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .background(if (isSeparated) Color(0xFFEC4899) else Color(0xFF64748B), CircleShape)
+                                )
+                                Text(
+                                    text = if (isSeparated) "Separate Repo: ON" else "Separate Repo: OFF",
+                                    color = if (isSeparated) Color(0xFFEC4899) else Color(0xFF94A3B8),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
                 }
 
                 // Push and Trigger build button (forces push to trigger workflow)
@@ -5311,7 +5371,9 @@ fun AndroidBuildTabContent(
                 shape = RoundedCornerShape(12.dp),
                 colors = CardDefaults.cardColors(containerColor = com.example.ui.theme.AppTheme.bgSurfaceElevated),
                 border = BorderStroke(1.dp, com.example.ui.theme.AppTheme.border),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .wrapContentHeight()
             ) {
                 Row(
                     modifier = Modifier

@@ -210,7 +210,11 @@ data class ToolArguments(
     val isRecurring: Boolean? = null,
     val fields: List<String>? = null,
     val isPrivate: Boolean? = null,
-    val autoInit: Boolean? = null
+    val autoInit: Boolean? = null,
+    val repo: String? = null,
+    val branch: String? = null,
+    val separate: Boolean? = null,
+    val enabled: Boolean? = null
 )
 
 @JsonClass(generateAdapter = true)

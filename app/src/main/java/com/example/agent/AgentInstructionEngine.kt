@@ -235,6 +235,7 @@ object AgentInstructionEngine {
         tools.add("'read_console_logs'(filter?, query?, maxLines?)")
         tools.add("'read_build_logs'(filter?, query?, maxLines?)")
         tools.add("'trigger_build'(message?) [Trigger project build: React Vite, Android App, Chrome Extension, Flutter App ONLY. Waits for build. WARNING: Do NOT use for Vanilla JS/React CDN]")
+        tools.add("'separate_build_pipeline'(repo?, branch?, separate?) [Separates Build Tab repository exclusively for current project]")
         tools.add("'record_vector_memory'(topic, content, tags?: [string]) [Saves persistent 256-D semantic vector memory via Cosine Similarity]")
         tools.add("'query_vector_memory'(query, topK?: number) [Performs Cosine Similarity vector search over semantic memory and past history]")
         tools.add("'get_vector_memory_status'() [Inspects active vector memory count, learned rules, and embedder status]")

@@ -1213,6 +1213,8 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     private val _writeFileConfirmInfo = MutableStateFlow<WriteFileConfirmInfo?>(null)
     val writeFileConfirmInfo = _writeFileConfirmInfo.asStateFlow()
 
+    var lastUserPromptText: String = ""
+
     private var writeFileConfirmationDeferred: kotlinx.coroutines.CompletableDeferred<Boolean>? = null
 
     fun approveWriteFile() {
@@ -1237,7 +1239,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         _githubRepo.value = repo
         val curProj = _currentProject.value?.name
         if (!curProj.isNullOrBlank()) {
-            com.example.agent.ProjectWebDistManager.saveProjectGithubRepo(sharedPrefs, curProj, repo)
+            com.example.workflow.ProjectBuildSeparationManager.saveProjectRepo(getApplication(), curProj, repo)
         } else {
             sharedPrefs.edit().putString("github_repo", repo).apply()
         }
@@ -1250,7 +1252,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         _githubBranch.value = branch
         val curProj = _currentProject.value?.name
         if (!curProj.isNullOrBlank()) {
-            com.example.agent.ProjectWebDistManager.saveProjectGithubBranch(sharedPrefs, curProj, branch)
+            com.example.workflow.ProjectBuildSeparationManager.saveProjectBranch(getApplication(), curProj, branch)
         } else {
             sharedPrefs.edit().putString("github_branch", branch).apply()
         }
@@ -2437,6 +2439,94 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     private val _chatMessages = MutableStateFlow<List<ChatMessageEntity>>(emptyList())
     val chatMessages: StateFlow<List<ChatMessageEntity>> = _chatMessages.asStateFlow()
 
+    // Multi-chat sessions per project
+    private val _currentChatSessionId = MutableStateFlow<String?>(null)
+    val currentChatSessionId: StateFlow<String?> = _currentChatSessionId.asStateFlow()
+
+    private val _projectChatSessions = MutableStateFlow<List<com.example.chat.ProjectChatSession>>(emptyList())
+    val projectChatSessions: StateFlow<List<com.example.chat.ProjectChatSession>> = _projectChatSessions.asStateFlow()
+
+    fun loadChatSessionsForProject(projectName: String, fallbackMessages: List<ChatMessageEntity> = emptyList()) {
+        val sessions = com.example.chat.ProjectChatSessionManager.getSessions(getApplication(), projectName, fallbackMessages)
+        _projectChatSessions.value = sessions
+        val activeId = com.example.chat.ProjectChatSessionManager.getActiveSessionId(getApplication(), projectName)
+            ?: sessions.firstOrNull()?.id
+        _currentChatSessionId.value = activeId
+        if (activeId != null) {
+            val (msgs, logs) = com.example.chat.ProjectChatSessionManager.loadSessionData(getApplication(), projectName, activeId)
+            if (msgs.isNotEmpty()) {
+                _chatMessages.value = msgs
+                _aiActionLogs.value = logs
+            }
+        }
+    }
+
+    fun startNewChatSession() {
+        val proj = _currentProject.value ?: return
+        val curId = _currentChatSessionId.value
+        if (curId != null) {
+            com.example.chat.ProjectChatSessionManager.saveSessionData(
+                getApplication(),
+                proj.name,
+                curId,
+                _chatMessages.value,
+                _aiActionLogs.value
+            )
+        }
+        val newSession = com.example.chat.ProjectChatSessionManager.createNewSession(getApplication(), proj.name)
+        _currentChatSessionId.value = newSession.id
+        _chatMessages.value = emptyList()
+        _aiActionLogs.value = emptyList()
+        _todoList.value = emptyList()
+        _projectChatSessions.value = com.example.chat.ProjectChatSessionManager.getSessions(getApplication(), proj.name)
+    }
+
+    fun selectChatSession(sessionId: String) {
+        val proj = _currentProject.value ?: return
+        val curId = _currentChatSessionId.value
+        if (curId != null) {
+            com.example.chat.ProjectChatSessionManager.saveSessionData(
+                getApplication(),
+                proj.name,
+                curId,
+                _chatMessages.value,
+                _aiActionLogs.value
+            )
+        }
+        com.example.chat.ProjectChatSessionManager.setActiveSessionId(getApplication(), proj.name, sessionId)
+        _currentChatSessionId.value = sessionId
+        val (msgs, logs) = com.example.chat.ProjectChatSessionManager.loadSessionData(getApplication(), proj.name, sessionId)
+        _chatMessages.value = msgs
+        _aiActionLogs.value = logs
+        _projectChatSessions.value = com.example.chat.ProjectChatSessionManager.getSessions(getApplication(), proj.name)
+    }
+
+    fun deleteChatSession(sessionId: String) {
+        val proj = _currentProject.value ?: return
+        val nextActiveId = com.example.chat.ProjectChatSessionManager.deleteSession(getApplication(), proj.name, sessionId)
+        val sessions = com.example.chat.ProjectChatSessionManager.getSessions(getApplication(), proj.name)
+        _projectChatSessions.value = sessions
+        if (sessions.isEmpty()) {
+            startNewChatSession()
+        } else if (_currentChatSessionId.value == sessionId) {
+            val targetId = nextActiveId ?: sessions.first().id
+            selectChatSession(targetId)
+        }
+    }
+
+    fun syncCurrentSessionData() {
+        val proj = _currentProject.value ?: return
+        val curId = _currentChatSessionId.value ?: return
+        com.example.chat.ProjectChatSessionManager.saveSessionData(
+            getApplication(),
+            proj.name,
+            curId,
+            _chatMessages.value,
+            _aiActionLogs.value
+        )
+        _projectChatSessions.value = com.example.chat.ProjectChatSessionManager.getSessions(getApplication(), proj.name)
+    }
+
     private val _isThinking = MutableStateFlow(false)
     val isThinking: StateFlow<Boolean> = _isThinking.asStateFlow()
 
@@ -2653,6 +2743,14 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         if (project != null) {
             val projectDir = repository.getProjectDir(project.name)
             com.example.agent.TaskCheckpointEngine.recordInterruption(project.name, projectDir, repository, _interruptionReason.value)
+            com.example.agent.CheckpointIncompleteTaskManager.recordIncompleteTask(
+                projectName = project.name,
+                projectDir = projectDir,
+                repository = repository,
+                prompt = lastUserPromptText.ifBlank { "User prompted task" },
+                incompleteObjectives = _todoList.value.filter { !it.isCompleted }.map { it.task },
+                latestContextSummary = "Task stopped: ${_interruptionReason.value}"
+            )
             projectActionLogsMap[project.name] = updatedLogs
             projectTodoListMap[project.name] = _todoList.value
             projectEditHistoryMap[project.name] = _editHistory.value
@@ -2961,8 +3059,10 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             // Restore project-specific GitHub repo and branch
-            _githubRepo.value = com.example.agent.ProjectWebDistManager.getProjectGithubRepo(sharedPrefs, project.name)
-            _githubBranch.value = com.example.agent.ProjectWebDistManager.getProjectGithubBranch(sharedPrefs, project.name)
+            val fallbackGlobalRepo = sharedPrefs.getString("github_repo", "") ?: ""
+            val fallbackGlobalBranch = sharedPrefs.getString("github_branch", "main") ?: "main"
+            _githubRepo.value = com.example.workflow.ProjectBuildSeparationManager.getEffectiveRepo(getApplication(), project.name, fallbackGlobalRepo)
+            _githubBranch.value = com.example.workflow.ProjectBuildSeparationManager.getEffectiveBranch(getApplication(), project.name, fallbackGlobalBranch)
             pollJob?.cancel()
             pollJob = null
             
@@ -3232,6 +3332,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             allProjectChats
         }
         _chatMessages.value = finalChats
+        loadChatSessionsForProject(projectName, finalChats)
         loadBackupsForCurrentProject(projectName)
     }
 
@@ -3650,6 +3751,13 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     fun sendPrompt(userPrompt: String, attachments: List<AttachedFile> = emptyList(), isRegenerate: Boolean = false) {
         val project = _currentProject.value ?: return
         if (userPrompt.isBlank() && attachments.isEmpty()) return
+        lastUserPromptText = userPrompt
+
+        val curSessionId = _currentChatSessionId.value ?: com.example.chat.ProjectChatSessionManager.getActiveSessionId(getApplication(), project.name)
+        if (curSessionId != null) {
+            com.example.chat.ProjectChatSessionManager.updateSessionTitle(getApplication(), project.name, curSessionId, userPrompt)
+            _projectChatSessions.value = com.example.chat.ProjectChatSessionManager.getSessions(getApplication(), project.name)
+        }
 
         val scope = if (_allowBackgroundExecution.value) backgroundScope else viewModelScope
         currentAiJob = scope.launch {
@@ -4449,6 +4557,35 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     onAddSkill = { skill -> addCustomAgentSkill(skill) }
                                 )
                             }
+                            "separate_build_pipeline", "separate_project_repo", "configure_project_repo", "separate_build_tab" -> {
+                                val logEntry = createAiLog(
+                                    title = "Configure Build Pipeline",
+                                    status = "thinking",
+                                    details = "Configuring project repository separation..."
+                                )
+                                _aiActionLogs.value = _aiActionLogs.value + logEntry
+
+                                val targetRepo = args?.repo ?: args?.path ?: args?.query
+                                val targetBranch = args?.branch ?: "main"
+                                val separate = args?.enabled ?: args?.separate ?: true
+
+                                val result = com.example.workflow.ProjectBuildSeparationManager.handleAiSeparationRequest(
+                                    context = getApplication(),
+                                    projectName = project.name,
+                                    repo = targetRepo,
+                                    branch = targetBranch,
+                                    separate = separate
+                                )
+
+                                if (separate && !targetRepo.isNullOrBlank()) {
+                                    _githubRepo.value = targetRepo
+                                    if (targetBranch.isNotBlank()) _githubBranch.value = targetBranch
+                                }
+
+                                updateAiLog(logEntry.id, "success", result)
+                                history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
+                                history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool':\n$result"))))
+                            }
                             "trigger_build", "build_and_push", "push_and_build", "run_build_pipeline" -> {
                                 val logEntry = createAiLog(
                                     title = "Triggered Project Build",
@@ -4797,6 +4934,14 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                         repository = repository,
                         reason = _interruptionReason.value
                     )
+                    com.example.agent.CheckpointIncompleteTaskManager.recordIncompleteTask(
+                        projectName = project.name,
+                        projectDir = projectDir,
+                        repository = repository,
+                        prompt = currentPromptText.ifBlank { finalPrompt },
+                        incompleteObjectives = _todoList.value.filter { !it.isCompleted }.map { it.task },
+                        latestContextSummary = "Task interrupted: ${_interruptionReason.value}"
+                    )
                     loopCompleted = true
                     throw e
                 } catch (e: Exception) {
@@ -4837,6 +4982,14 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                         projectDir = projectDir,
                         repository = repository,
                         reason = _interruptionReason.value
+                    )
+                    com.example.agent.CheckpointIncompleteTaskManager.recordIncompleteTask(
+                        projectName = project.name,
+                        projectDir = projectDir,
+                        repository = repository,
+                        prompt = currentPromptText.ifBlank { finalPrompt },
+                        incompleteObjectives = _todoList.value.filter { !it.isCompleted }.map { it.task },
+                        latestContextSummary = "Halted: ${_interruptionReason.value}"
                     )
                     loopCompleted = true
                 }
@@ -5002,6 +5155,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             projectTodoListMap[project.name] = _todoList.value
             projectEditHistoryMap[project.name] = _editHistory.value
             projectAgentStatusMap[project.name] = _agentStatus.value
+            syncCurrentSessionData()
             if (runningProjectName == project.name) {
                 runningProjectName = null
             }

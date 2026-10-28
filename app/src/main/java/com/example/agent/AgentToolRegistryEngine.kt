@@ -82,6 +82,7 @@ object AgentToolRegistryEngine {
         • mcp_call_tool(mcpServerId: string, toolName: string, mcpArgsJson: string) -> Calls an MCP tool.
         • mcp_list_tools(mcpServerId: string) -> Lists tools available on an MCP server.
         • mcp_read_resource(mcpServerId: string, resourceUri: string) -> Reads an MCP resource.
+        • separate_build_pipeline(repo?: string, branch?: string, separate?: boolean) -> Separates or configures the Build tab repository for the current project.
         """.trimIndent()
     }
 
@@ -132,6 +133,7 @@ object AgentToolRegistryEngine {
             "'recall_learned_patterns'(query) [Recalls past fixes and patterns]",
             "'mcp_call_tool'(mcpServerId, toolName, mcpArgsJson)",
             "'mcp_list_tools'(mcpServerId)",
+            "'separate_build_pipeline'(repo?, branch?, separate?) [Configure or separate project build repo]",
             "'ask_user'(question, options?)",
             "'ai_think'(message)",
             "'complete'(message)"
