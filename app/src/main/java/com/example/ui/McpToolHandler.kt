@@ -150,20 +150,7 @@ object McpToolHandler {
                     return result
                 }
 
-                // Universal Fallback across GitHub, Supabase, Cloudflare, Vercel, GSC, and Remote MCPs
-                val mcpLog = createLog("MCP: $tool", "Resolving and executing MCP tool '$tool'")
-                addLog(mcpLog)
-                val fallbackResult = com.example.data.mcp.McpUniversalToolResolver.executeUniversalMcpCall(
-                    context = mcpManager.context,
-                    mcpManager = mcpManager,
-                    toolName = tool,
-                    args = args,
-                    projectName = project.name,
-                    selectedServerIds = selectedServerIds
-                )
-                val isSuccess = !fallbackResult.startsWith("Error:") && !fallbackResult.startsWith("MCP Call Error:")
-                updateLog(mcpLog.id, if (isSuccess) "success" else "failed", if (isSuccess) "MCP: $tool" else fallbackResult)
-                fallbackResult
+                "Error: Unknown MCP tool '$tool'"
             }
         }
     }

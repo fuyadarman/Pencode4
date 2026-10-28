@@ -1132,55 +1132,6 @@ object ExtraToolHandlers {
                 updateLog(upLog.id, if (isSuccess) "success" else "failed", result)
                 result
             }
-            "browser_new_tab", "browser_open_tab", "open_browser_tab", "new_browser_tab" -> {
-                val targetUrl = args?.url ?: args?.query ?: args?.message ?: ""
-                val title = args?.title ?: args?.name ?: "New Tab"
-                val tabLog = createLog("New Browser Tab", "thinking", "Opening new tab: $targetUrl", "web-clone")
-                addLog(tabLog)
-                val result = com.example.browser.BrowserTabAndHistoryAgentEngine.openNewTab(targetUrl, title)
-                updateLog(tabLog.id, "success", result)
-                result
-            }
-            "browser_switch_tab", "switch_browser_tab" -> {
-                val query = args?.query ?: args?.title ?: args?.url ?: args?.message ?: ""
-                val tabLog = createLog("Switch Browser Tab", "thinking", "Switching tab to '$query'", "web-clone")
-                addLog(tabLog)
-                val result = com.example.browser.BrowserTabAndHistoryAgentEngine.switchTab(query)
-                val isSuccess = !result.startsWith("Error:")
-                updateLog(tabLog.id, if (isSuccess) "success" else "failed", result)
-                result
-            }
-            "browser_close_tab", "close_browser_tab" -> {
-                val query = args?.query ?: args?.title ?: args?.url ?: args?.message ?: ""
-                val tabLog = createLog("Close Browser Tab", "thinking", "Closing tab '$query'", "web-clone")
-                addLog(tabLog)
-                val result = com.example.browser.BrowserTabAndHistoryAgentEngine.closeTab(query)
-                val isSuccess = !result.startsWith("Error:")
-                updateLog(tabLog.id, if (isSuccess) "success" else "failed", result)
-                result
-            }
-            "browser_list_tabs", "browser_get_tabs", "list_browser_tabs" -> {
-                val tabLog = createLog("List Browser Tabs", "thinking", "Listing active browser tabs", "web-clone")
-                addLog(tabLog)
-                val result = com.example.browser.BrowserTabAndHistoryAgentEngine.listOpenTabs()
-                updateLog(tabLog.id, "success", result.take(150))
-                result
-            }
-            "browser_get_history", "browser_history", "list_browser_history" -> {
-                val query = args?.query ?: args?.search ?: args?.filter
-                val histLog = createLog("Browser History", "thinking", "Querying browser history", "web-clone")
-                addLog(histLog)
-                val result = com.example.browser.BrowserTabAndHistoryAgentEngine.queryHistory(query)
-                updateLog(histLog.id, "success", result.take(150))
-                result
-            }
-            "browser_clear_history", "clear_browser_history" -> {
-                val histLog = createLog("Clear Browser History", "thinking", "Clearing all browser history", "web-clone")
-                addLog(histLog)
-                val result = com.example.browser.BrowserTabAndHistoryAgentEngine.clearHistory()
-                updateLog(histLog.id, "success", result)
-                result
-            }
             "deep_clone_web_ui" -> {
                 val targetUrl = (args?.url ?: args?.query ?: args?.message ?: "").trim()
                 val targetFile = args?.targetFile ?: args?.destinationPath ?: args?.path

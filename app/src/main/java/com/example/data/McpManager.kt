@@ -26,7 +26,7 @@ import org.json.JSONObject
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
-class McpManager(val context: Context) {
+class McpManager(private val context: Context) {
 
     val tokenStore = McpTokenStore(context)
     val authManager = McpAuthManager(context, tokenStore)

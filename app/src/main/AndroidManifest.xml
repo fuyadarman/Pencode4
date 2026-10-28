@@ -31,10 +31,10 @@
             android:name="google_analytics_adid_collection_enabled"
             android:value="false" />
 
-        <!-- Google AdMob App ID -->
+        <!-- Google AdMob App ID (Official Google Test App ID) -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3054330248552854~5049996676" />
+            android:value="ca-app-pub-3940256099942544~3347511713" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

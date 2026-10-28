@@ -3457,8 +3457,6 @@ fun PreviewTabContent(
     }
     var currentViewport by remember { mutableStateOf(PreviewViewport.DESKTOP) }
     var showHamburgerMenu by remember { mutableStateOf(false) }
-    var showChromeTabSwitcher by remember { mutableStateOf(false) }
-    var showBrowserHistory by remember { mutableStateOf(false) }
 
     val initialActiveTab = remember { com.example.browser.RealBrowserTabManager.getActiveTab() }
     var customUrl by remember { 
@@ -3725,27 +3723,6 @@ fun PreviewTabContent(
                     }
                 }
 
-                // Chrome-style Tab Switcher Badge Button [N]
-                Surface(
-                    onClick = { showChromeTabSwitcher = true },
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color(0xFF161B22),
-                    border = BorderStroke(1.dp, Color(0xFF30363D))
-                ) {
-                    Box(
-                        modifier = Modifier.size(38.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "${browserTabs.size}",
-                            color = Color(0xFFE6EDF3),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
-                        )
-                    }
-                }
-
                 // Three-line Hamburger Menu Button with Dropdown
                 Box {
                     Surface(
@@ -3840,33 +3817,6 @@ fun PreviewTabContent(
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF8B949E),
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
-                        )
-
-                        DropdownMenuItem(
-                            text = { 
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically, 
-                                    horizontalArrangement = Arrangement.SpaceBetween, 
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text("Tabs Overview (Chrome Style)", fontSize = 12.sp, color = Color(0xFFE6EDF3))
-                                    Text("${browserTabs.size}", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF38BDF8))
-                                }
-                            },
-                            leadingIcon = { Icon(Icons.Default.GridView, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(16.dp)) },
-                            onClick = {
-                                showHamburgerMenu = false
-                                showChromeTabSwitcher = true
-                            }
-                        )
-
-                        DropdownMenuItem(
-                            text = { Text("Browser History", fontSize = 12.sp, color = Color(0xFFE6EDF3)) },
-                            leadingIcon = { Icon(Icons.Default.History, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(16.dp)) },
-                            onClick = {
-                                showHamburgerMenu = false
-                                showBrowserHistory = true
-                            }
                         )
 
                         DropdownMenuItem(
@@ -4296,10 +4246,6 @@ fun PreviewTabContent(
                                                         canGoBack = canGoBack,
                                                         canGoForward = canGoForward,
                                                         isLoading = false
-                                                    )
-                                                    com.example.browser.RealBrowserHistoryManager.recordHistory(
-                                                        title = view?.title?.ifBlank { url } ?: url,
-                                                        url = url
                                                     )
                                                 } else if (effectiveHtmlContent != null) {
                                                     com.example.browser.RealBrowserTabManager.updateActiveTab(
@@ -4733,46 +4679,6 @@ fun PreviewTabContent(
                 }
             }
         }
-
-        // Chrome Tab Switcher Grid Dialog
-        com.example.ui.browser.ChromeTabSwitcherDialog(
-            isOpen = showChromeTabSwitcher,
-            onDismiss = { showChromeTabSwitcher = false },
-            onTabSelected = { tabId ->
-                com.example.browser.RealBrowserTabManager.switchTab(tabId)
-                val selectedTab = browserTabs.find { it.id == tabId }
-                if (selectedTab != null) {
-                    if (selectedTab.url.isBlank() || selectedTab.url == defaultPreviewUrl) {
-                        customUrl = null
-                        urlInputText = defaultPreviewUrl
-                        refreshTrigger++
-                    } else {
-                        customUrl = selectedTab.url
-                        urlInputText = selectedTab.url
-                        webViewRef?.loadUrl(selectedTab.url)
-                    }
-                }
-            },
-            onNewTab = {
-                com.example.browser.RealBrowserTabManager.openNewTab("https://www.google.com/", "Google")
-                customUrl = "https://www.google.com/"
-                urlInputText = "https://www.google.com/"
-                webViewRef?.loadUrl("https://www.google.com/")
-            }
-        )
-
-        // Browser History Dialog
-        com.example.ui.browser.ChromeBrowserHistoryDialog(
-            isOpen = showBrowserHistory,
-            onDismiss = { showBrowserHistory = false },
-            onUrlSelected = { url ->
-                val targetUrl = com.example.util.WebUrlHelper.normalizeUrl(url)
-                customUrl = targetUrl
-                urlInputText = targetUrl
-                webViewRef?.loadUrl(targetUrl)
-                com.example.browser.RealBrowserTabManager.updateActiveTab(url = targetUrl, title = targetUrl)
-            }
-        )
     }
 }
 
