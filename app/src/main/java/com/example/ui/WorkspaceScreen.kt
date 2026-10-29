@@ -149,6 +149,8 @@ fun WorkspaceScreen(
     onDeleteMessage: (ChatMessageEntity) -> Unit = {},
     onEditMessage: (ChatMessageEntity, String) -> Unit = { _, _ -> },
     onRegenerate: (ChatMessageEntity) -> Unit = {},
+    onNewChat: () -> Unit = {},
+    onRegenerate: (ChatMessageEntity) -> Unit = {},
     isInterrupted: Boolean = false,
     interruptionReason: String = "",
     onContinue: () -> Unit = {},
@@ -2096,7 +2098,8 @@ fun ChatTabContent(
                         onSelectCustomModel = { modelId, provider, baseUrl, apiKey ->
                             onSaveSettings(provider, apiKey, baseUrl, modelId, true)
                         },
-                        currentModelDisplayName = if (currentRunningModelName.isNotBlank() && currentRunningModelName != "Gemini Model") currentRunningModelName else selectedModelId.ifBlank { "Gemini" }
+                        currentModelDisplayName = if (currentRunningModelName.isNotBlank() && currentRunningModelName != "Gemini Model") currentRunningModelName else selectedModelId.ifBlank { "Gemini" },
+                        onNewChat = onNewChat
                     )
                 }
             }
@@ -3730,28 +3733,7 @@ fun PreviewTabContent(
                     }
                 }
 
-                // Three-line Hamburger Menu Button with Dropdown
-                Box {
-                    Surface(
-                        onClick = { showHamburgerMenu = !showHamburgerMenu },
-                        shape = RoundedCornerShape(8.dp),
-                        color = Color(0xFF161B22),
-                        border = BorderStroke(1.dp, Color(0xFF30363D))
-                    ) {
-                        Box(
-                            modifier = Modifier.size(38.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = if (showHamburgerMenu) Icons.Default.Close else Icons.Default.Menu,
-                                contentDescription = if (showHamburgerMenu) "Close Menu" else "Browser Options Menu",
-                                tint = if (showHamburgerMenu) Color(0xFF38BDF8) else Color(0xFFE6EDF3),
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-
-                    DropdownMenu(
+                        DropdownMenu(
                         expanded = showHamburgerMenu,
                         onDismissRequest = { showHamburgerMenu = false },
                         modifier = Modifier
