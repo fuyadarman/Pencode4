@@ -2751,7 +2751,8 @@ button {
                 projectName = projectName,
                 repository = this@VibeRepository,
                 currentFiles = rawFiles,
-                templateKey = null
+                templateKey = null,
+                includeAndroidYml = false
             )
             if (projectFiles.isEmpty()) {
                 return@withContext Result.failure(Exception("Cannot push an empty workspace. Please add files first."))

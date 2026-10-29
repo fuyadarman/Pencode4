@@ -149,6 +149,8 @@ fun WorkspaceScreen(
     onDeleteMessage: (ChatMessageEntity) -> Unit = {},
     onEditMessage: (ChatMessageEntity, String) -> Unit = { _, _ -> },
     onRegenerate: (ChatMessageEntity) -> Unit = {},
+    onNewChat: () -> Unit = {},
+    onRegenerate: (ChatMessageEntity) -> Unit = {},
     isInterrupted: Boolean = false,
     interruptionReason: String = "",
     onContinue: () -> Unit = {},
@@ -2096,7 +2098,8 @@ fun ChatTabContent(
                         onSelectCustomModel = { modelId, provider, baseUrl, apiKey ->
                             onSaveSettings(provider, apiKey, baseUrl, modelId, true)
                         },
-                        currentModelDisplayName = if (currentRunningModelName.isNotBlank() && currentRunningModelName != "Gemini Model") currentRunningModelName else selectedModelId.ifBlank { "Gemini" }
+                        currentModelDisplayName = if (currentRunningModelName.isNotBlank() && currentRunningModelName != "Gemini Model") currentRunningModelName else selectedModelId.ifBlank { "Gemini" },
+                        onNewChat = onNewChat
                     )
                 }
             }
@@ -3500,6 +3503,33 @@ fun PreviewTabContent(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
+        // Browser Menu Bar (Hamburger + Title)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(
+                onClick = { showHamburgerMenu = !showHamburgerMenu },
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Menu,
+                    contentDescription = "Browser Menu",
+                    tint = Color(0xFF8B949E),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Text(
+                text = "Preview Browser",
+                color = Color(0xFF8B949E),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium
+            )
+        }
+
         // Real Browser Multi-Tab Bar
         com.example.ui.browser.RealBrowserTabsBar(
             tabs = browserTabs,
@@ -3703,28 +3733,7 @@ fun PreviewTabContent(
                     }
                 }
 
-                // Three-line Hamburger Menu Button with Dropdown
-                Box {
-                    Surface(
-                        onClick = { showHamburgerMenu = !showHamburgerMenu },
-                        shape = RoundedCornerShape(8.dp),
-                        color = Color(0xFF161B22),
-                        border = BorderStroke(1.dp, Color(0xFF30363D))
-                    ) {
-                        Box(
-                            modifier = Modifier.size(38.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = if (showHamburgerMenu) Icons.Default.Close else Icons.Default.Menu,
-                                contentDescription = if (showHamburgerMenu) "Close Menu" else "Browser Options Menu",
-                                tint = if (showHamburgerMenu) Color(0xFF38BDF8) else Color(0xFFE6EDF3),
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-
-                    DropdownMenu(
+                        DropdownMenu(
                         expanded = showHamburgerMenu,
                         onDismissRequest = { showHamburgerMenu = false },
                         modifier = Modifier

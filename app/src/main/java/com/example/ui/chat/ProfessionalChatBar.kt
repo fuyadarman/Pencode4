@@ -67,6 +67,7 @@ fun ProfessionalChatBar(
     onToggleControlBrowser: (Boolean) -> Unit = {},
     onSelectCustomModel: ((modelId: String, provider: String, baseUrl: String, apiKey: String) -> Unit)? = null,
     currentModelDisplayName: String = "Gemini",
+    onNewChat: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val canSend = chatInputText.isNotBlank() || attachedFiles.isNotEmpty() || taggedFiles.isNotEmpty() || taggedSkills.isNotEmpty()
@@ -345,6 +346,23 @@ fun ProfessionalChatBar(
                                 }
                             )
 
+                            HorizontalDivider(color = com.example.ui.theme.AppTheme.border)
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = "Start New Chat",
+                                        color = com.example.ui.theme.AppTheme.textPrimary,
+                                        fontSize = 13.sp
+                                    )
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.AddCircleOutline, contentDescription = null, tint = Color(0xFF818CF8), modifier = Modifier.size(18.dp))
+                                },
+                                onClick = {
+                                    showPlusMenu = false
+                                    onNewChat()
+                                }
+                            )
                             HorizontalDivider(color = com.example.ui.theme.AppTheme.border)
                             DropdownMenuItem(
                                 text = {

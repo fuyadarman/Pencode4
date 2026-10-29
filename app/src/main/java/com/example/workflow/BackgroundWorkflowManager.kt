@@ -158,17 +158,20 @@ jobs:
         projectName: String,
         repository: VibeRepository,
         currentFiles: List<ProjectFileEntity>,
-        templateKey: String?
+        templateKey: String?,
+        includeAndroidYml: Boolean = true
     ): List<ProjectFileEntity> = withContext(Dispatchers.IO) {
         val mutableFiles = currentFiles.toMutableList()
-        val hasWorkflow = mutableFiles.any { 
-            val p = it.path.replace('\\', '/').trim().trimStart('/').lowercase()
-            p == ".github/workflows/android.yml" || p.endsWith("/android.yml")
-        }
+        if (includeAndroidYml) {
+            val hasWorkflow = mutableFiles.any { 
+                val p = it.path.replace('\\', '/').trim().trimStart('/').lowercase()
+                p == ".github/workflows/android.yml" || p.endsWith("/android.yml")
+            }
 
-        if (!hasWorkflow) {
-            val workflowFile = ensureBackgroundWorkflow(projectName, repository, templateKey)
-            mutableFiles.add(workflowFile)
+            if (!hasWorkflow) {
+                val workflowFile = ensureBackgroundWorkflow(projectName, repository, templateKey)
+                mutableFiles.add(workflowFile)
+            }
         }
         mutableFiles
     }

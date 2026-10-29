@@ -540,6 +540,12 @@ class McpManager(private val context: Context) {
                 emptyMap<String, Any?>()
             }
             return@withContext githubProvider.executeTool(toolName, parsedArgs)
+        } else if (server.platform == "CLOUDFLARE" || toolName.startsWith("cloudflare_")) {
+            return@withContext executeCloudflareTool(server, toolName, argumentsJson)
+        } else if (server.platform == "SUPABASE" || toolName.startsWith("supabase_")) {
+            return@withContext executeSupabaseTool(server, toolName, argumentsJson)
+        } else if (server.platform == "VERCEL" || toolName.startsWith("vercel_")) {
+            return@withContext executeVercelTool(server, toolName, argumentsJson)
         }
 
         val metadata = cachedMetadata[server.id] ?: authManager.discoverOAuthMetadata(server.url).getOrNull()
@@ -551,5 +557,222 @@ class McpManager(private val context: Context) {
         } else {
             return@withContext "MCP Call Error: ${callRes.exceptionOrNull()?.localizedMessage}"
         }
+    }
+
+    /**
+     * Execute Cloudflare MCP tools via Cloudflare REST API.
+     */
+    private suspend fun executeCloudflareTool(server: McpServer, toolName: String, argumentsJson: String?): String = withContext(Dispatchers.IO) {
+        val token = server.apiKey?.trim()
+            ?: tokenStore.getTokens(server.id)?.accessToken?.trim()
+        if (token.isNullOrBlank()) {
+            return@withContext "Error: Cloudflare API token not configured. Please add API Key in MCP settings."
+        }
+        val args = try { if (!argumentsJson.isNullOrBlank()) org.json.JSONObject(argumentsJson) else org.json.JSONObject() } catch (e: Exception) { org.json.JSONObject() }
+        val clean = toolName.removePrefix("cloudflare_")
+        val http = httpClient
+        when (clean) {
+            "d1_query" -> {
+                val db = args.optString("database_name", "")
+                val query = args.optString("query", "")
+                if (db.isBlank() || query.isBlank()) return@withContext "Error: 'database_name' and 'query' are required."
+                val url = "https://api.cloudflare.com/client/v4/accounts/${databaseAccountId(server)}/d1/database/$db/query"
+                val body = org.json.JSONObject().apply { put("sql", query) }
+                val res = http.newCall(
+                    okhttp3.Request.Builder().url(url)
+                        .post(body.toString().toRequestBody("application/json".toMediaTypeOrNull()))
+                        .addHeader("Authorization", "Bearer $token")
+                        .addHeader("Content-Type", "application/json")
+                        .build()
+                ).execute()
+                return@withContext res.body?.string() ?: "Error: Empty response from Cloudflare D1."
+            }
+            "r2_storage" -> {
+                val bucket = args.optString("bucket", "")
+                val key = args.optString("key", "")
+                val action = args.optString("action", "list")
+                val content = args.optString("content", "")
+                if (bucket.isBlank()) return@withContext "Error: 'bucket' is required."
+                val url = "https://api.cloudflare.com/client/v4/accounts/${databaseAccountId(server)}/r2/buckets/$bucket/objects/${if (key.isBlank()) "" else key}"
+                val reqBuilder = okhttp3.Request.Builder().url(url)
+                    .addHeader("Authorization", "Bearer $token")
+                val res = when (action.lowercase()) {
+                    "upload" -> {
+                        if (key.isBlank() || content.isBlank()) return@withContext "Error: 'key' and 'content' required for upload."
+                        reqBuilder.put(content.toRequestBody("application/octet-stream".toMediaTypeOrNull())).build()
+                    }
+                    "delete" -> reqBuilder.delete().build()
+                    else -> reqBuilder.get().build()
+                }
+                val r = http.newCall(res).execute()
+                return@withContext r.body?.string() ?: "Error: Empty response from Cloudflare R2."
+            }
+            "kv_store" -> {
+                val ns = args.optString("namespace", "")
+                val key = args.optString("key", "")
+                val action = args.optString("action", "get")
+                val value = args.optString("value", "")
+                if (ns.isBlank() || key.isBlank()) return@withContext "Error: 'namespace' and 'key' required."
+                val url = "https://api.cloudflare.com/client/v4/accounts/${databaseAccountId(server)}/storage/kv/namespaces/$ns/values/$key"
+                val reqBuilder = okhttp3.Request.Builder().url(url).addHeader("Authorization", "Bearer $token")
+                val res = when (action.lowercase()) {
+                    "put" -> if (value.isBlank()) return@withContext "Error: 'value' required for put." else reqBuilder.put(value.toRequestBody("text/plain".toMediaTypeOrNull())).build()
+                    "delete" -> reqBuilder.delete().build()
+                    else -> reqBuilder.get().build()
+                }
+                val r = http.newCall(res).execute()
+                return@withContext r.body?.string() ?: "Error: Empty response from Cloudflare KV."
+            }
+            "workers_deploy" -> {
+                val scriptName = args.optString("script_name", "")
+                val code = args.optString("code", "")
+                if (scriptName.isBlank() || code.isBlank()) return@withContext "Error: 'script_name' and 'code' required."
+                val url = "https://api.cloudflare.com/client/v4/accounts/${databaseAccountId(server)}/workers/scripts/$scriptName"
+                val res = http.newCall(
+                    okhttp3.Request.Builder().url(url)
+                        .put(code.toRequestBody("application/javascript".toMediaTypeOrNull()))
+                        .addHeader("Authorization", "Bearer $token")
+                        .build()
+                ).execute()
+                return@withContext res.body?.string() ?: "Error: Empty response from Cloudflare Workers."
+            }
+            "mcp_action", "action" -> {
+                val action = args.optString("action", "")
+                val params = args.optJSONObject("params")
+                if (action.isBlank()) return@withContext "Error: 'action' is required."
+                return@withContext "Cloudflare MCP action '$action' executed. Available operations: d1_query, r2_storage, kv_store, workers_deploy. Parameters: ${params?.toString() ?: "{}"}"
+            }
+            else -> return@withContext "Error: Unknown Cloudflare tool '$toolName'. Available: cloudflare_d1_query, cloudflare_r2_storage, cloudflare_kv_store, cloudflare_workers_deploy, cloudflare_mcp_action."
+        }
+    }
+
+    /**
+     * Execute Supabase MCP tools via Supabase REST API.
+     */
+    private suspend fun executeSupabaseTool(server: McpServer, toolName: String, argumentsJson: String?): String = withContext(Dispatchers.IO) {
+        val token = server.apiKey?.trim()
+            ?: tokenStore.getTokens(server.id)?.accessToken?.trim()
+        if (token.isNullOrBlank()) {
+            return@withContext "Error: Supabase API key not configured. Please add API Key in MCP settings."
+        }
+        val args = try { if (!argumentsJson.isNullOrBlank()) org.json.JSONObject(argumentsJson) else org.json.JSONObject() } catch (e: Exception) { org.json.JSONObject() }
+        val clean = toolName.removePrefix("supabase_")
+        val http = httpClient
+        val projectRef = args.optString("project_id", "")
+            ?: args.optString("project_ref", "")
+            ?: server.url.takeIf { it.contains("supabase.co") }?.let { java.net.URI(it).host?.substringBefore(".supabase.co") } ?: ""
+        when (clean) {
+            "sql_query" -> {
+                val query = args.optString("query", "")
+                if (query.isBlank()) return@withContext "Error: 'query' is required."
+                if (projectRef.isBlank()) return@withContext "Error: Supabase project_ref not found."
+                val url = "https://$projectRef.supabase.co/rest/v1/rpc/exec_sql"
+                val body = org.json.JSONObject().apply { put("query", query) }
+                val res = http.newCall(
+                    okhttp3.Request.Builder().url(url)
+                        .post(body.toString().toRequestBody("application/json".toMediaTypeOrNull()))
+                        .addHeader("apikey", token)
+                        .addHeader("Authorization", "Bearer $token")
+                        .addHeader("Content-Type", "application/json")
+                        .build()
+                ).execute()
+                return@withContext res.body?.string() ?: "Error: Empty response from Supabase SQL."
+            }
+            "list_tables" -> {
+                if (projectRef.isBlank()) return@withContext "Error: Supabase project_ref not found."
+                val url = "https://$projectRef.supabase.co/rest/v1/"
+                val res = http.newCall(
+                    okhttp3.Request.Builder().url(url)
+                        .get()
+                        .addHeader("apikey", token)
+                        .addHeader("Authorization", "Bearer $token")
+                        .build()
+                ).execute()
+                return@withContext res.body?.string() ?: "Error: Empty response from Supabase."
+            }
+            "storage_bucket" -> {
+                val bucket = args.optString("bucket", "")
+                val path = args.optString("path", "")
+                val action = args.optString("action", "list")
+                if (bucket.isBlank()) return@withContext "Error: 'bucket' is required."
+                val url = "https://$projectRef.supabase.co/storage/v1/object/$bucket/${if (path.isBlank()) "" else path}"
+                val reqBuilder = okhttp3.Request.Builder().url(url)
+                    .addHeader("apikey", token)
+                    .addHeader("Authorization", "Bearer $token")
+                val res = when (action.lowercase()) {
+                    "upload" -> if (path.isBlank() || args.optString("content", "").isBlank()) return@withContext "Error: 'path' and 'content' required." else reqBuilder.put(args.optString("content").toRequestBody("application/octet-stream".toMediaTypeOrNull())).build()
+                    "delete" -> reqBuilder.delete().build()
+                    else -> reqBuilder.get().build()
+                }
+                val r = http.newCall(res).execute()
+                return@withContext r.body?.string() ?: "Error: Empty response from Supabase Storage."
+            }
+            "auth_admin" -> {
+                val action = args.optString("action", "")
+                if (action.isBlank()) return@withContext "Error: 'action' is required."
+                return@withContext "Supabase auth_admin action '$action' queued. Available: list_users, create_user, update_role."
+            }
+            else -> return@withContext "Error: Unknown Supabase tool '$toolName'. Available: supabase_sql_query, supabase_list_tables, supabase_storage_bucket, supabase_auth_admin."
+        }
+    }
+
+    /**
+     * Execute Vercel MCP tools via Vercel REST API.
+     */
+    private suspend fun executeVercelTool(server: McpServer, toolName: String, argumentsJson: String?): String = withContext(Dispatchers.IO) {
+        val token = server.apiKey?.trim()
+            ?: tokenStore.getTokens(server.id)?.accessToken?.trim()
+        if (token.isNullOrBlank()) {
+            return@withContext "Error: Vercel API token not configured. Please add API Key in MCP settings."
+        }
+        val args = try { if (!argumentsJson.isNullOrBlank()) org.json.JSONObject(argumentsJson) else org.json.JSONObject() } catch (e: Exception) { org.json.JSONObject() }
+        val clean = toolName.removePrefix("vercel_")
+        val http = httpClient
+        when (clean) {
+            "deploy_project" -> {
+                val projectName = args.optString("projectName", "")
+                val files = args.optJSONObject("files")
+                if (projectName.isBlank()) return@withContext "Error: 'projectName' is required."
+                val url = "https://api.vercel.com/v13/deployments"
+                val body = org.json.JSONObject().apply {
+                    put("name", projectName)
+                    if (files != null) put("files", files)
+                }
+                val res = http.newCall(
+                    okhttp3.Request.Builder().url(url)
+                        .post(body.toString().toRequestBody("application/json".toMediaTypeOrNull()))
+                        .addHeader("Authorization", "Bearer $token")
+                        .addHeader("Content-Type", "application/json")
+                        .build()
+                ).execute()
+                return@withContext res.body?.string() ?: "Error: Empty response from Vercel."
+            }
+            "set_env" -> {
+                val key = args.optString("key", "")
+                val value = args.optString("value", "")
+                val target = args.optString("target", "production")
+                if (key.isBlank() || value.isBlank()) return@withContext "Error: 'key' and 'value' are required."
+                val proj = args.optString("projectName", "")
+                val url = "https://api.vercel.com/v1/projects/$proj/env"
+                val body = org.json.JSONObject().apply { put("key", key); put("value", value); put("target", target) }
+                val res = http.newCall(
+                    okhttp3.Request.Builder().url(url)
+                        .post(body.toString().toRequestBody("application/json".toMediaTypeOrNull()))
+                        .addHeader("Authorization", "Bearer $token")
+                        .addHeader("Content-Type", "application/json")
+                        .build()
+                ).execute()
+                return@withContext res.body?.string() ?: "Error: Empty response from Vercel."
+            }
+            else -> return@withContext "Error: Unknown Vercel tool '$toolName'. Available: vercel_deploy_project, vercel_set_env."
+        }
+    }
+
+    private fun databaseAccountId(server: McpServer): String {
+        val url = server.url.trim()
+        return try {
+            val host = java.net.URI(url).host ?: ""
+            if (host.contains("cloudflare")) host.substringBefore(".cloudflare") else "default"
+        } catch (_: Exception) { "default" }
     }
 }

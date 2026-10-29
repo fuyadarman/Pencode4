@@ -3058,6 +3058,13 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         pollJob = null
     }
 
+    fun startNewChat() {
+        _chatMessages.value = emptyList()
+        _aiActionLogs.value = emptyList()
+        _todoList.value = emptyList()
+        _agentStatus.value = ""
+    }
+
     fun dismissGithubPushPrompt() {
         _showGithubPushPrompt.value = false
     }

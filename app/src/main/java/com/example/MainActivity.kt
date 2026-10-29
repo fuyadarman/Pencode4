@@ -482,7 +482,8 @@ class MainActivity : ComponentActivity() {
                                 },
                                 reasoningEffort = reasoningEffort,
                                 onSelectReasoningEffort = { viewModel.setReasoningEffort(it) },
-                                onInjectInFlightTask = { viewModel.injectInFlightTask(it) }
+                                onInjectInFlightTask = { viewModel.injectInFlightTask(it) },
+                                onNewChat = { viewModel.startNewChat() }
                             )
                         }
 
