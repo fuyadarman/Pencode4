@@ -356,7 +356,7 @@ fun ProfessionalChatBar(
                                     )
                                 },
                                 leadingIcon = {
-                                    Icon(Icons.Default.AddChat, contentDescription = null, tint = Color(0xFF818CF8), modifier = Modifier.size(18.dp))
+                                    Icon(Icons.Default.AddCircleOutline, contentDescription = null, tint = Color(0xFF818CF8), modifier = Modifier.size(18.dp))
                                 },
                                 onClick = {
                                     showPlusMenu = false

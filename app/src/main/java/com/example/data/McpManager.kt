@@ -576,7 +576,7 @@ class McpManager(private val context: Context) {
                 val db = args.optString("database_name", "")
                 val query = args.optString("query", "")
                 if (db.isBlank() || query.isBlank()) return@withContext "Error: 'database_name' and 'query' are required."
-                val url = "https://api.cloudflare.com/client/v4/accounts/$databaseAccountId(server)/d1/database/$db/query"
+                val url = "https://api.cloudflare.com/client/v4/accounts/${databaseAccountId(server)}/d1/database/$db/query"
                 val body = org.json.JSONObject().apply { put("sql", query) }
                 val res = http.newCall(
                     okhttp3.Request.Builder().url(url)
@@ -593,7 +593,7 @@ class McpManager(private val context: Context) {
                 val action = args.optString("action", "list")
                 val content = args.optString("content", "")
                 if (bucket.isBlank()) return@withContext "Error: 'bucket' is required."
-                val url = "https://api.cloudflare.com/client/v4/accounts/$databaseAccountId(server)/r2/buckets/$bucket/objects/${if (key.isBlank()) "" else key}"
+                val url = "https://api.cloudflare.com/client/v4/accounts/${databaseAccountId(server)}/r2/buckets/$bucket/objects/${if (key.isBlank()) "" else key}"
                 val reqBuilder = okhttp3.Request.Builder().url(url)
                     .addHeader("Authorization", "Bearer $token")
                 val res = when (action.lowercase()) {
@@ -613,7 +613,7 @@ class McpManager(private val context: Context) {
                 val action = args.optString("action", "get")
                 val value = args.optString("value", "")
                 if (ns.isBlank() || key.isBlank()) return@withContext "Error: 'namespace' and 'key' required."
-                val url = "https://api.cloudflare.com/client/v4/accounts/$databaseAccountId(server)/storage/kv/namespaces/$ns/values/$key"
+                val url = "https://api.cloudflare.com/client/v4/accounts/${databaseAccountId(server)}/storage/kv/namespaces/$ns/values/$key"
                 val reqBuilder = okhttp3.Request.Builder().url(url).addHeader("Authorization", "Bearer $token")
                 val res = when (action.lowercase()) {
                     "put" -> if (value.isBlank()) return@withContext "Error: 'value' required for put." else reqBuilder.put(value.toRequestBody("text/plain".toMediaTypeOrNull())).build()
@@ -627,7 +627,7 @@ class McpManager(private val context: Context) {
                 val scriptName = args.optString("script_name", "")
                 val code = args.optString("code", "")
                 if (scriptName.isBlank() || code.isBlank()) return@withContext "Error: 'script_name' and 'code' required."
-                val url = "https://api.cloudflare.com/client/v4/accounts/$databaseAccountId(server)/workers/scripts/$scriptName"
+                val url = "https://api.cloudflare.com/client/v4/accounts/${databaseAccountId(server)}/workers/scripts/$scriptName"
                 val res = http.newCall(
                     okhttp3.Request.Builder().url(url)
                         .put(code.toRequestBody("application/javascript".toMediaTypeOrNull()))
