@@ -3500,6 +3500,33 @@ fun PreviewTabContent(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
+        // Browser Menu Bar (Hamburger + Title)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(
+                onClick = { showHamburgerMenu = !showHamburgerMenu },
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Menu,
+                    contentDescription = "Browser Menu",
+                    tint = Color(0xFF8B949E),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Text(
+                text = "Preview Browser",
+                color = Color(0xFF8B949E),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium
+            )
+        }
+
         // Real Browser Multi-Tab Bar
         com.example.ui.browser.RealBrowserTabsBar(
             tabs = browserTabs,
