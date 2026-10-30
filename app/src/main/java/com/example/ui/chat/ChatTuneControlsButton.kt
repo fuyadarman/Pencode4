@@ -39,6 +39,8 @@ fun ChatTuneControlsButton(
     selectedMcpServerIds: Set<String>,
     onOpenSelectMcpDialog: () -> Unit,
     onOpenReasoningDialog: () -> Unit,
+    onStartNewChat: () -> Unit = {},
+    onSelectChatSession: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var isExpanded by remember { mutableStateOf(false) }
@@ -150,6 +152,113 @@ fun ChatTuneControlsButton(
                         }
 
                         HorizontalDivider(color = Color(0xFF2A3140), thickness = 1.dp)
+
+                        // Start New Chat & Recent Sessions (Integrated into filter button)
+                        val projectSessions by com.example.chat.ProjectChatSessionManager.currentSessions.collectAsState()
+                        val activeSessionId by com.example.chat.ProjectChatSessionManager.activeSessionId.collectAsState()
+                        val sessionDateFormatter = remember { java.text.SimpleDateFormat("dd MMM, HH:mm", java.util.Locale.getDefault()) }
+
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color(0xFF242936))
+                                .border(1.dp, Color(0xFF2E3545), RoundedCornerShape(10.dp))
+                                .padding(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        isExpanded = false
+                                        onStartNewChat()
+                                    },
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(28.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF238636)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = "Start new chat",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Start new chat",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFF0F6FC)
+                                    )
+                                    Text(
+                                        text = "Start fresh session in project",
+                                        fontSize = 10.sp,
+                                        color = Color(0xFF8B949E)
+                                    )
+                                }
+                            }
+
+                            if (projectSessions.isNotEmpty()) {
+                                HorizontalDivider(color = Color(0xFF2E3545), thickness = 1.dp)
+                                Text(
+                                    text = "RECENT CHATS",
+                                    fontSize = 9.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF8B949E),
+                                    letterSpacing = 0.5.sp
+                                )
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    projectSessions.take(3).forEach { session ->
+                                        val isCurrent = session.id == activeSessionId
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(if (isCurrent) Color(0xFF1E293B) else Color.Transparent)
+                                                .clickable {
+                                                    isExpanded = false
+                                                    onSelectChatSession(session.id)
+                                                }
+                                                .padding(horizontal = 6.dp, vertical = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = session.title,
+                                                    fontSize = 11.5.sp,
+                                                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
+                                                    color = if (isCurrent) Color(0xFF58A6FF) else Color(0xFFC9D1D9),
+                                                    maxLines = 1,
+                                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                                )
+                                                Text(
+                                                    text = sessionDateFormatter.format(java.util.Date(session.timestamp)),
+                                                    fontSize = 9.5.sp,
+                                                    color = Color(0xFF6E7681)
+                                                )
+                                            }
+                                            if (isCurrent) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Check,
+                                                    contentDescription = "Active",
+                                                    tint = Color(0xFF58A6FF),
+                                                    modifier = Modifier.size(12.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
 
                         // 1. Plan Mode Section
                         Row(

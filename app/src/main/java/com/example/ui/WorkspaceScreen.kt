@@ -7,6 +7,8 @@ import android.webkit.WebViewClient
 import android.webkit.WebChromeClient
 import android.webkit.ConsoleMessage
 import com.example.ui.GitHubRepoSelectorDialog
+import com.example.ui.browser.ChromeTabsGridView
+import com.example.ui.browser.BrowserHistoryDialog
 import com.example.ui.settings.ModelFallbackSettingsCard
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
@@ -226,7 +228,9 @@ fun WorkspaceScreen(
     onClearSelectedMcpServers: () -> Unit = {},
     reasoningEffort: com.example.agent.ReasoningEffort = com.example.agent.ReasoningEffort.NORMAL,
     onSelectReasoningEffort: (com.example.agent.ReasoningEffort) -> Unit = {},
-    onInjectInFlightTask: (String) -> Unit = {}
+    onInjectInFlightTask: (String) -> Unit = {},
+    onStartNewChatSession: () -> Unit = {},
+    onSwitchChatSession: (String) -> Unit = {}
 ) {
     var showExplorer by remember { mutableStateOf(false) }
     var showCreateFileDialog by remember { mutableStateOf(false) }
@@ -244,6 +248,7 @@ fun WorkspaceScreen(
     var showCustomAgentsDialog by remember { mutableStateOf(false) }
     var showScheduledTasksDialog by remember { mutableStateOf(false) }
     var isControlBrowserActive by remember { mutableStateOf(false) }
+    var showChatSessionsMenu by remember { mutableStateOf(false) }
 
     val liveBrowserPendingUrl by com.example.browser.LivePreviewBrowserManager.pendingUrl.collectAsState()
     val liveBrowserActionStatus by com.example.browser.LivePreviewBrowserManager.agentActionStatus.collectAsState()
@@ -332,6 +337,31 @@ fun WorkspaceScreen(
                     }
                 },
                 actions = {
+                    Box(modifier = Modifier.padding(end = 4.dp)) {
+                        IconButton(
+                            onClick = { showChatSessionsMenu = !showChatSessionsMenu },
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "Start new chat & sessions",
+                                tint = Color(0xFF38BDF8),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        com.example.ui.chat.ProjectChatSessionsMenu(
+                            expanded = showChatSessionsMenu,
+                            onDismissRequest = { showChatSessionsMenu = false },
+                            onStartNewChat = {
+                                showChatSessionsMenu = false
+                                onStartNewChatSession()
+                            },
+                            onSelectSession = { sessionId ->
+                                showChatSessionsMenu = false
+                                onSwitchChatSession(sessionId)
+                            }
+                        )
+                    }
                     Surface(
                         onClick = { showAgentSkillsDialog = true },
                         shape = RoundedCornerShape(6.dp),
@@ -504,7 +534,9 @@ fun WorkspaceScreen(
                                 onOpenSkillsDialog = { showAgentSkillsDialog = true },
                                 isControlBrowserActive = isControlBrowserActive,
                                 onToggleControlBrowser = { isControlBrowserActive = it },
-                                onSwitchToPreviewTab = { onTabSelected(WorkspaceTab.PREVIEW) }
+                                onSwitchToPreviewTab = { onTabSelected(WorkspaceTab.PREVIEW) },
+                                onStartNewChat = onStartNewChatSession,
+                                onSelectChatSession = onSwitchChatSession
                             )
                         }
                         WorkspaceTab.CODE -> {
@@ -1084,6 +1116,8 @@ fun ChatTabContent(
     isControlBrowserActive: Boolean = false,
     onToggleControlBrowser: (Boolean) -> Unit = {},
     onSwitchToPreviewTab: () -> Unit = {},
+    onStartNewChat: () -> Unit = {},
+    onSelectChatSession: (String) -> Unit = {},
     onSaveSettings: (String, String, String, String, Boolean) -> Unit = { _, _, _, _, _ -> }
 ) {
     var taggedFiles by remember { mutableStateOf<List<ProjectFileEntity>>(emptyList()) }
@@ -1245,17 +1279,18 @@ fun ChatTabContent(
                 contentPadding = PaddingValues(vertical = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                itemsIndexed(messages) { index, message ->
-                    var nextModelName: String? = null
-                    var nextDuration: String? = null
-                    if (message.role == "user") {
-                        val nextMsg = messages.getOrNull(index + 1)
+                itemsIndexed(
+                    items = messages,
+                    key = { _, msg -> msg.id }
+                ) { index, message ->
+                    val nextMsg = if (message.role == "user") messages.getOrNull(index + 1) else null
+                    val (nextModelName, nextDuration) = remember(nextMsg?.id, nextMsg?.aiActionLogsJson) {
                         if (nextMsg != null && nextMsg.role == "assistant") {
                             val nextLogs = com.example.agent.LargeProjectMemoryGuard.parseActionLogsJson(nextMsg.aiActionLogsJson)
                             if (nextLogs.isNotEmpty()) {
-                                nextModelName = nextLogs.firstOrNull { !it.modelName.isNullOrBlank() }?.modelName ?: "Gemini 1.5 Flash"
+                                val model = nextLogs.firstOrNull { !it.modelName.isNullOrBlank() }?.modelName ?: "Gemini 1.5 Flash"
                                 val totalMs = nextLogs.sumOf { it.durationMillis ?: 0L }
-                                nextDuration = if (totalMs > 0) {
+                                val dur = if (totalMs > 0) {
                                     "${maxOf(1, totalMs / 1000)}s"
                                 } else {
                                     val firstLog = nextLogs.firstOrNull()
@@ -1265,8 +1300,9 @@ fun ChatTabContent(
                                         "${maxOf(1, diff / 1000)}s"
                                     } else ""
                                 }
-                            }
-                        }
+                                Pair(model, dur)
+                            } else Pair(null, null)
+                        } else Pair(null, null)
                     }
 
                     val isLatestUserAndThinking = isThinking && message.role == "user" && (index == messages.size - 1 || messages.subList(index + 1, messages.size).none { it.role == "user" })
@@ -2096,7 +2132,9 @@ fun ChatTabContent(
                         onSelectCustomModel = { modelId, provider, baseUrl, apiKey ->
                             onSaveSettings(provider, apiKey, baseUrl, modelId, true)
                         },
-                        currentModelDisplayName = if (currentRunningModelName.isNotBlank() && currentRunningModelName != "Gemini Model") currentRunningModelName else selectedModelId.ifBlank { "Gemini" }
+                        currentModelDisplayName = if (currentRunningModelName.isNotBlank() && currentRunningModelName != "Gemini Model") currentRunningModelName else selectedModelId.ifBlank { "Gemini" },
+                        onStartNewChat = onStartNewChat,
+                        onSelectChatSession = onSelectChatSession
                     )
                 }
             }
@@ -3437,6 +3475,8 @@ fun PreviewTabContent(
     }
     var currentViewport by remember { mutableStateOf(PreviewViewport.DESKTOP) }
     var showHamburgerMenu by remember { mutableStateOf(false) }
+    var showChromeTabsGrid by remember { mutableStateOf(false) }
+    var showBrowserHistory by remember { mutableStateOf(false) }
 
     val initialActiveTab = remember { com.example.browser.RealBrowserTabManager.getActiveTab() }
     var customUrl by remember { 
@@ -3703,6 +3743,35 @@ fun PreviewTabContent(
                     }
                 }
 
+                // Chrome-style Tabs Badge Button (Matching Chrome UI spec)
+                Surface(
+                    onClick = { showChromeTabsGrid = true },
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFF161B22),
+                    border = BorderStroke(1.dp, Color(0xFF30363D))
+                ) {
+                    Box(
+                        modifier = Modifier.size(38.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            border = BorderStroke(1.5.dp, Color(0xFFE6EDF3)),
+                            color = Color.Transparent,
+                            modifier = Modifier.size(20.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                Text(
+                                    text = "${browserTabs.size.coerceAtLeast(1)}",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFE6EDF3)
+                                )
+                            }
+                        }
+                    }
+                }
+
                 // Three-line Hamburger Menu Button with Dropdown
                 Box {
                     Surface(
@@ -3797,6 +3866,29 @@ fun PreviewTabContent(
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF8B949E),
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                        )
+
+                        DropdownMenuItem(
+                            text = { 
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                                    Text("Chrome Tabs Switcher", fontSize = 12.sp, color = Color(0xFFE6EDF3))
+                                    Text("${browserTabs.size}", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF38BDF8))
+                                }
+                            },
+                            leadingIcon = { Icon(Icons.Default.Tab, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(16.dp)) },
+                            onClick = {
+                                showHamburgerMenu = false
+                                showChromeTabsGrid = true
+                            }
+                        )
+
+                        DropdownMenuItem(
+                            text = { Text("Browsing History", fontSize = 12.sp, color = Color(0xFFE6EDF3)) },
+                            leadingIcon = { Icon(Icons.Default.History, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(16.dp)) },
+                            onClick = {
+                                showHamburgerMenu = false
+                                showBrowserHistory = true
+                            }
                         )
 
                         DropdownMenuItem(
@@ -4478,9 +4570,9 @@ fun PreviewTabContent(
                         )
                     }
                 }
-                }
-                }
             }
+        }
+    }
 
         if (showLogs) {
             Surface(
@@ -4659,6 +4751,53 @@ fun PreviewTabContent(
                 }
             }
         }
+
+        ChromeTabsGridView(
+            isOpen = showChromeTabsGrid,
+            tabs = browserTabs,
+            activeTabId = activeBrowserTabId,
+            onTabSelected = { tabId ->
+                showChromeTabsGrid = false
+                val selected = com.example.browser.RealBrowserTabManager.switchTab(tabId)
+                if (selected != null) {
+                    if (selected.url.isBlank() || selected.url == defaultPreviewUrl) {
+                        customUrl = null
+                        urlInputText = defaultPreviewUrl
+                        refreshTrigger++
+                    } else {
+                        customUrl = selected.url
+                        urlInputText = selected.url
+                        webViewRef?.loadUrl(selected.url)
+                    }
+                }
+            },
+            onTabClosed = { tabId ->
+                com.example.browser.RealBrowserTabManager.closeTab(tabId)
+            },
+            onNewTab = {
+                showChromeTabsGrid = false
+                com.example.browser.RealBrowserTabManager.openNewTab("https://www.google.com/", "Google")
+                customUrl = "https://www.google.com/"
+                urlInputText = "https://www.google.com/"
+                webViewRef?.loadUrl("https://www.google.com/")
+            },
+            onOpenHistory = {
+                showChromeTabsGrid = false
+                showBrowserHistory = true
+            },
+            onDismiss = { showChromeTabsGrid = false }
+        )
+
+        BrowserHistoryDialog(
+            isOpen = showBrowserHistory,
+            onDismiss = { showBrowserHistory = false },
+            onOpenUrl = { url ->
+                showBrowserHistory = false
+                customUrl = url
+                urlInputText = url
+                webViewRef?.loadUrl(url)
+            }
+        )
     }
 }
 
@@ -4973,7 +5112,7 @@ fun AndroidBuildTabContent(
                 Icon(
                     imageVector = Icons.Default.Build,
                     contentDescription = null,
-                    tint = Color(0xFFEC4899),
+                    tint = Color(0xFF8B949E),
                     modifier = Modifier.size(20.dp)
                 )
                 Text(
@@ -5132,7 +5271,7 @@ fun AndroidBuildTabContent(
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedTextColor = com.example.ui.theme.AppTheme.textPrimary,
                                 unfocusedTextColor = com.example.ui.theme.AppTheme.textPrimary,
-                                focusedBorderColor = Color(0xFFEC4899),
+                                focusedBorderColor = Color(0xFF58A6FF),
                                 unfocusedBorderColor = com.example.ui.theme.AppTheme.border,
                                 focusedContainerColor = com.example.ui.theme.AppTheme.inputBg,
                                 unfocusedContainerColor = com.example.ui.theme.AppTheme.inputBg
@@ -5149,7 +5288,7 @@ fun AndroidBuildTabContent(
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedTextColor = com.example.ui.theme.AppTheme.textPrimary,
                                 unfocusedTextColor = com.example.ui.theme.AppTheme.textPrimary,
-                                focusedBorderColor = Color(0xFFEC4899),
+                                focusedBorderColor = Color(0xFF58A6FF),
                                 unfocusedBorderColor = com.example.ui.theme.AppTheme.border,
                                 focusedContainerColor = com.example.ui.theme.AppTheme.inputBg,
                                 unfocusedContainerColor = com.example.ui.theme.AppTheme.inputBg
@@ -5167,8 +5306,8 @@ fun AndroidBuildTabContent(
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = Color.White,
                             unfocusedTextColor = Color.White,
-                            focusedBorderColor = Color(0xFFEC4899),
-                            unfocusedBorderColor = Color(0xFF1E2230)
+                            focusedBorderColor = Color(0xFF58A6FF),
+                            unfocusedBorderColor = Color(0xFF30363D)
                         ),
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(8.dp)
@@ -5195,9 +5334,10 @@ fun AndroidBuildTabContent(
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFFEC4899),
-                                contentColor = Color.White
+                                containerColor = Color(0xFF21262D),
+                                contentColor = Color(0xFFF0F6FC)
                             ),
+                            border = BorderStroke(1.dp, Color(0xFF30363D)),
                             shape = RoundedCornerShape(8.dp),
                             enabled = tempRepo.isNotBlank() && tempToken.isNotBlank()
                         ) {
@@ -5260,25 +5400,25 @@ fun AndroidBuildTabContent(
                                     showRepoPicker = true
                                 }
                             },
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (isSeparated) Color(0xFFEC4899).copy(alpha = 0.2f) else Color(0xFF1E293B),
-                            border = BorderStroke(1.dp, if (isSeparated) Color(0xFFEC4899) else Color(0xFF334155))
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isSeparated) Color(0xFF21262D) else Color(0xFF161B22),
+                            border = BorderStroke(1.dp, if (isSeparated) Color(0xFF58A6FF) else Color(0xFF30363D))
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Box(
                                     modifier = Modifier
                                         .size(6.dp)
-                                        .background(if (isSeparated) Color(0xFFEC4899) else Color(0xFF64748B), CircleShape)
+                                        .background(if (isSeparated) Color(0xFF58A6FF) else Color(0xFF6E7681), CircleShape)
                                 )
                                 Text(
                                     text = if (isSeparated) "Separate Repo: ON" else "Separate Repo: OFF",
-                                    color = if (isSeparated) Color(0xFFEC4899) else Color(0xFF94A3B8),
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold
+                                    color = if (isSeparated) Color(0xFFE6EDF3) else Color(0xFF8B949E),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium
                                 )
                             }
                         }
@@ -5289,13 +5429,14 @@ fun AndroidBuildTabContent(
                 if (gitProgress.isNotEmpty()) {
                     val isSuccess = gitProgress.contains("complete", ignoreCase = true) || gitProgress.contains("success", ignoreCase = true)
                     val isFailure = gitProgress.contains("failed", ignoreCase = true) || gitProgress.contains("error", ignoreCase = true)
-                    val indicatorColor = if (isSuccess) Color(0xFF2ED573) else if (isFailure) Color(0xFFEE5253) else Color(0xFFEC4899)
+                    val indicatorColor = if (isSuccess) Color(0xFF238636) else if (isFailure) Color(0xFFF85149) else Color(0xFF58A6FF)
 
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier
-                            .background(Color(0xFF1E293B), RoundedCornerShape(8.dp))
+                            .background(Color(0xFF161B22), RoundedCornerShape(6.dp))
+                            .border(1.dp, Color(0xFF30363D), RoundedCornerShape(6.dp))
                             .padding(horizontal = 12.dp, vertical = 6.dp)
                     ) {
                         if (isSuccess) {
@@ -5321,7 +5462,7 @@ fun AndroidBuildTabContent(
                         }
                         Text(
                             text = gitProgress,
-                            color = Color.White,
+                            color = Color(0xFFE6EDF3),
                             fontSize = 11.sp
                         )
                     }
@@ -5329,18 +5470,18 @@ fun AndroidBuildTabContent(
                     Button(
                         onClick = onTriggerBuild,
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFFEC4899),
+                            containerColor = Color(0xFF238636),
                             contentColor = Color.White
                         ),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                        shape = RoundedCornerShape(8.dp)
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                        shape = RoundedCornerShape(6.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(14.dp))
-                            Text("Build", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("Build", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }
@@ -5393,7 +5534,7 @@ fun AndroidBuildTabContent(
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             CircularProgressIndicator(
-                                color = Color(0xFFEC4899),
+                                color = Color(0xFF8B949E),
                                 modifier = Modifier.size(10.dp),
                                 strokeWidth = 1.5.dp
                             )
@@ -5428,7 +5569,7 @@ fun AndroidBuildTabContent(
                             Icon(
                                 imageVector = if (isWorkflowsExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                                 contentDescription = "Toggle Workflows",
-                                tint = Color(0xFFEC4899),
+                                tint = Color(0xFF8B949E),
                                 modifier = Modifier.size(18.dp)
                             )
                             Text(
@@ -5440,13 +5581,18 @@ fun AndroidBuildTabContent(
                         }
 
                         Button(
-                            onClick = { onTriggerWorkflows(if (selectedWorkflowIds.isNotEmpty()) selectedWorkflowIds else null) },
+                            onClick = {
+                                com.example.workflow.BuildTriggerHelper.onWorkflowTriggerClicked(context) {
+                                    onTriggerWorkflows(if (selectedWorkflowIds.isNotEmpty()) selectedWorkflowIds else null)
+                                }
+                            },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFFEC4899),
-                                contentColor = Color.White
+                                containerColor = Color(0xFF21262D),
+                                contentColor = Color(0xFFF0F6FC)
                             ),
+                            border = BorderStroke(1.dp, Color(0xFF30363D)),
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                            shape = RoundedCornerShape(8.dp),
+                            shape = RoundedCornerShape(6.dp),
                             enabled = gitHubWorkflows.isNotEmpty()
                         ) {
                             Row(
@@ -5459,9 +5605,9 @@ fun AndroidBuildTabContent(
                                     modifier = Modifier.size(14.dp)
                                 )
                                 Text(
-                                    text = if (selectedWorkflowIds.isNotEmpty()) "Trigger Selected Workflows (${selectedWorkflowIds.size})" else "Trigger Non-Running Workflows",
+                                    text = if (selectedWorkflowIds.isNotEmpty()) "Trigger Selected (${selectedWorkflowIds.size})" else "Trigger Workflows",
                                     fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Medium
                                 )
                             }
                         }
@@ -5488,8 +5634,8 @@ fun AndroidBuildTabContent(
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .background(Color(0xFF08090F), RoundedCornerShape(8.dp))
-                                            .border(1.dp, Color(0xFF141722), RoundedCornerShape(8.dp))
+                                            .background(Color(0xFF0D1117), RoundedCornerShape(6.dp))
+                                            .border(1.dp, Color(0xFF21262D), RoundedCornerShape(6.dp))
                                             .padding(horizontal = 10.dp, vertical = 8.dp),
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
@@ -5508,8 +5654,8 @@ fun AndroidBuildTabContent(
                                                     }
                                                 },
                                                 colors = CheckboxDefaults.colors(
-                                                    checkedColor = Color(0xFFEC4899),
-                                                    uncheckedColor = Color(0xFF80809B),
+                                                    checkedColor = Color(0xFF58A6FF),
+                                                    uncheckedColor = Color(0xFF8B949E),
                                                     checkmarkColor = Color.White
                                                 )
                                             )
@@ -5518,13 +5664,13 @@ fun AndroidBuildTabContent(
                                             ) {
                                                 Text(
                                                     text = wf.name,
-                                                    color = Color.White,
+                                                    color = Color(0xFFF0F6FC),
                                                     fontSize = 12.sp,
-                                                    fontWeight = FontWeight.Bold
+                                                    fontWeight = FontWeight.SemiBold
                                                 )
                                                 Text(
                                                     text = wf.path,
-                                                    color = Color(0xFF80809B),
+                                                    color = Color(0xFF8B949E),
                                                     fontSize = 10.sp
                                                 )
                                             }
@@ -5539,11 +5685,11 @@ fun AndroidBuildTabContent(
                                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                                             ) {
                                                 CircularProgressIndicator(
-                                                    color = Color(0xFFEC4899),
+                                                    color = Color(0xFF8B949E),
                                                     modifier = Modifier.size(12.dp),
                                                     strokeWidth = 1.5.dp
                                                 )
-                                                Text("Triggering... 🚀", color = Color(0xFFEC4899), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                Text("Triggering...", color = Color(0xFF8B949E), fontSize = 11.sp, fontWeight = FontWeight.Medium)
                                             }
                                         } else {
                                             val status = wf.latestRunStatus.lowercase()
@@ -5556,11 +5702,11 @@ fun AndroidBuildTabContent(
                                                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                                                     ) {
                                                         CircularProgressIndicator(
-                                                            color = Color(0xFFEC4899),
+                                                            color = Color(0xFF58A6FF),
                                                             modifier = Modifier.size(12.dp),
                                                             strokeWidth = 1.5.dp
                                                         )
-                                                        Text("Running... ⚙️", color = Color(0xFFEC4899), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                        Text("Running...", color = Color(0xFF58A6FF), fontSize = 11.sp, fontWeight = FontWeight.Medium)
                                                     }
                                                 }
                                                 status == "completed" && conclusion == "success" -> {
@@ -5669,9 +5815,9 @@ fun AndroidBuildTabContent(
                                                       else if (step.conclusion == "failure") Icons.Default.Cancel
                                                       else Icons.Default.Info,
                                         contentDescription = step.status,
-                                        tint = if (step.conclusion == "success") Color(0xFF2ED573)
-                                               else if (step.conclusion == "failure") Color(0xFFEE5253)
-                                               else if (step.status == "in_progress") Color(0xFFEC4899)
+                                        tint = if (step.conclusion == "success") Color(0xFF238636)
+                                               else if (step.conclusion == "failure") Color(0xFFF85149)
+                                               else if (step.status == "in_progress") Color(0xFF58A6FF)
                                                else Color.Gray,
                                         modifier = Modifier.size(14.dp)
                                     )
@@ -5777,8 +5923,8 @@ fun AndroidBuildTabContent(
                                             LinearProgressIndicator(
                                                 progress = { apkDownloadPercentage / 100f },
                                                 modifier = Modifier.fillMaxWidth().height(4.dp),
-                                                color = Color(0xFFEC4899),
-                                                trackColor = Color(0xFF1E2230)
+                                                color = Color(0xFF58A6FF),
+                                                trackColor = Color(0xFF21262D)
                                             )
                                             Text(
                                                 text = "${apkDownloadPercentage.toInt()}%",

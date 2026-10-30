@@ -25,8 +25,11 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 import java.util.concurrent.TimeUnit
+import com.example.data.mcp.RealCloudflareMcpEngine
+import com.example.data.mcp.RealSupabaseMcpEngine
+import com.example.data.mcp.RealVercelMcpEngine
 
-class McpManager(private val context: Context) {
+class McpManager(val context: Context) {
 
     val tokenStore = McpTokenStore(context)
     val authManager = McpAuthManager(context, tokenStore)
@@ -540,6 +543,24 @@ class McpManager(private val context: Context) {
                 emptyMap<String, Any?>()
             }
             return@withContext githubProvider.executeTool(toolName, parsedArgs)
+        }
+
+        if (server.platform == "CLOUDFLARE" || toolName.startsWith("cloudflare_")) {
+            val tokens = tokenStore.getTokens(server.id)
+            val token = server.apiKey?.trim().takeIf { !it.isNullOrBlank() } ?: tokens?.accessToken
+            return@withContext RealCloudflareMcpEngine.execute(token, toolName, argumentsJson)
+        }
+
+        if (server.platform == "SUPABASE" || toolName.startsWith("supabase_")) {
+            val tokens = tokenStore.getTokens(server.id)
+            val token = server.apiKey?.trim().takeIf { !it.isNullOrBlank() } ?: tokens?.accessToken
+            return@withContext RealSupabaseMcpEngine.execute(server.url, token, toolName, argumentsJson)
+        }
+
+        if (server.platform == "VERCEL" || toolName.startsWith("vercel_")) {
+            val tokens = tokenStore.getTokens(server.id)
+            val token = server.apiKey?.trim().takeIf { !it.isNullOrBlank() } ?: tokens?.accessToken
+            return@withContext RealVercelMcpEngine.execute(token, toolName, argumentsJson)
         }
 
         val metadata = cachedMetadata[server.id] ?: authManager.discoverOAuthMetadata(server.url).getOrNull()

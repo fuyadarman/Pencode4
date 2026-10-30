@@ -1066,6 +1066,62 @@ object ExtraToolHandlers {
                 updateLog(actLog.id, if (isSuccess) "success" else "failed", result)
                 result
             }
+            "browser_open_url", "browser_open", "open_url", "navigate" -> {
+                val targetUrl = args?.url ?: args?.query ?: args?.text ?: "https://www.google.com"
+                val newTab = args?.newTab ?: false
+                val openLog = createLog("Browser Navigate", "thinking", "Opening $targetUrl", "web-clone")
+                addLog(openLog)
+                setAgentStatus("Browsing to $targetUrl...")
+                val result = com.example.browser.AiBrowserControlBridge.openUrl(targetUrl, newTab)
+                updateLog(openLog.id, "success", result)
+                result
+            }
+            "browser_new_tab" -> {
+                val initialUrl = args?.url ?: ""
+                val initialTitle = args?.title ?: args?.name ?: "New Tab"
+                val tabLog = createLog("Browser New Tab", "thinking", "Opening new tab: $initialTitle", "web-clone")
+                addLog(tabLog)
+                val result = com.example.browser.AiBrowserControlBridge.openNewTab(initialUrl, initialTitle)
+                updateLog(tabLog.id, "success", result)
+                result
+            }
+            "browser_close_tab" -> {
+                val tabId = args?.tabId ?: args?.targetFile ?: args?.query
+                val tabLog = createLog("Browser Close Tab", "thinking", "Closing tab", "web-clone")
+                addLog(tabLog)
+                val result = com.example.browser.AiBrowserControlBridge.closeTab(tabId)
+                updateLog(tabLog.id, "success", result)
+                result
+            }
+            "browser_switch_tab" -> {
+                val tabQuery = args?.tabId ?: args?.query ?: args?.name ?: args?.title ?: "0"
+                val tabLog = createLog("Browser Switch Tab", "thinking", "Switching tab: $tabQuery", "web-clone")
+                addLog(tabLog)
+                val result = com.example.browser.AiBrowserControlBridge.switchTab(tabQuery)
+                updateLog(tabLog.id, if (result.startsWith("Error")) "failed" else "success", result)
+                result
+            }
+            "browser_list_tabs" -> {
+                val tabLog = createLog("Browser Tabs", "thinking", "Listing open tabs", "web-clone")
+                addLog(tabLog)
+                val result = com.example.browser.AiBrowserControlBridge.listTabs()
+                updateLog(tabLog.id, "success", "Listed browser tabs")
+                result
+            }
+            "browser_history" -> {
+                val histLog = createLog("Browser History", "thinking", "Reading browsing history", "web-clone")
+                addLog(histLog)
+                val result = com.example.browser.AiBrowserControlBridge.getHistory()
+                updateLog(histLog.id, "success", "Retrieved browser history")
+                result
+            }
+            "browser_clear_history" -> {
+                val clearLog = createLog("Browser History", "thinking", "Clearing history", "web-clone")
+                addLog(clearLog)
+                val result = com.example.browser.AiBrowserControlBridge.clearHistory()
+                updateLog(clearLog.id, "success", result)
+                result
+            }
             "browser_reload", "preview_reload", "reload_preview", "reload_preview_tab" -> {
                 val reloadLog = createLog(
                     "Reload Preview Tab",

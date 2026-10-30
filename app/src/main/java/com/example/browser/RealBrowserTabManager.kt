@@ -73,10 +73,11 @@ object RealBrowserTabManager {
         }
     }
 
-    fun switchTab(tabId: String) {
-        val tab = _tabs.value.find { it.id == tabId } ?: return
+    fun switchTab(tabId: String): RealBrowserTab? {
+        val tab = _tabs.value.find { it.id == tabId } ?: return null
         _activeTabId.value = tabId
         LivePreviewBrowserManager.setRequestedUrl(tab.url)
+        return tab
     }
 
     fun updateActiveTab(url: String, title: String? = null, canGoBack: Boolean = false, canGoForward: Boolean = false, isLoading: Boolean = false) {

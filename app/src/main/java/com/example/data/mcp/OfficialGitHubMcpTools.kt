@@ -148,12 +148,15 @@ object OfficialGitHubMcpTools {
             .removePrefix("github.")
         return when (clean) {
             "get_file", "read_file", "view_file", "cat" -> "get_file_contents"
-            "commit_file", "write_file", "save_file", "put_file", "edit_file" -> "create_or_update_file"
+            "commit_file", "write_file", "save_file", "put_file", "edit_file", "create_file", "modify_file", "update_file" -> "create_or_update_file"
+            "push_files", "push_file", "git_push", "commit_files" -> "push_files"
+            "deploy", "deploy_project", "deploy_workflow" -> "trigger_workflow"
             "list_repos", "get_repositories", "repos" -> "list_repositories"
             "search_repo" -> "search_repositories"
             "create_repo", "new_repo" -> "create_repository"
             "issues", "get_issues" -> "list_issues"
             "new_issue" -> "create_issue"
+            "comment", "comment_issue" -> "add_issue_comment"
             "pulls", "prs", "get_prs" -> "list_pull_requests"
             "new_pr", "new_pull_request" -> "create_pull_request"
             "branches", "get_branches" -> "list_branches"
@@ -296,9 +299,21 @@ object OfficialGitHubMcpTools {
 
                 "create_or_update_file" -> {
                     if (repo.isBlank()) return@withContext "Error: No repository specified."
-                    val path = args["path"]?.toString() ?: return@withContext "Error: 'path' is required."
-                    val content = args["content"]?.toString() ?: ""
-                    val message = args["message"]?.toString() ?: "Update $path via GitHub MCP"
+                    val path = args["path"]?.toString()
+                        ?: args["targetFile"]?.toString()
+                        ?: args["file"]?.toString()
+                        ?: args["filePath"]?.toString()
+                        ?: return@withContext "Error: 'path' is required."
+                    val content = args["content"]?.toString()
+                        ?: args["code"]?.toString()
+                        ?: args["text"]?.toString()
+                        ?: args["body"]?.toString()
+                        ?: args["file_content"]?.toString()
+                        ?: ""
+                    val message = args["message"]?.toString()
+                        ?: args["commit_message"]?.toString()
+                        ?: args["description"]?.toString()
+                        ?: "Update $path via GitHub MCP"
                     val branch = args["branch"]?.toString() ?: "main"
 
                     // Check if file already exists to get SHA
@@ -336,6 +351,67 @@ object OfficialGitHubMcpTools {
                     } else {
                         "Failed to commit file: HTTP ${putRes.code} - $putBody"
                     }
+                }
+
+                "push_files" -> {
+                    if (repo.isBlank()) return@withContext "Error: No repository specified."
+                    val branch = args["branch"]?.toString() ?: "main"
+                    val message = args["message"]?.toString() ?: "Commit files via GitHub MCP"
+                    val filesRaw = args["files"]
+
+                    var successCount = 0
+                    if (filesRaw is List<*>) {
+                        for (item in filesRaw) {
+                            if (item is Map<*, *>) {
+                                val p = item["path"]?.toString() ?: continue
+                                val c = item["content"]?.toString() ?: ""
+                                val getUrl = "https://api.github.com/repos/$repo/contents/$p?ref=$branch"
+                                val getReq = Request.Builder().url(getUrl).header("Authorization", "Bearer $token").build()
+                                val getRes = httpClient.newCall(getReq).execute()
+                                val sha = if (getRes.isSuccessful) JSONObject(getRes.body?.string().orEmpty()).optString("sha") else null
+                                val encoded = Base64.encodeToString(c.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
+                                val payload = JSONObject().apply {
+                                    put("message", message)
+                                    put("content", encoded)
+                                    put("branch", branch)
+                                    if (!sha.isNullOrBlank()) put("sha", sha)
+                                }
+                                val putReq = Request.Builder()
+                                    .url("https://api.github.com/repos/$repo/contents/$p")
+                                    .put(payload.toString().toRequestBody("application/json".toMediaTypeOrNull()))
+                                    .header("Authorization", "Bearer $token")
+                                    .build()
+                                if (httpClient.newCall(putReq).execute().isSuccessful) successCount++
+                            }
+                        }
+                    } else if (filesRaw is org.json.JSONArray) {
+                        for (i in 0 until filesRaw.length()) {
+                            val item = filesRaw.optJSONObject(i) ?: continue
+                            val p = item.optString("path")
+                            val c = item.optString("content")
+                            if (p.isNotBlank()) {
+                                val getUrl = "https://api.github.com/repos/$repo/contents/$p?ref=$branch"
+                                val getReq = Request.Builder().url(getUrl).header("Authorization", "Bearer $token").build()
+                                val getRes = httpClient.newCall(getReq).execute()
+                                val sha = if (getRes.isSuccessful) JSONObject(getRes.body?.string().orEmpty()).optString("sha") else null
+                                val encoded = Base64.encodeToString(c.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
+                                val payload = JSONObject().apply {
+                                    put("message", message)
+                                    put("content", encoded)
+                                    put("branch", branch)
+                                    if (!sha.isNullOrBlank()) put("sha", sha)
+                                }
+                                val putReq = Request.Builder()
+                                    .url("https://api.github.com/repos/$repo/contents/$p")
+                                    .put(payload.toString().toRequestBody("application/json".toMediaTypeOrNull()))
+                                    .header("Authorization", "Bearer $token")
+                                    .build()
+                                if (httpClient.newCall(putReq).execute().isSuccessful) successCount++
+                            }
+                        }
+                    }
+
+                    "GitHub MCP: Successfully pushed $successCount file(s) to $repo on branch '$branch'."
                 }
 
                 "delete_file" -> {

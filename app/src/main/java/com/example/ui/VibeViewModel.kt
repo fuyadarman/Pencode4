@@ -1239,7 +1239,12 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         _githubRepo.value = repo
         val curProj = _currentProject.value?.name
         if (!curProj.isNullOrBlank()) {
-            com.example.workflow.ProjectBuildSeparationManager.saveProjectRepo(getApplication(), curProj, repo)
+            val isSep = com.example.workflow.ProjectBuildSeparationManager.isBuildSeparated(getApplication(), curProj)
+            if (isSep) {
+                com.example.workflow.ProjectBuildSeparationManager.saveProjectRepo(getApplication(), curProj, repo)
+            } else {
+                sharedPrefs.edit().putString("github_repo", repo).apply()
+            }
         } else {
             sharedPrefs.edit().putString("github_repo", repo).apply()
         }
@@ -1252,7 +1257,12 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         _githubBranch.value = branch
         val curProj = _currentProject.value?.name
         if (!curProj.isNullOrBlank()) {
-            com.example.workflow.ProjectBuildSeparationManager.saveProjectBranch(getApplication(), curProj, branch)
+            val isSep = com.example.workflow.ProjectBuildSeparationManager.isBuildSeparated(getApplication(), curProj)
+            if (isSep) {
+                com.example.workflow.ProjectBuildSeparationManager.saveProjectBranch(getApplication(), curProj, branch)
+            } else {
+                sharedPrefs.edit().putString("github_branch", branch).apply()
+            }
         } else {
             sharedPrefs.edit().putString("github_branch", branch).apply()
         }
@@ -1595,6 +1605,7 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun triggerWorkflows(selectedWorkflowIds: Set<Long>? = null) {
+        com.example.workflow.BuildTriggerHelper.setBuildTrigger(true)
         lastAutoFixedRunId = -1L
         _buildError.value = null
         _detectedAndroidBuildErrors.value = emptyList()
@@ -1661,10 +1672,32 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                     if (response.isSuccessful) {
                         Log.d("VibeViewModel", "Successfully triggered workflow: ${wf.name}")
                     } else {
-                        Log.e("VibeViewModel", "Failed to trigger workflow ${wf.name}: ${response.code}")
+                        val errMsg = "HTTP ${response.code}: ${response.message.ifBlank { "Workflow dispatch failed" }}"
+                        Log.e("VibeViewModel", "Failed to trigger workflow ${wf.name}: $errMsg")
+                        viewModelScope.launch(Dispatchers.Main) {
+                            com.example.workflow.BuildTriggerHelper.showWorkflowErrorPrompt(
+                                workflowName = wf.name,
+                                errorMessage = errMsg,
+                                onAllow = {
+                                    triggerWorkflows(setOf(wf.id))
+                                },
+                                onDeny = {}
+                            )
+                        }
                     }
                 } catch (e: Exception) {
-                    Log.e("VibeViewModel", "Error triggering workflow ${wf.name}: ${e.localizedMessage}")
+                    val errMsg = e.localizedMessage ?: "Unknown network error during workflow dispatch"
+                    Log.e("VibeViewModel", "Error triggering workflow ${wf.name}: $errMsg")
+                    viewModelScope.launch(Dispatchers.Main) {
+                        com.example.workflow.BuildTriggerHelper.showWorkflowErrorPrompt(
+                            workflowName = wf.name,
+                            errorMessage = errMsg,
+                            onAllow = {
+                                triggerWorkflows(setOf(wf.id))
+                            },
+                            onDeny = {}
+                        )
+                    }
                 }
             }
         }
@@ -2398,11 +2431,11 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun pushGitRepo(projectName: String, repo: String, token: String, branch: String, force: Boolean, onComplete: (Result<Unit>) -> Unit) {
+    fun pushGitRepo(projectName: String, repo: String, token: String, branch: String, force: Boolean, isBuildTrigger: Boolean = false, onComplete: (Result<Unit>) -> Unit) {
         viewModelScope.launch {
             clearAndroidBuildErrors()
             _gitProgress.value = if (force) "Force pushing code to GitHub..." else "Pushing code to GitHub..."
-            val result = repository.pushToGitHub(projectName, repo, token, branch, force) { progress ->
+            val result = repository.pushToGitHub(projectName, repo, token, branch, force, isBuildTrigger) { progress ->
                 _gitProgress.value = progress
             }
             if (result.isSuccess) {
@@ -2978,17 +3011,23 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             pollJob?.cancel()
             pollJob = null
             
+            com.example.chat.ProjectChatSessionManager.loadSessions(getApplication(), project.name)
+
             val isProjectCurrentlyThinking = runningProjectName == project.name && currentAiJob?.isActive == true
             _isThinking.value = isProjectCurrentlyThinking
             if (isProjectCurrentlyThinking) {
                 _agentStatus.value = projectAgentStatusMap[project.name] ?: "AI is working..."
                 _aiActionLogs.value = projectActionLogsMap[project.name] ?: emptyList()
             } else {
-                _agentStatus.value = projectAgentStatusMap[project.name] ?: ""
-                _aiActionLogs.value = emptyList()
+                _agentStatus.value = projectAgentStatusMap[project.name] ?: "Ready"
+                val restoredLogs = projectActionLogsMap[project.name]
+                    ?: com.example.agent.service.AgentPersistentStateManager.restoreLogs(getApplication(), project.name)
+                _aiActionLogs.value = restoredLogs
             }
 
-            _todoList.value = projectTodoListMap[project.name] ?: emptyList()
+            val restoredTodos = projectTodoListMap[project.name]
+                ?: com.example.agent.service.AgentPersistentStateManager.restoreTodos(getApplication(), project.name)
+            _todoList.value = restoredTodos
             _editHistory.value = projectEditHistoryMap[project.name] ?: emptyList()
 
             startPollingBuild()
@@ -3008,6 +3047,20 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
             } finally {
                 _isLoadingWorkspace.value = false
             }
+        }
+    }
+
+    fun startNewChatSession() {
+        val project = _currentProject.value ?: return
+        viewModelScope.launch {
+            com.example.chat.ProjectChatSessionManager.startNewChat(getApplication(), project.name, repository)
+        }
+    }
+
+    fun switchChatSession(sessionId: String) {
+        val project = _currentProject.value ?: return
+        viewModelScope.launch {
+            com.example.chat.ProjectChatSessionManager.switchSession(getApplication(), project.name, sessionId, repository)
         }
     }
 
@@ -4633,6 +4686,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                             "delete_chunk", "delete_block", "remove_chunk", "remove_block",
                             "browser_snapshot", "browser_inspect_interactive", "inspect_interactive", "browser_elements",
                             "browser_controller", "browser_interact", "browser_action",
+                            "browser_open_url", "browser_open", "browser_new_tab", "browser_close_tab", "browser_switch_tab", "browser_list_tabs", "browser_history", "browser_clear_history",
                             "browser_reload", "preview_reload", "reload_preview", "reload_preview_tab",
                             "browser_download", "download_from_browser", "web_download", "browser_upload", "upload_to_browser", "web_upload",
                             "open_url", "navigate", "browse_url", "get_page_source", "inspect_dom", "inspect_css", "get_computed_styles", "take_screenshot", "click", "type", "scroll", "get_links", "get_images", "get_fonts", "run_javascript", "execute_javascript", "eval_js", "compare_screenshot" -> {

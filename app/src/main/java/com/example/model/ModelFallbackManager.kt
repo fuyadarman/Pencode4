@@ -76,15 +76,30 @@ object ModelFallbackManager {
         if (!isAutoSwitchEnabled(context)) return null
 
         val selectedIds = getSelectedFallbackModelIds(context)
-        if (selectedIds.isEmpty()) return null
+        val candidates = if (selectedIds.isNotEmpty()) {
+            availableModels.filter { model ->
+                selectedIds.contains(model.id) || selectedIds.contains(model.modelId) || selectedIds.contains(model.alias)
+            }
+        } else {
+            availableModels
+        }
 
-        // Filter models that are selected, exist in available configurations, and have not yet been tried
-        return availableModels.firstOrNull { model ->
-            (selectedIds.contains(model.id) || selectedIds.contains(model.modelId) || selectedIds.contains(model.alias)) &&
-                    model.id != currentModelId &&
+        val matched = candidates.firstOrNull { model ->
+            model.id != currentModelId &&
                     model.modelId != currentModelId &&
                     !triedModelIds.contains(model.id) &&
                     !triedModelIds.contains(model.modelId)
+        }
+        if (matched != null) return matched
+
+        // Default high-reliability fallbacks
+        val builtInFallbacks = listOf(
+            CustomModelConfig("auto_fallback_flash", "Gemini 2.5 Flash", "gemini", "", "", "gemini-2.5-flash"),
+            CustomModelConfig("auto_fallback_15_flash", "Gemini 1.5 Flash", "gemini", "", "", "gemini-1.5-flash"),
+            CustomModelConfig("auto_fallback_pro", "Gemini 1.5 Pro", "gemini", "", "", "gemini-1.5-pro")
+        )
+        return builtInFallbacks.firstOrNull { fb ->
+            fb.modelId != currentModelId && !triedModelIds.contains(fb.modelId) && !triedModelIds.contains(fb.id)
         }
     }
 }

@@ -177,14 +177,10 @@ class MainActivity : ComponentActivity() {
                         val githubAuthManager = remember { com.example.auth.github.GitHubAuthManager.getInstance(this@MainActivity) }
                         val githubAuthState by githubAuthManager.authState.collectAsState()
 
-                        LaunchedEffect(githubAuthState.isConnected, githubAuthState.accessToken, githubAuthState.selectedRepo) {
+                        LaunchedEffect(githubAuthState.isConnected, githubAuthState.accessToken) {
                             if (githubAuthState.isConnected && githubAuthState.accessToken.isNotBlank()) {
                                 if (viewModel.githubToken.value != githubAuthState.accessToken) {
                                     viewModel.saveGithubToken(githubAuthState.accessToken)
-                                }
-                                if (githubAuthState.selectedRepo.isNotBlank() && viewModel.githubRepo.value != githubAuthState.selectedRepo) {
-                                    viewModel.saveGithubRepo(githubAuthState.selectedRepo)
-                                    viewModel.saveGithubBranch(githubAuthState.selectedBranch)
                                 }
                             }
                         }
@@ -296,7 +292,11 @@ class MainActivity : ComponentActivity() {
                                 githubRepo = githubRepo,
                                 githubBranch = githubBranch,
                                 gitHubWorkflows = gitHubWorkflows,
-                                onTriggerWorkflows = { selectedIds -> viewModel.triggerWorkflows(selectedIds) },
+                                onTriggerWorkflows = { selectedIds ->
+                                    com.example.workflow.BuildTriggerHelper.onWorkflowTriggerClicked(this@MainActivity) {
+                                        viewModel.triggerWorkflows(selectedIds)
+                                    }
+                                },
                                 explorerGithubToken = explorerGithubToken,
                                 explorerGithubRepo = explorerGithubRepo,
                                 explorerGithubBranch = explorerGithubBranch,
@@ -396,8 +396,10 @@ class MainActivity : ComponentActivity() {
                                     viewModel.saveExplorerGithubToken(token)
                                 },
                                 onPushGitRepo = { repo, token, branch, force, onComplete ->
-                                    viewModel.pushGitRepo(currentProject!!.name, repo, token, branch, force, onComplete)
+                                    viewModel.pushGitRepo(currentProject!!.name, repo, token, branch, force, onComplete = onComplete)
                                 },
+                                onStartNewChatSession = { viewModel.startNewChatSession() },
+                                onSwitchChatSession = { viewModel.switchChatSession(it) },
                                 onTabSelected = { tab ->
                                     viewModel.changeTab(tab)
                                     com.example.admob.AdMobManager.onTabSwitched(this@MainActivity, tab.name)
@@ -517,6 +519,8 @@ class MainActivity : ComponentActivity() {
                                 }
                             )
                         }
+
+                        com.example.ui.workflow.WorkflowErrorPromptDialog()
                 }
             }
         }

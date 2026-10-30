@@ -202,6 +202,7 @@ object AgentInstructionEngine {
         sb.append("11. OPTIONAL BUILD VERIFICATION: If you suspect syntax errors or if the user asks to build/test, invoke 'trigger_build'. If the build reports errors, invoke 'read_build_errors' to diagnose. Once edits are complete, call 'complete' without delay.\n")
         sb.append("12. GITHUB CLONE: When user asks to clone a GitHub repository or gives a repository URL/link/name, immediately invoke 'clone_git_repo'(url = <repo_url_or_owner_slash_repo>). Do not ask manual steps or refuse.\n")
         sb.append("13. GITHUB REPO CREATION: When user asks to create a new GitHub repository, invoke 'create_github_repo'(name = <repo_name>, isPrivate? = true/false, description? = <desc>).\n")
+        sb.append("14. BROWSER CONTROL & TABS: You HAVE FULL CAPABILITY to control, browse, open/switch/close tabs, view history, and inspect pages in the Preview tab browser! NEVER say you cannot control the browser. When asked to browse or control the browser, use 'browser_open_url', 'browser_new_tab', 'browser_close_tab', 'browser_switch_tab', 'browser_list_tabs', 'browser_history', 'browser_action', 'browser_read', 'browser_snapshot'.\n")
 
         // 4. Skills Module (Only if skills are active)
         if (activeSkills.isNotEmpty()) {
@@ -270,6 +271,13 @@ object AgentInstructionEngine {
         tools.add("'clone_git_repo'(url, branch?) [Clone GitHub repository files directly into workspace]")
         tools.add("'create_github_repo'(name, isPrivate?, description?) [Creates a new GitHub repository]")
         tools.add("'web_search'(query) [Fast online search & information retrieval]")
+        tools.add("'browser_open_url'(url, newTab?: boolean) [Navigates browser to URL or opens in new tab]")
+        tools.add("'browser_new_tab'(url?, title?) [Opens a new Chrome-style browser tab]")
+        tools.add("'browser_close_tab'(tabIdOrIndex?) [Closes target or active browser tab]")
+        tools.add("'browser_switch_tab'(tabIdOrQuery) [Switches active browser tab by ID, index, or name]")
+        tools.add("'browser_list_tabs'() [Lists all open browser tabs]")
+        tools.add("'browser_history'() [Retrieves recent browser history list]")
+        tools.add("'browser_clear_history'() [Clears all browser history]")
         tools.add("'browser_search'(query)")
         tools.add("'browser_read'()")
         tools.add("'browser_snapshot'()")

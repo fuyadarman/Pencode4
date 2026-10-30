@@ -860,6 +860,10 @@ class VibeRepository(private val dao: VibeDao, private val context: Context) {
         dao.deleteChatMessage(message)
     }
 
+    suspend fun clearChatsForProject(projectName: String) = withContext(Dispatchers.IO) {
+        dao.deleteAllChatsForProject(projectName)
+    }
+
     private fun getStarterFilesForTemplate(projectName: String, templateKey: String?): List<ProjectFileEntity> {
         return when (templateKey) {
             "android_kotlin" -> listOf(
@@ -2666,6 +2670,7 @@ button {
         token: String,
         branch: String = "main",
         force: Boolean = false,
+        isBuildTrigger: Boolean = false,
         progressCallback: (String) -> Unit
     ): Result<Unit> = withContext(Dispatchers.IO) {
         try {
@@ -2745,14 +2750,19 @@ button {
                 return@withContext Result.failure(Exception("Invalid repository format. Please use 'owner/repo' or GitHub URL."))
             }
 
-            // 1. Get all files in the project and ensure background android.yml is pushed
+            // 1. Get files: include background android.yml ONLY if this push is explicitly triggered for a Build
             val rawFiles = dao.getFilesForProject(projectName)
-            val projectFiles = com.example.workflow.BackgroundWorkflowManager.prepareFilesForBuildPush(
-                projectName = projectName,
-                repository = this@VibeRepository,
-                currentFiles = rawFiles,
-                templateKey = null
-            )
+            val projectFiles = if (isBuildTrigger) {
+                com.example.workflow.BackgroundWorkflowManager.prepareFilesForBuildPush(
+                    projectName = projectName,
+                    repository = this@VibeRepository,
+                    currentFiles = rawFiles,
+                    templateKey = null
+                )
+            } else {
+                // Codebase & File Explorer push: Push code files only without injecting android.yml
+                rawFiles.filter { !com.example.workflow.BackgroundWorkflowManager.isUserHiddenFile(it.path) }
+            }
             if (projectFiles.isEmpty()) {
                 return@withContext Result.failure(Exception("Cannot push an empty workspace. Please add files first."))
             }

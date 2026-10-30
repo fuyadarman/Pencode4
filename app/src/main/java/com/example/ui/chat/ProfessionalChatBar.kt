@@ -67,6 +67,8 @@ fun ProfessionalChatBar(
     onToggleControlBrowser: (Boolean) -> Unit = {},
     onSelectCustomModel: ((modelId: String, provider: String, baseUrl: String, apiKey: String) -> Unit)? = null,
     currentModelDisplayName: String = "Gemini",
+    onStartNewChat: () -> Unit = {},
+    onSelectChatSession: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val canSend = chatInputText.isNotBlank() || attachedFiles.isNotEmpty() || taggedFiles.isNotEmpty() || taggedSkills.isNotEmpty()
@@ -364,7 +366,7 @@ fun ProfessionalChatBar(
                             )
                         }
                     }
-                    // 2. Tune Controls Button (Houses Plan, Thinking & Reasoning, and MCP)
+                    // 2. Tune Controls Button (Houses Plan, Thinking & Reasoning, MCP, and Chat Sessions)
                     ChatTuneControlsButton(
                         isPlanModeActive = isPlanModeActive,
                         onTogglePlanMode = onTogglePlanMode,
@@ -372,7 +374,9 @@ fun ProfessionalChatBar(
                         onSelectReasoningEffort = onSelectReasoningEffort,
                         selectedMcpServerIds = selectedMcpServerIds,
                         onOpenSelectMcpDialog = onOpenSelectMcpDialog,
-                        onOpenReasoningDialog = { showReasoningEffortDialog = true }
+                        onOpenReasoningDialog = { showReasoningEffortDialog = true },
+                        onStartNewChat = onStartNewChat,
+                        onSelectChatSession = onSelectChatSession
                     )
                 }
 

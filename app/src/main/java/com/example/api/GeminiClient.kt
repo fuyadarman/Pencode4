@@ -158,6 +158,8 @@ data class ToolArguments(
     val mcpArgsJson: String? = null,
     val resourceUri: String? = null,
     val url: String? = null,
+    val newTab: Boolean? = null,
+    val tabId: String? = null,
     val selector: String? = null,
     val properties: String? = null,
     val script: String? = null,

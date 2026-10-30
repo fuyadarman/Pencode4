@@ -48,16 +48,25 @@ object ProjectBuildSeparationManager {
     }
 
     /**
+     * Gets the project-specific repository if one has been assigned.
+     */
+    fun getProjectSpecificRepo(context: Context, projectName: String): String {
+        if (projectName.isBlank()) return ""
+        val key = KEY_REPO_PREFIX + sanitize(projectName)
+        return getPrefs(context).getString(key, "") ?: ""
+    }
+
+    /**
      * Gets the effective GitHub repository for the current project.
      */
     fun getEffectiveRepo(context: Context, projectName: String, globalRepo: String): String {
         if (projectName.isBlank()) return globalRepo
         val isSep = isBuildSeparated(context, projectName)
-        if (!isSep) return globalRepo
-
-        val key = KEY_REPO_PREFIX + sanitize(projectName)
-        val projectSpecific = getPrefs(context).getString(key, "") ?: ""
-        return if (projectSpecific.isNotBlank()) projectSpecific else globalRepo
+        if (isSep) {
+            val key = KEY_REPO_PREFIX + sanitize(projectName)
+            return getPrefs(context).getString(key, "") ?: ""
+        }
+        return globalRepo
     }
 
     /**
