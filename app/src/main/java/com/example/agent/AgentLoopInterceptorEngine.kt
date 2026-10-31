@@ -58,7 +58,8 @@ object AgentLoopInterceptorEngine {
         }
 
         val targetSummary = args?.path ?: args?.targetFile ?: args?.selector ?: args?.query ?: args?.command ?: ""
-        when (val guardVerdict = AgentRepetitionGuardEngine.evaluateAction(tool, targetSummary)) {
+        val snippetSummary = args?.targetContent ?: args?.targetContentPascal ?: args?.old_string ?: args?.old_str ?: args?.startLine?.toString() ?: ""
+        when (val guardVerdict = AgentRepetitionGuardEngine.evaluateAction(tool, targetSummary, snippetSummary)) {
             is AgentRepetitionGuardEngine.LoopVerdict.Halt -> {
                 val loopWarnLog = createAiLog(
                     "Loop Alert",
