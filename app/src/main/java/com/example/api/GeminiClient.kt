@@ -1190,7 +1190,9 @@ object GeminiClient {
                 val activeModel = if (useCustom && modelId.isNotBlank()) modelId else MODEL_NAME
                 val url = when {
                     baseUrl.contains(":generateContent") -> if (baseUrl.contains("key=")) baseUrl else "$baseUrl?key=$activeApiKey"
+                    baseUrl.contains(":generateContent") -> if (baseUrl.contains("key=")) baseUrl else "$baseUrl?key=$activeApiKey"
                     baseUrl.contains("/models/") -> "$baseUrl:generateContent?key=$activeApiKey"
+                    baseUrl.contains("v1beta") || baseUrl.contains("v1") -> "$baseUrl/models/$activeModel:generateContent?key=$activeApiKey"
                     else -> "$baseUrl/v1beta/models/$activeModel:generateContent?key=$activeApiKey"
                 }
 
