@@ -15,6 +15,7 @@ object AgentLoopInterceptorEngine {
         object Continue : LoopAction()
         object SkipTurn : LoopAction()
         data class Abort(val reason: String, val log: AiActionLog) : LoopAction()
+        data class BlockTool(val directResult: String, val log: AiActionLog) : LoopAction()
     }
 
     fun inspectAction(
@@ -26,6 +27,21 @@ object AgentLoopInterceptorEngine {
         addHistory: (Content) -> Unit,
         addLog: (AiActionLog) -> Unit
     ): LoopAction {
+        when (val gateVerdict = IntelligentRetryController.evaluatePreExecution(tool, args)) {
+            is IntelligentRetryController.GateVerdict.Block -> {
+                val blockLog = createAiLog(
+                    "Action Blocked by Harness",
+                    "failed",
+                    gateVerdict.reason
+                )
+                return LoopAction.BlockTool(gateVerdict.simulatedToolOutput, blockLog)
+            }
+            is IntelligentRetryController.GateVerdict.WarnAndAnalyze -> {
+                addHistory(Content(role = "user", parts = listOf(Part(text = "System Notice: ${gateVerdict.message}"))))
+            }
+            IntelligentRetryController.GateVerdict.Allow -> { /* proceed */ }
+        }
+
         val repCheck = OpenCodeLoopGuardEngine.checkAndRecordRepetition(
             tool = tool,
             args = args,

@@ -3910,6 +3910,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             var currentConfigId = activeConfig.id
             val triedModelIds = mutableSetOf(activeConfig.id, activeConfig.modelId)
             com.example.agent.AgentRepetitionGuardEngine.resetSession()
+            com.example.agent.IntelligentRetryController.resetSession()
 
             val executionStartTime = System.currentTimeMillis()
             _executionElapsedTimeSeconds.value = 0L
@@ -4342,6 +4343,12 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                         loopCompleted = true
                                         break
                                     }
+                                    is com.example.agent.AgentLoopInterceptorEngine.LoopAction.BlockTool -> {
+                                        _aiActionLogs.value = _aiActionLogs.value + loopAction.log
+                                        history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
+                                        history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': ${loopAction.directResult}"))))
+                                        continue
+                                    }
                                     com.example.agent.AgentLoopInterceptorEngine.LoopAction.SkipTurn -> continue
                                     com.example.agent.AgentLoopInterceptorEngine.LoopAction.Continue -> { /* proceed */ }
                                 }
@@ -4472,6 +4479,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': ${mutationRes.resultText}"))))
                                 loopProtectionEngine.recordActionOutcome(tool, args, isSuccess = mutationRes.isSuccess, turn = turn)
+                                com.example.agent.IntelligentRetryController.recordOutcome(tool, args, mutationRes.resultText)
                             }
                             "mcp_call_tool", "mcp_call", "mcp_execute", "call_mcp_tool", "use_mcp_tool", "mcp_tool", "mcp_list_tools", "mcp_list", "mcp_read_resource" -> {
                                 val result = McpToolHandler.handleMcpToolCall(
@@ -4486,6 +4494,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 )
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': $result"))))
+                                com.example.agent.IntelligentRetryController.recordOutcome(tool, args, result)
                             }
                             "read_preview_errors", "get_preview_errors", "preview_errors", "console_errors" -> {
                                 val logEntry = createAiLog(
@@ -4778,6 +4787,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 val safeResult = com.example.agent.LargeProjectMemoryGuard.sanitizeToolOutput(tool, result)
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': $safeResult"))))
+                                com.example.agent.IntelligentRetryController.recordOutcome(tool, args, result)
                             }
                             "generate_pdf", "generate_document" -> {
                                 val result = com.example.document.DocumentToolHandler.handleDocumentTool(
@@ -4870,6 +4880,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                 )
                                 history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                 history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': $result"))))
+                                com.example.agent.IntelligentRetryController.recordOutcome(tool, args, result)
                             }
                             else -> {
                                 val isMcpCandidate = tool.startsWith("mcp_") || 
@@ -4890,6 +4901,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                                     )
                                     history.add(Content(role = "model", parts = listOf(Part(text = moshi.adapter(ToolCallResponse::class.java).toJson(stepResponse)))))
                                     history.add(Content(role = "user", parts = listOf(Part(text = "System/Tool Output for '$tool': $result"))))
+                                    com.example.agent.IntelligentRetryController.recordOutcome(tool, args, result)
                                 } else {
                                     loopCompleted = true
                                 }
