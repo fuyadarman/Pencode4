@@ -1281,7 +1281,7 @@ fun ChatTabContent(
             ) {
                 itemsIndexed(
                     items = messages,
-                    key = { _, msg -> msg.id }
+                    key = { index, msg -> if (msg.id > 0) "msg_${msg.id}" else "msg_idx_${index}_${msg.timestamp}" }
                 ) { index, message ->
                     val nextMsg = if (message.role == "user") messages.getOrNull(index + 1) else null
                     val (nextModelName, nextDuration) = remember(nextMsg?.id, nextMsg?.aiActionLogsJson) {
@@ -3469,8 +3469,7 @@ fun PreviewTabContent(
     val defaultPreviewUrl = remember(isReactViteFramework, hasWebDist, effectiveHtmlContent) {
         when {
             isReactViteFramework && hasWebDist -> "http://localhost:5173"
-            effectiveHtmlContent != null -> com.example.ui.preview.WebPreviewLifecycleManager.VIRTUAL_BASE_URL
-            else -> "https://www.google.com/"
+            else -> com.example.ui.preview.WebPreviewLifecycleManager.VIRTUAL_BASE_URL
         }
     }
     var currentViewport by remember { mutableStateOf(PreviewViewport.DESKTOP) }
@@ -3487,7 +3486,7 @@ fun PreviewTabContent(
         ) 
     }
     var urlInputText by remember { 
-        mutableStateOf(customUrl ?: (if (effectiveHtmlContent != null) defaultPreviewUrl else "https://www.google.com/")) 
+        mutableStateOf(customUrl ?: defaultPreviewUrl) 
     }
     var canGoBack by remember { mutableStateOf(false) }
     var canGoForward by remember { mutableStateOf(false) }
@@ -3563,10 +3562,10 @@ fun PreviewTabContent(
                 com.example.browser.RealBrowserTabManager.closeTab(tabId)
             },
             onNewTab = {
-                com.example.browser.RealBrowserTabManager.openNewTab("https://www.google.com/", "Google")
-                customUrl = "https://www.google.com/"
-                urlInputText = "https://www.google.com/"
-                webViewRef?.loadUrl("https://www.google.com/")
+                com.example.browser.RealBrowserTabManager.openNewTab(defaultPreviewUrl, "Localhost")
+                customUrl = null
+                urlInputText = defaultPreviewUrl
+                webViewRef?.loadUrl(defaultPreviewUrl)
             }
         )
 
@@ -4511,7 +4510,7 @@ fun PreviewTabContent(
                                     val startHtml = com.example.browser.RealBrowserStartPageGenerator.generateStartPageHtml()
                                     tag = startHtml
                                     loadDataWithBaseURL(
-                                        "https://browser-home/",
+                                        com.example.ui.preview.WebPreviewLifecycleManager.VIRTUAL_BASE_URL,
                                         startHtml,
                                         "text/html",
                                         "UTF-8",
@@ -4543,7 +4542,7 @@ fun PreviewTabContent(
                                     val currentTag = webView.tag as? String
                                     if (currentTag != null && currentTag != startHtml) {
                                         webView.tag = startHtml
-                                        webView.loadDataWithBaseURL("https://browser-home/", startHtml, "text/html", "UTF-8", null)
+                                        webView.loadDataWithBaseURL(com.example.ui.preview.WebPreviewLifecycleManager.VIRTUAL_BASE_URL, startHtml, "text/html", "UTF-8", null)
                                     } else if (currentTag == null) {
                                         webView.tag = startHtml
                                     }
@@ -4776,10 +4775,10 @@ fun PreviewTabContent(
             },
             onNewTab = {
                 showChromeTabsGrid = false
-                com.example.browser.RealBrowserTabManager.openNewTab("https://www.google.com/", "Google")
-                customUrl = "https://www.google.com/"
-                urlInputText = "https://www.google.com/"
-                webViewRef?.loadUrl("https://www.google.com/")
+                com.example.browser.RealBrowserTabManager.openNewTab(defaultPreviewUrl, "Localhost")
+                customUrl = null
+                urlInputText = defaultPreviewUrl
+                webViewRef?.loadUrl(defaultPreviewUrl)
             },
             onOpenHistory = {
                 showChromeTabsGrid = false

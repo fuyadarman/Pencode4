@@ -587,7 +587,7 @@ object GeminiClient {
 
                 try {
                     var attempt = 0
-                    val maxAttempts = 10
+                    val maxAttempts = 3
                     var response: okhttp3.Response? = null
                     var rawResponse: String? = null
                     var lastCode = 0
@@ -784,7 +784,7 @@ object GeminiClient {
 
                 try {
                     var attempt = 0
-                    val maxAttempts = 10
+                    val maxAttempts = 3
                     var response: okhttp3.Response? = null
                     var rawResponse: String? = null
                     var lastCode = 0
@@ -1019,7 +1019,7 @@ object GeminiClient {
 
                 try {
                     var attempt = 0
-                    val maxAttempts = 10
+                    val maxAttempts = 3
                     var response: okhttp3.Response? = null
                     var rawResponse: String? = null
                     var lastCode = 0
@@ -1218,7 +1218,7 @@ object GeminiClient {
 
                 try {
                     var attempt = 0
-                    val maxAttempts = 10
+                    val maxAttempts = 3
                     var response: okhttp3.Response? = null
                     var rawResponse: String? = null
                     var lastCode = 0
@@ -1438,7 +1438,7 @@ object GeminiClient {
             .build()
 
         var attempt = 0
-        val maxAttempts = 10
+        val maxAttempts = 3
         var response: okhttp3.Response? = null
         var rawResponse: String? = null
         var lastCode = 0

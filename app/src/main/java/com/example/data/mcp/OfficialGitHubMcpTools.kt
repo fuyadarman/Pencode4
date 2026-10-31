@@ -122,7 +122,7 @@ object OfficialGitHubMcpTools {
             McpToolInfo(
                 name = "trigger_workflow",
                 description = "Trigger a GitHub Actions workflow dispatch by workflow ID or file name.",
-                parametersJsonSchema = """{"type":"object","properties":{"repo":{"type":"string"},"workflow":{"type":"string"},"branch":{"type":"string"}},"required":["workflow"]}"""
+                parametersJsonSchema = """{"type":"object","properties":{"repo":{"type":"string","description":"GitHub repository (owner/repo)"},"workflow":{"type":"string","description":"Workflow file name (e.g. android.yml, build.yml) or workflow ID. Optional, defaults to repo workflow."},"branch":{"type":"string","description":"Target git branch, defaults to main"}}}"""
             ),
             McpToolInfo(
                 name = "get_workflow_runs",
@@ -601,7 +601,26 @@ object OfficialGitHubMcpTools {
 
                 "trigger_workflow" -> {
                     if (repo.isBlank()) return@withContext "Error: No repository specified."
-                    val workflowId = args["workflow"]?.toString() ?: args["workflow_id"]?.toString() ?: "android.yml"
+                    var workflowId = args["workflow"]?.toString()?.ifBlank { null }
+                        ?: args["workflow_id"]?.toString()?.ifBlank { null }
+                        ?: args["name"]?.toString()?.ifBlank { null }
+                    if (workflowId.isNullOrBlank()) {
+                        try {
+                            val listUrl = "https://api.github.com/repos/$repo/actions/workflows"
+                            val listReq = Request.Builder().url(listUrl).header("Authorization", "Bearer $token").build()
+                            val listRes = httpClient.newCall(listReq).execute()
+                            if (listRes.isSuccessful) {
+                                val json = JSONObject(listRes.body?.string().orEmpty())
+                                val wfs = json.optJSONArray("workflows")
+                                if (wfs != null && wfs.length() > 0) {
+                                    val first = wfs.getJSONObject(0)
+                                    val path = first.optString("path", "")
+                                    workflowId = if (path.isNotBlank()) path.substringAfterLast("/") else first.optLong("id").toString()
+                                }
+                            }
+                        } catch (_: Exception) {}
+                        if (workflowId.isNullOrBlank()) workflowId = "android.yml"
+                    }
                     val branch = args["branch"]?.toString() ?: "main"
                     val url = "https://api.github.com/repos/$repo/actions/workflows/$workflowId/dispatches"
 

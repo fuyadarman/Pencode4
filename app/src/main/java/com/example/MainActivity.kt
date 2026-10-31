@@ -87,6 +87,8 @@ class MainActivity : ComponentActivity() {
                 }
                 kotlinx.coroutines.delay(1200)
                 com.example.admob.AdMobManager.showAppOpenAdIfAvailable(this@MainActivity)
+                com.example.admob.AdMobManager.loadRewardedAd(applicationContext)
+                com.example.admob.AdMobManager.loadInterstitialAd(applicationContext)
             }
             val themeMode by com.example.settings.AppThemeManager.themeMode.collectAsState()
             val isDarkTheme = themeMode == com.example.settings.AppThemeManager.ThemeMode.DARK

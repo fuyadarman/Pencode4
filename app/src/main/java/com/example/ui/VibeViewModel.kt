@@ -3054,6 +3054,17 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         val project = _currentProject.value ?: return
         viewModelScope.launch {
             com.example.chat.ProjectChatSessionManager.startNewChat(getApplication(), project.name, repository)
+            val templateKey = project.templateKey?.ifBlank { "vanilla" } ?: "vanilla"
+            val welcomeMsg = com.example.data.ChatMessageEntity(
+                projectName = project.name,
+                role = "assistant",
+                content = "Hello! I am your AI Vibe Coding Agent. I have initialized the **$templateKey** template for you. What would you like to build today? Feel free to write prompts or use the terminal!",
+                timestamp = System.currentTimeMillis()
+            )
+            repository.insertChatMessage(welcomeMsg)
+            _chatMessages.value = repository.getChatsForProject(project.name)
+            _aiActionLogs.value = emptyList()
+            _todoList.value = emptyList()
         }
     }
 
@@ -3061,6 +3072,9 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         val project = _currentProject.value ?: return
         viewModelScope.launch {
             com.example.chat.ProjectChatSessionManager.switchSession(getApplication(), project.name, sessionId, repository)
+            _chatMessages.value = repository.getChatsForProject(project.name)
+            _aiActionLogs.value = emptyList()
+            _todoList.value = emptyList()
         }
     }
 
@@ -4143,6 +4157,39 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 
                         if (hasExplicitComplete) {
                             val candidateMsg = toolCalls.firstOrNull { it.tool == "complete" }?.arguments?.message ?: stepMsg
+                            val isApiErrorMessage = candidateMsg != null && (
+                                candidateMsg.contains("API Provider Error", ignoreCase = true) ||
+                                candidateMsg.contains("API call failed", ignoreCase = true) ||
+                                candidateMsg.contains("Too Many Requests", ignoreCase = true) ||
+                                candidateMsg.contains("quota", ignoreCase = true) ||
+                                candidateMsg.contains("RESOURCE_EXHAUSTED", ignoreCase = true) ||
+                                candidateMsg.contains("Error response: 4", ignoreCase = true) ||
+                                candidateMsg.contains("Error response: 5", ignoreCase = true)
+                            )
+                            if (isApiErrorMessage) {
+                                val switchResult = com.example.model.ModelFallbackExecutionEngine.attemptAutoSwitch(
+                                    context = getApplication(),
+                                    currentModelId = currentModelId,
+                                    currentRunningModelName = _currentRunningModelName.value,
+                                    availableModels = _customModels.value,
+                                    triedModelIds = triedModelIds,
+                                    errorMessage = candidateMsg,
+                                    createAiLog = { title, status, details -> createAiLog(title, status, details) }
+                                )
+                                if (switchResult != null) {
+                                    val next = switchResult.newConfig
+                                    activeApiKey = next.apiKey
+                                    provider = next.provider
+                                    modelId = next.modelId
+                                    baseUrl = next.baseUrl
+                                    currentModelId = next.modelId
+                                    currentConfigId = next.id
+                                    _currentRunningModelName.value = next.alias.ifBlank { next.modelId }
+                                    _aiActionLogs.value = _aiActionLogs.value + switchResult.switchLog
+                                    history.add(switchResult.systemNotice)
+                                    continue
+                                }
+                            }
                             val completionCheck = com.example.agent.AgentModelExecutionSafeguard.validateTaskCompletion(
                                 userPrompt = userPrompt,
                                 filesModifiedThisPrompt = filesModifiedThisPrompt,

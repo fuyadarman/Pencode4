@@ -31,6 +31,7 @@ object WebPreviewLifecycleManager {
                clean.startsWith("http://localhost:8080") ||
                clean.startsWith("https://localhost/") ||
                clean.startsWith("http://localhost/") ||
+               clean.contains("browser-home") ||
                clean == "about:blank" ||
                clean.startsWith("data:") ||
                clean == "about:srcdoc"

@@ -124,6 +124,18 @@ object McpToolHandler {
                 updateLog(mcpLog.id, if (targetServer != null) "success" else "failed", result)
                 result
             }
+            "search_mcp_tools", "mcp_search_tools", "find_mcp_tool" -> {
+                val query = args?.query ?: args?.message ?: args?.path ?: ""
+                val allTools = mcpManager.toolRegistry.getAllTools(mcpManager.servers.value)
+                val searchResult = com.example.data.mcp.McpSmartToolRouter.searchTools(query, allTools)
+                val mcpLog = createLog(
+                    "MCP Router: Search Tools",
+                    "Dynamically searched MCP tools for query: '$query'"
+                )
+                addLog(mcpLog)
+                updateLog(mcpLog.id, "success", "Discovered matching tools for '$query'")
+                searchResult
+            }
             else -> {
                 // Check tool registry & enabled servers for direct tool invocations (e.g. supabase_mcp__query or list_tables)
                 val enabledServers = mcpManager.getEnabledServersForWorkspace(project.name)
@@ -138,20 +150,34 @@ object McpToolHandler {
                 if (matched != null) {
                     val (server, toolInfo) = matched
                     val cleanToolName = toolInfo.name
+                    val brand = com.example.data.mcp.McpBrandHelper.resolveBrand(server.name.ifBlank { tool })
                     val mcpLog = createLog(
-                        "${server.name}: $cleanToolName",
+                        "${brand.serviceName}: $cleanToolName",
                         "Executing '$cleanToolName' on ${server.name} (${server.url})"
                     )
                     addLog(mcpLog)
                     val mcpArgsJson = com.example.data.mcp.McpExecutionEngine.extractMcpPayload(args)
+
+                    // Input Schema Validation before execution
+                    val validation = com.example.data.mcp.McpSmartToolRouter.validateToolExecution(
+                        toolName = cleanToolName,
+                        argsJson = mcpArgsJson,
+                        schemaJson = toolInfo.parametersJsonSchema
+                    )
+                    if (validation is com.example.data.mcp.McpSmartToolRouter.ValidationResult.Invalid) {
+                        updateLog(mcpLog.id, "failed", validation.errorExplanation)
+                        return "Tool Argument Validation Error for '$cleanToolName': ${validation.errorExplanation}"
+                    }
+
                     val result = mcpManager.executeMcpToolCall(server.id, cleanToolName, mcpArgsJson)
                     val isSuccess = !result.startsWith("Error:") && !result.startsWith("MCP Call Error:")
-                    updateLog(mcpLog.id, if (isSuccess) "success" else "failed", if (isSuccess) "${server.name} ($cleanToolName)" else result)
+                    updateLog(mcpLog.id, if (isSuccess) "success" else "failed", if (isSuccess) "${brand.serviceName} ($cleanToolName)" else result)
                     return result
                 }
 
                 // Universal Fallback across GitHub, Supabase, Cloudflare, Vercel, GSC, and Remote MCPs
-                val mcpLog = createLog("MCP: $tool", "Resolving and executing MCP tool '$tool'")
+                val brand = com.example.data.mcp.McpBrandHelper.resolveBrand(tool)
+                val mcpLog = createLog("${brand.serviceName}: $tool", "Resolving and executing MCP tool '$tool'")
                 addLog(mcpLog)
                 val fallbackResult = com.example.data.mcp.McpUniversalToolResolver.executeUniversalMcpCall(
                     context = mcpManager.context,
@@ -162,7 +188,7 @@ object McpToolHandler {
                     selectedServerIds = selectedServerIds
                 )
                 val isSuccess = !fallbackResult.startsWith("Error:") && !fallbackResult.startsWith("MCP Call Error:")
-                updateLog(mcpLog.id, if (isSuccess) "success" else "failed", if (isSuccess) "MCP: $tool" else fallbackResult)
+                updateLog(mcpLog.id, if (isSuccess) "success" else "failed", if (isSuccess) "${brand.serviceName}: $tool" else fallbackResult)
                 fallbackResult
             }
         }

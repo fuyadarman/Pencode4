@@ -37,8 +37,15 @@ object ModelFallbackExecutionEngine {
             triedModelIds = triedModelIds
         ) ?: return null
 
-        triedModelIds.add(fallback.id)
-        triedModelIds.add(fallback.modelId)
+        val resolvedApiKey = if (fallback.apiKey.isNotBlank()) {
+            fallback.apiKey
+        } else {
+            availableModels.find { it.provider.equals(fallback.provider, ignoreCase = true) && it.apiKey.isNotBlank() }?.apiKey ?: ""
+        }
+        val effectiveFallback = fallback.copy(apiKey = resolvedApiKey)
+
+        triedModelIds.add(effectiveFallback.id)
+        triedModelIds.add(effectiveFallback.modelId)
 
         val errDesc = errorMessage ?: "error"
         val log = createAiLog(
@@ -52,7 +59,7 @@ object ModelFallbackExecutionEngine {
         )
 
         return SwitchResult(
-            newConfig = fallback,
+            newConfig = effectiveFallback,
             switchLog = log,
             systemNotice = notice
         )

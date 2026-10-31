@@ -190,6 +190,16 @@ private fun AgentFeedItemRow(
             isOptimization -> {
                 Quad(Icons.Default.Sync, Color(0xFF8B949E), "Optimized the conversation", null)
             }
+            title.contains("MCP", ignoreCase = true) ||
+            title.startsWith("GitHub:", ignoreCase = true) ||
+            title.startsWith("Cloudflare:", ignoreCase = true) ||
+            title.startsWith("Supabase:", ignoreCase = true) ||
+            title.startsWith("Vercel:", ignoreCase = true) ||
+            title.startsWith("Google Search Console:", ignoreCase = true) ||
+            title.startsWith("Neon:", ignoreCase = true) -> {
+                val brand = com.example.data.mcp.McpBrandHelper.resolveBrand(title)
+                Quad(brand.icon, brand.tint, title, brand.badgeText)
+            }
             title.startsWith("Edit:") || title.startsWith("Patch:") || title.contains("Modified file") -> {
                 Quad(Icons.Default.Edit, Color(0xFF7EE787), title, if (log.status == "thinking") "editing" else null)
             }

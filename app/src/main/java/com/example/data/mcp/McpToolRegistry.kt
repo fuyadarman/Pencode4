@@ -56,9 +56,10 @@ class McpToolRegistry {
     }
 
     /**
-     * Build system prompt documentation string for specific enabled MCP servers
+     * Build system prompt documentation string for specific enabled MCP servers,
+     * applying Lazy Tool Loading based on prompt context to prevent context window blowup.
      */
-    fun buildMcpToolsPromptForServers(servers: List<McpServer>): String {
+    fun buildMcpToolsPromptForServers(servers: List<McpServer>, prompt: String = ""): String {
         val toolsFromRegistered = _registeredTools.value
         val allTools = mutableListOf<RegisteredMcpTool>()
         allTools.addAll(toolsFromRegistered)
@@ -73,11 +74,13 @@ class McpToolRegistry {
 
         if (allTools.isEmpty()) return ""
 
+        val selectedTools = McpSmartToolRouter.selectRelevantTools(allTools, prompt)
+
         val sb = StringBuilder()
         sb.append("\n\n=== CONNECTED REMOTE MCP (MODEL CONTEXT PROTOCOL) TOOLS ===\n")
-        sb.append("You have active access to the following live Remote MCP servers and tools. You can invoke them either using 'mcp_call_tool' (with mcpServerName, toolName, mcpArgsJson) or by directly specifying the tool name as the 'tool' in your JSON action:\n\n")
+        sb.append("You have active access to live Remote MCP servers and tools. You can invoke them either using 'mcp_call_tool' (with mcpServerName, toolName, mcpArgsJson) or by directly specifying the tool name as the 'tool' in your JSON action. If you need a tool from an MCP server not listed below, call 'search_mcp_tools' to discover it dynamically:\n\n")
 
-        for (reg in allTools) {
+        for (reg in selectedTools) {
             sb.append("• Tool: '${reg.globalToolName}' (Alias: '${reg.tool.name}')\n")
             sb.append("  Server: ${reg.serverName}\n")
             if (!reg.tool.description.isNullOrBlank()) {
@@ -89,6 +92,18 @@ class McpToolRegistry {
             sb.append("\n")
         }
         return sb.toString()
+    }
+
+    fun getAllTools(servers: List<McpServer>): List<RegisteredMcpTool> {
+        val all = _registeredTools.value.toMutableList()
+        for (s in servers) {
+            for (t in s.availableTools) {
+                if (all.none { it.serverId == s.id && it.tool.name == t.name }) {
+                    all.add(RegisteredMcpTool(serverId = s.id, serverName = s.name, tool = t))
+                }
+            }
+        }
+        return all
     }
 
     /**
